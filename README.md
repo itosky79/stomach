@@ -1,6 +1,6 @@
 # 胃バリウム透視シミュレーター
 
-### ▶ **[https://itosky79.github.io/stomach/](https://itosky79.github.io/stomach/)**
+
 
 ブラウザで開くだけで使えます。インストールもログインも要りません。スマートフォンでも動きます。
 
