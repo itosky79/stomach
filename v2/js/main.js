@@ -19,6 +19,7 @@ function settle() {
   for (let i = NMAIN * CM; i < NV; i++) aWet[i] = 0;
 }
 function resize() {
+  if (renderer.xr.isPresenting) return;   // VR 中の大きさはゴーグルが決める
   const w = stage.clientWidth, h = stage.clientHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -29,7 +30,7 @@ new ResizeObserver(resize).observe(stage);
 const tiltRot = document.getElementById('tiltRot'), tiltTxt = document.getElementById('tiltTxt');
 let last = performance.now(), acc = 0;
 function loop(now) {
-  requestAnimationFrame(loop);
+  perfBegin(now);
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
 
   if (playing) {
@@ -61,6 +62,7 @@ function loop(now) {
     tiltTxt.textContent = Math.round(tiltCur) + '°';
   }
   render();
+  perfEnd();
 }
 
 matSkin.uniforms.uO.value = skinOpacity;
@@ -69,4 +71,4 @@ matSkin.uniforms.uO.value = skinOpacity;
 rebuildAll(); buildLabels(); settle();
 setPreset('stand'); tiltCur = tiltT; rollCur = rollT;
 updateNotes(); applyRail(); resize(); fitCam(); layoutFilm(); renderStrip();
-requestAnimationFrame(loop);
+renderer.setAnimationLoop(loop);   // VR に入ってもこのループがそのまま回る

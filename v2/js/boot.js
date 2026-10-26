@@ -6,7 +6,18 @@ import * as THREE from '../lib/three.module.min.js';
 THREE.ColorManagement.enabled = false;
 window.THREE = THREE;
 
-const FILES = ['data', 'questions', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'main'];
+// ?xr=emulate のときは VR ゴーグルの代わりにエミュレーター（Meta の IWER）を入れる。
+// 既定は Quest 3、&device=quest2 で Quest 2。本物の VR が使えるブラウザでは何もしない
+const Q = new URLSearchParams(location.search);
+if (Q.get('xr') === 'emulate') {
+  const { XRDevice, metaQuest2, metaQuest3, DevUI } = await import('../lib/iwer.min.js');
+  const dev = new XRDevice(Q.get('device') === 'quest2' ? metaQuest2 : metaQuest3);
+  dev.installRuntime({ forceInstall: true });   // ブラウザに中身のない WebXR があっても置き換える
+  new DevUI(dev);
+  window.XR_EMULATED = Q.get('device') === 'quest2' ? 'Quest 2' : 'Quest 3';
+}
+
+const FILES = ['data', 'questions', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'perf', 'xr', 'main'];
 for (const f of FILES) {
   await new Promise((done, fail) => {
     const s = document.createElement('script');

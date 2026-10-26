@@ -55,6 +55,7 @@ function setXray(on) {
   guides.visible = !on && viewMode !== 2;
 }
 function render() {
+  if (renderer.xr.isPresenting) { renderXR(); return; }
   const r = viewRects();
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, r.w, r.h); renderer.setScissor(0, 0, r.w, r.h);

@@ -164,6 +164,14 @@ button.act.wide{grid-column:1/-1; color:var(--barium); border-color:#456A80}
   color:#F3C173; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; cursor:pointer;
 }
 .expose:hover{background:#4A2B10; color:#FFD79A}
+.vrbtn{
+  padding:5px 12px; border:1px solid var(--teal); background:rgba(10,15,20,.9); border-radius:3px;
+  color:var(--teal); font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; cursor:pointer;
+}
+.vrbtn:hover{background:#13242F}
+#perf{position:absolute; left:10px; top:44px; z-index:5; pointer-events:none; white-space:pre;
+  font-family:var(--mono); font-size:10px; line-height:1.5; color:#CFE8EF; background:rgba(5,8,11,.78);
+  border:1px solid #23404E; border-radius:3px; padding:5px 8px}
 .fluoro{font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; color:var(--dim); background:rgba(10,15,20,.8); padding:4px 8px; border-radius:3px}
 .fluoro b{color:var(--teal); font-weight:400}
 
