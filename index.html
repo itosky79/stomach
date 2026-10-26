@@ -1357,14 +1357,16 @@ const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・
   grid2.material.transparent = true; grid2.material.opacity = 0.30;
   grid2.position.y = -38; roomBase.add(grid2);
   for (const sz of [1, -1]) {   // 台座は天板の両脇だけに置き、立位で足台・足先と重ならないようにする
-    prop(roomBase, new THREE.BoxGeometry(14, 3, 9), matFrame, 0, -36.5, 30 * sz);
-    uprights.push(prop(roomProps, new THREE.BoxGeometry(5, 21, 5), matFrame, 0, -10.5, 30 * sz));
-    prop(roomProps, new THREE.CylinderGeometry(3.4, 3.4, 6, 16), matGear, 0, 0, 30 * sz, Math.PI / 2);
+    prop(roomBase, new THREE.BoxGeometry(14, 3, 9), matFrame, 0, -36.5, 33 * sz);
+    uprights.push(prop(roomProps, new THREE.BoxGeometry(5, 21, 5), matFrame, 0, -10.5, 33 * sz));
+    prop(roomProps, new THREE.CylinderGeometry(3.4, 3.4, 6, 16), matGear, 0, 0, 32 * sz, Math.PI / 2);   // 回転軸
   }
   prop(tableProps, new THREE.BoxGeometry(132, 5, 50), matPad, 8, -12, 0);       // 天板
   prop(tableProps, new THREE.BoxGeometry(5, 26, 50), matPad, 74, 1, 0);         // 足台
   prop(tableProps, new THREE.BoxGeometry(120, 2.5, 6), matFrame, 8, -9, 26);    // 側レール
   prop(tableProps, new THREE.BoxGeometry(120, 2.5, 6), matFrame, 8, -9, -26);
+  for (const sz of [1, -1])                                                     // 側レールから回転軸までの腕
+    prop(tableProps, new THREE.BoxGeometry(10, 14.5, 2), matFrame, 0, -3.5, 29 * sz);
 }
 
 /* ---- ガイド ---- */
