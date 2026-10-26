@@ -17,7 +17,7 @@ if (Q.get('xr') === 'emulate') {
   window.XR_EMULATED = Q.get('device') === 'quest2' ? 'Quest 2' : 'Quest 3';
 }
 
-const FILES = ['data', 'questions', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'perf', 'xr', 'main'];
+const FILES = ['data', 'questions', 'anatomy-data', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'perf', 'xr', 'main'];
 for (const f of FILES) {
   await new Promise((done, fail) => {
     const s = document.createElement('script');

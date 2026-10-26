@@ -146,6 +146,17 @@ VR の操作：
 
 透視像のシェーダは厚みを cm で数えるので、VR で部屋を 0.01 倍にしているときも、透視像を描く間だけ元の大きさに戻している。
 
+## 第 2 段階の作業
+
+人体のモデルは BodyParts3D（CC BY 4.0）を使う（2026-10-26 決定）。出典と加工の内容は `docs/sources.md`。
+
+| | 内容 | 状態 |
+|---|---|---|
+| 1 | BodyParts3D から体表・胸郭（肋骨・肋軟骨・胸骨）・胸椎・腰椎・胃を取り出し、軽くして v2 の座標に変換する（`tools/build_anatomy.py`） | 済 |
+| 2 | 患者の体表と骨を BodyParts3D に差し替える。天板の高さと足台の位置は、BodyParts3D の体（身長 172 cm）の背中と足の裏から決める | 済 |
+| 3 | 胃の管の形（中心の線と太さ）を BodyParts3D の胃に合わせ、4 つの胃の型を作り直す | 未 |
+| 4 | 出典の表示（アプリの最初の案内と `docs/sources.md`） | 済 |
+
 ## 胃の物理の試作（proto/physics/）
 
 本体とは別の 1 ページ。URL は `…/stomach/v2/proto/physics/`。
@@ -174,6 +185,7 @@ v2/
 ├── ROADMAP.md        このファイル
 ├── DIMENSIONS.md     寸法
 ├── proto/physics/    胃の物理の試作（index.html と main.js）
+├── tools/build_anatomy.py  BodyParts3D から js/anatomy-data.js を作る
 ├── lib/
 │   ├── three.module.min.js  three.js 0.186.1（ES モジュール、1 ファイルにまとめたもの）
 │   ├── three.LICENSE        three.js のライセンス（MIT）
@@ -184,6 +196,7 @@ v2/
 └── js/
     ├── boot.js       three.js を読み込み、下のファイルを順に読み込む
     ├── data.js       胃型・体位・撮影手順の定義
+    ├── anatomy-data.js  BodyParts3D から作った体表と骨（tools/build_anatomy.py で生成）
     ├── questions.js  収録問題（国試の過去問）
     ├── model.js      胃の管モデルの生成
     ├── scene.js      体表・骨格・患者・透視台

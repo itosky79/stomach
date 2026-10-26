@@ -52,18 +52,18 @@ function litMat(color, opacity, baseA, rimA) {
     transparent: true, depthWrite: false, side: THREE.DoubleSide
   });
 }
-function xrayMat(density, bone, edgeCap) {
+function xrayMat(density, bone, edgeCap, dia) {   // dia：横隔膜の高さ（メッシュの座標の y）。これより頭側は肺野
   return new THREE.ShaderMaterial({
-    uniforms: { uD: { value: density }, uBone: { value: bone ? 1 : 0 }, uE: { value: edgeCap || 5.0 } },
+    uniforms: { uD: { value: density }, uBone: { value: bone ? 1 : 0 }, uE: { value: edgeCap || 5.0 }, uDia: { value: dia === undefined ? 13.5 : dia } },
     vertexShader: SIMPLE_VERT,
-    fragmentShader: `uniform float uD; uniform float uBone; uniform float uE;
+    fragmentShader: `uniform float uD; uniform float uBone; uniform float uE; uniform float uDia;
       varying vec3 vN; varying vec3 vVd; varying vec3 vL;
       void main(){
         vec3 n = normalize(vN);
         float edge = clamp(1.0/max(abs(dot(n, normalize(vVd))),0.16), 1.0, uE);
         float d = uD * edge;
         // 横隔膜より頭側は肺野なので軟部組織の濃度を落とす
-        if(uBone < 0.5){ float dia = 13.5 - 0.05*vL.x*vL.x; d *= mix(1.0, 0.18, smoothstep(dia-1.5, dia+2.0, vL.y)); }
+        if(uBone < 0.5){ float dia = uDia - 0.05*vL.x*vL.x; d *= mix(1.0, 0.18, smoothstep(dia-1.5, dia+2.0, vL.y)); }
         gl_FragColor = vec4(vec3(0.90,0.93,1.0) * d, 1.0);
       }`,
     transparent: true, depthWrite: false, depthTest: false,
@@ -220,66 +220,40 @@ const matSurfX = new THREE.ShaderMaterial({
 const meshSurf = new THREE.Mesh(surfGeom, matSurf); meshSurf.renderOrder = 2;
 bodyGroup.add(meshSurf);
 
-/* ---- 体表 ---- */
-const TORSO = [[25, 9.0, 6.4], [19, 12.6, 8.2], [13, 13.8, 9.0], [6, 13.4, 9.4], [-2, 12.9, 9.4],
-               [-9, 12.6, 9.2], [-15, 13.4, 8.8], [-21, 11.6, 7.8], [-25, 8.6, 6.4]];
-const torsoGeom = lathe(TORSO, 48, 36);
-const matSkin = litMat(0xB8CBD8, 0.30, 0.07, 1.9), matSkinX = xrayMat(0.042, false, 3.2);
+/* ---- 患者の体表と骨（BodyParts3D。js/anatomy-data.js、tools/build_anatomy.py で作る）----
+   BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International
+   座標は bodyGroup と同じ（胃の中心が原点、x = 左、y = 頭側、z = 腹側、単位は実寸 cm / BODY_SCALE） */
+function bp3dGeom(d) {
+  const q = new Uint16Array(Uint8Array.from(atob(d.pos), ch => ch.charCodeAt(0)).buffer);
+  const pos = new Float32Array(d.n * 3);
+  for (let i = 0; i < d.n * 3; i++) pos[i] = d.lo[i % 3] + q[i] * d.s[i % 3];
+  const ib = Uint8Array.from(atob(d.idx), ch => ch.charCodeAt(0)).buffer;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(new THREE.BufferAttribute(d.i32 ? new Uint32Array(ib) : new Uint16Array(ib), 1));
+  g.computeVertexNormals();
+  return g;
+}
+const matSkin = litMat(0xB8CBD8, 0.30, 0.07, 1.9), matSkinX = xrayMat(0.042, false, 3.2, BP3D.meta.dia);
 matSkin.side = THREE.FrontSide;
-const meshSkin = new THREE.Mesh(torsoGeom, matSkin); meshSkin.renderOrder = 6;
-anatGroup.add(meshSkin);
+const meshSkin = new THREE.Mesh(bp3dGeom(BP3D.skin), matSkin); meshSkin.renderOrder = 6;
+bodyGroup.add(meshSkin);
 
-/* ---- 骨格（胸郭と脊椎だけ。目印として要るものに絞る）---- */
-const boneGroup = new THREE.Group(); anatGroup.add(boneGroup);
-const matBone = litMat(0xD6DEE6, 0.26, 0.07, 0.95), matBoneX = xrayMat(0.075, true, 2.1);
-{
-  const vb = new THREE.CylinderGeometry(1.75, 1.75, 2.25, 14, 1, false);
-  for (let i = 0; i < 11; i++) {
-    const m = new THREE.Mesh(vb, matBone);
-    m.position.set(0, 14 - i * 3.0, -6.4); m.renderOrder = 0; boneGroup.add(m);
-  }
-  for (let i = 0; i < 5; i++) {
-    const y = 13.4 - i * 3.1;
-    for (const sx of [1, -1]) {
-      const c = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(1.6 * sx, y, -6.0), new THREE.Vector3(7.0 * sx, y - 0.9, -3.2),
-        new THREE.Vector3(9.9 * sx, y - 2.8, 1.6), new THREE.Vector3(7.3 * sx, y - 4.8, 4.9),
-        new THREE.Vector3(3.4 * sx, y - 6.0, 6.2)]);
-      const m = new THREE.Mesh(new THREE.TubeGeometry(c, 28, 0.34, 6, false), matBone);
-      m.renderOrder = 0; boneGroup.add(m);
-    }
-  }
-}
+/* ---- 骨格（胸郭・胸骨と脊椎だけ。目印として要るものに絞る）---- */
+const boneGroup = new THREE.Group(); bodyGroup.add(boneGroup);
+const matBone = litMat(0xD6DEE6, 0.26, 0.07, 0.95), matBoneX = xrayMat(0.030, true, 1.8);   // BodyParts3D の骨は面が多いので薄めに
+{ const m = new THREE.Mesh(bp3dGeom(BP3D.bones), matBone); m.renderOrder = 0; boneGroup.add(m); }
 
-/* ---- 患者の全身（体表といっしょに透ける）---- */
-const figureGroup = new THREE.Group(); anatGroup.add(figureGroup);
-function addFig(g, x, y, z) {
-  const m = new THREE.Mesh(g, matSkin); m.position.set(x, y, z); m.renderOrder = 6;
-  figureGroup.add(m); return m;
-}
-{
-  addFig(new THREE.CylinderGeometry(3.9, 4.6, 9, 16), 0, 29, 1);
-  addFig(new THREE.SphereGeometry(7.8, 20, 16), 0, 38.5, 1.5);
-  for (const sx of [1, -1]) {
-    const arm = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(12.0 * sx, 21.5, 1), new THREE.Vector3(15.8 * sx, 10, 2.4),
-      new THREE.Vector3(15.4 * sx, -1, 3.4), new THREE.Vector3(13.6 * sx, -9, 4.2)]);
-    addFig(new THREE.TubeGeometry(arm, 24, 3.1, 10, false), 0, 0, 0);
-    const leg = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(6.2 * sx, -22, 1), new THREE.Vector3(7.2 * sx, -46, 2),
-      new THREE.Vector3(6.6 * sx, -72, 2.6), new THREE.Vector3(6.4 * sx, -91, 3)]);
-    addFig(new THREE.TubeGeometry(leg, 30, 5.1, 12, false), 0, 0, 0);
-    addFig(new THREE.BoxGeometry(7, 4.5, 12), 6.4 * sx, -93.5, 7.5);
-  }
-}
+/* 体表が全身を覆うので、手足や頭を別に作る必要はなくなった（表示の切り替えのために箱だけ残す） */
+const figureGroup = new THREE.Group(); bodyGroup.add(figureGroup);
 
 /* ---- 鼻（顔が向いているほうが腹側）---- */
 const matAnt = litMat(0xFFA94D, 0.95, 0.70, 0.55);
 matAnt.side = THREE.FrontSide; matAnt.depthWrite = true;
-const orientGroup = new THREE.Group(); anatGroup.add(orientGroup);
+const orientGroup = new THREE.Group(); bodyGroup.add(orientGroup);
 {
   const nose = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3.6, 14), matAnt);
-  nose.position.set(0, 37.6, 8.2); nose.rotation.x = Math.PI / 2;
+  nose.position.set(0, BP3D.meta.nose[1], BP3D.meta.nose[2]); nose.rotation.x = Math.PI / 2;
   nose.renderOrder = 7; orientGroup.add(nose);
 }
 
@@ -318,16 +292,19 @@ const ROOM_Z0 = 250;                                                 // 仕切�
    台は回転軸を中心に起倒する。立位や逆傾斜で天板の端が床に当たらないよう、
    実機と同じく天板が長手方向に滑る（回転軸に対する天板の位置 tablePx が変わる）。 */
 const TB = {
-  top: -9.6,              // 天板の上面（胃の中心から背中側へ）
+  top: -(BP3D.meta.back + 0.3),   // 天板の上面（胃の中心から背中までの距離。BodyParts3D から）
   thick: 5, house: 17,    // 天板の厚さ、天板の下の受像器の箱の厚さ
-  x0: -86.5, x1: 123.5,   // 天板の頭側・足側の端（長さ 210）
+  x1: BP3D.meta.sole + 0.5 + 4,  // 天板の足側の端（足の裏の 0.5 cm 先に厚さ 4 cm の足台）
   w: 75,                  // 天板の幅
+  len: 210,               // 天板の長さ
   foot: 25,               // 足台の高さ
-  pivotY: -22.6,          // 回転軸の高さ（天板の上面から 13 cm 下）
+  pivotY: 0,              // 回転軸の高さ（天板の上面から 13 cm 下。下で決める）
   pivotH: 67,             // 回転軸の床からの高さ（水平のとき天板の上面が床から 80 cm）
   sid: 120,               // X 線管の焦点と受像器の距離
   clear: 3                // 起倒したとき、台の一番低い点を床から離しておく距離
 };
+TB.x0 = TB.x1 - TB.len;
+TB.pivotY = TB.top - 13;
 const TB_BOTTOM = TB.top - TB.thick - TB.house;
 const TB_CORNERS = [[TB.x0, TB.top], [TB.x0, TB_BOTTOM], [TB.x1, TB_BOTTOM], [TB.x1, TB.top + TB.foot]];
 const PX0 = (TB.x0 + TB.x1) / 2;   // 水平のときは天板の真ん中に回転軸がある
