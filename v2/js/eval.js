@@ -348,6 +348,57 @@ function evalKokushi() {   // 選んだ胃型で 2 問を評価する。行ご�
   });
 }
 
+/* ================= 条件を振った評価（胃型 × バリウム量 × 角度）=================
+   基準撮影法Ⅱの表（data.js の SEQ2）から、食道（①）と圧迫（⑫）を除いた 10 体位と、その目的部位を使う。
+   ・バリウム量：各体位・各胃型で、バリウム量だけを変えて描出率を求める。充填率 = バリウム量 ÷ 胃の容量（十二指腸球部を除く）。
+   ・斜位の角度：斜位の体位（回転角が 45°・135°・225°・315°）について、起倒角はそのままで、回転角を
+     斜位の両隣の正面・側面の間（例：45° なら 0〜90°）で 5° ずつ変え、描出率がいちばん高い回転角を求める。
+   ・頭低位の角度：頭低位の体位（起倒角が負）について、回転角はそのままで、起倒角を 0〜−45° で 5° ずつ変える。
+   それ以外の条件と手順は評価モードと同じ（settle のあと Δt = 1/60 秒で 10 秒）。 */
+function seqRows() { return SEQ2.filter(q => !q.comp && q.tgt.indexOf('食道') < 0); }
+function capacityNow() {   // 胃の容量（十二指腸球部を除く、模型の mL）
+  let c = 0; for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] !== 'duode') c += cap[i]; return c;
+}
+async function sweepAll(types, mls, report) {
+  const out = [], saveType = EVAL.type, saveMl = EVAL.ml;
+  try {
+    for (const type of types) {
+      EVAL.type = type;
+      // バリウム量
+      for (const ml of mls) {
+        EVAL.ml = ml;
+        for (const q of seqRows()) {
+          evalPrepare(q.tilt, q.roll);
+          out.push({ kind: 'バリウム量', type, ml, fill: ml / capacityNow() * 100, pose: q.name, tilt: q.tilt, roll: q.roll, target: q.tgt,
+                     rate: depictionRate(parseTarget(q.tgt)).rate });
+        }
+        report(TYPES[type].name + ' ' + ml + ' mL'); await nextFrame();
+      }
+      EVAL.ml = saveMl;
+      // 角度
+      for (const q of seqRows()) {
+        const oblique = q.roll % 90 === 45, headDown = q.tilt < 0;
+        if (oblique) for (let r = q.roll - 45; r <= q.roll + 45; r += 5) {
+          evalPrepare(q.tilt, r);
+          out.push({ kind: '回転角', type, ml: EVAL.ml, fill: EVAL.ml / capacityNow() * 100, pose: q.name, tilt: q.tilt, roll: r, target: q.tgt, rate: depictionRate(parseTarget(q.tgt)).rate });
+        }
+        if (headDown) for (let t = 0; t >= -45; t -= 5) {
+          evalPrepare(t, q.roll);
+          out.push({ kind: '起倒角', type, ml: EVAL.ml, fill: EVAL.ml / capacityNow() * 100, pose: q.name, tilt: t, roll: q.roll, target: q.tgt, rate: depictionRate(parseTarget(q.tgt)).rate });
+        }
+      }
+      report(TYPES[type].name + ' 角度'); await nextFrame();
+    }
+  } finally { EVAL.type = saveType; EVAL.ml = saveMl; }
+  return out;
+}
+const SWEEP_HEAD = ['種類', '胃型', 'バリウム量(模型mL)', '充填率(%)', '体位名', '起倒角', '回転角', '目的部位', '描出率(%)'];
+function sweepCsv(rows) {
+  const f = x => Number.isFinite(x) ? x.toFixed(2) : '';
+  return '\uFEFF' + [SWEEP_HEAD, ...rows.map(r => [r.kind, TYPES[r.type].name, r.ml, f(r.fill), r.pose, r.tilt, r.roll, r.target, f(r.rate)])]
+    .map(a => a.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n') + '\r\n';
+}
+
 /* ================= 画面 ================= */
 const evalStyle = document.createElement('style');
 evalStyle.textContent = `
@@ -384,7 +435,7 @@ evalPanel.innerHTML = `
 <div class="row"><button type="button" id="evSeq1">基準撮影法Ⅰを読み込む</button><button type="button" id="evSeq2">基準撮影法Ⅱを読み込む</button>
 <span>（data.js の撮影手順の表から。原典：日本消化器がん検診学会のマニュアル 表1-Ⅱ-1。読み込んだら原典と照合する）</span></div>
 <div class="row"><button type="button" id="evAdd">行を足す</button><button type="button" id="evRun">評価する</button>
-<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
+<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evSweep">条件を振って評価</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
 <table id="evOut"></table>`;
 document.body.appendChild(evalPanel);
 
@@ -484,6 +535,18 @@ $e('evKok').addEventListener('click', async () => {
   $e('evOut').innerHTML = '<thead><tr><th>問題</th><th>部位</th><th>選択肢ごとの描出率(%)</th><th>描出率で選んだ体位</th><th>正答</th><th>一致</th></tr></thead><tbody>' +
     res.map(r => '<tr><td>' + r.src + '</td><td>' + r.target + '</td><td>' + r.rates.map(([c, v]) => c + ' ' + v.toFixed(1)).join(' / ') +
       '</td><td>' + r.top.join('・') + '</td><td>' + r.ans.join('・') + '</td><td>' + (r.hit ? '一致' : '不一致') + '</td></tr>').join('') + '</tbody>';
+});
+$e('evSweep').addEventListener('click', async () => {
+  renderer.setAnimationLoop(null);
+  const saved = evalSave();
+  let rows = [];
+  try { rows = await sweepAll(['hook', 'horn', 'casc', 'ptos'], [60, 90, 120, 150, 180, 240], m => { $e('evalMsg').textContent = '条件を振って評価中：' + m; }); }
+  finally { evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
+  window.SWEEP_ROWS = rows;
+  $e('evalMsg').textContent = '条件を振った評価：' + rows.length + ' 件。CSV を保存しました';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([sweepCsv(rows)], { type: 'text/csv' }));
+  a.download = 'stomach_sweep.csv'; document.body.appendChild(a); a.click(); a.remove();
 });
 $e('evCsv').addEventListener('click', () => {
   const esc = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
