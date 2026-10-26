@@ -63,6 +63,6 @@ private にしたあとは、clone に GitHub へのログインが必要にな�
 
 ### NAS 上で使う
 
-- `index.html` と `three.min.js` が同じフォルダにあれば、`index.html` をブラウザで開くだけで動く。インターネット接続は不要（フォントだけは代わりのものになる）
+- `index.html` と `three.min.js` が同じフォルダにあれば、`start.bat`（Windows）か `start.command`（Mac）をダブルクリックするだけで動く。`index.html` を直接開いてもよい。インターネット接続は不要（フォントだけは代わりのものになる）
 - 収録問題の正答を確かめ直す:  `pip install pdfminer.six` のあと `python3 tools/verify_answers.py`（厚生労働省のサイトに接続する）
 - 収録問題を書き換えたら:  `python3 tools/extract_questions.py` で `data/` と `docs/questions.md` を作り直す
