@@ -37,6 +37,7 @@ function loop(now) {
     playT += dt;
     if (playT > 3.4) { playT = 0; if (seqIdx >= SEQ.length - 1) { playing = false; document.getElementById('bPlay').textContent = '順に再生'; } else gotoStep(seqIdx + 1); }
   }
+  if (renderer.xr.isPresenting) xrInput(dt);   // VR のスティックとレバー
   const k = 1 - Math.exp(-dt * 3.6);
   tiltCur += (tiltT - tiltCur) * k;
   rollCur += (rollT - rollCur) * k;

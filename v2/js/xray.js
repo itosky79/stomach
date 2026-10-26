@@ -56,8 +56,30 @@ function setXray(on) {
   boneGroup.traverse(o => { if (o.isMesh) o.material = on ? matBoneX : matBone; });
   guides.visible = !on && viewMode !== 2;
 }
+/* 透視像を fluoroRT に描き、部屋のモニタに映す。2 フレームに 1 回（VR では毎回）。
+   VR の最中でも普通の描画先として描けるよう、描く間だけ xr を止める（three.js の例と同じ手順） */
+let fluoroTick = 0;
+function renderFluoro() {
+  if (!renderer.xr.isPresenting && (fluoroTick++ & 1)) return;
+  setXcam(FLUORO_W / FLUORO_H);
+  setXray(true);
+  const rt = renderer.getRenderTarget(), xrOn = renderer.xr.enabled;
+  // 透視像のシェーダは厚みを cm で数えるので、VR で部屋を縮めているときは描く間だけ元の大きさに戻す
+  const shrunk = xrWorld.parent === scene;
+  if (shrunk) { xrWorld.scale.setScalar(1); xrWorld.position.set(0, 0, 0); }
+  renderer.xr.enabled = false;
+  renderer.setRenderTarget(fluoroRT);
+  renderer.setClearColor(0x05080B, 1); renderer.clear();
+  renderer.render(scene, xcam);
+  renderer.xr.enabled = xrOn;
+  renderer.setRenderTarget(rt);
+  if (shrunk) { xrWorld.scale.setScalar(XR_SCALE); xrWorld.position.set(0, 0, -XR_STAND * XR_SCALE); }
+  setXray(false);
+}
 function render() {
   if (renderer.xr.isPresenting) { renderXR(); return; }
+  setXray(false);
+  if (roomProps.visible) renderFluoro();   // 部屋が見えているときだけモニタを更新する
   const r = viewRects();
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, r.w, r.h); renderer.setScissor(0, 0, r.w, r.h);

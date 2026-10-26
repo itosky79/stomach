@@ -412,10 +412,20 @@ function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxG
   box(roomProps, 40, 6, 28, matFrame, -150, 102, 70);
   box(partition, 180, 6, 70, matFrame, 0, 75, Z0 + 50);                // 遠隔操作卓の机
   for (const sx of [1, -1]) box(partition, 6, 72, 60, matFrame, sx * 84, 36, Z0 + 50);
-  box(partition, 60, 36, 4, matDark, -40, 100, Z0 + 70);               // 机の上のモニタ 2 台
-  box(partition, 60, 36, 4, matDark, 40, 100, Z0 + 70);
+  box(partition, 30, 36, 4, matDark, -75, 100, Z0 + 30);               // 机の上のモニタ 2 台（窓の左右。窓をふさがない）
+  box(partition, 30, 36, 4, matDark, 75, 100, Z0 + 30);
   box(partition, 70, 4, 26, matDark, 0, 80, Z0 + 40);                  // 操作盤
 }
+/* ---- 透視像をモニタに映す（xray.js の renderFluoro が毎フレーム描く）---- */
+const FLUORO_W = 256, FLUORO_H = 320;
+const fluoroRT = new THREE.WebGLRenderTarget(FLUORO_W, FLUORO_H, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+const matMonitor = new THREE.MeshBasicMaterial({ map: fluoroRT.texture });
+function monitorImage(h, x, y, z) {   // 縦 h cm の透視像（縦横比 4:5）を +z 向きに貼る
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(h * FLUORO_W / FLUORO_H, h), matMonitor);
+  m.position.set(x, y, z); return m;
+}
+roomProps.add(monitorImage(60, 60, 175, -350 + 7.6));          // 透視室の奥の壁の 55 インチ
+partition.add(monitorImage(32, -75, 100, ROOM_Z0 + 32.2));      // 操作室の机の左のモニタ
 const OPERATOR_EYE = new THREE.Vector3(0, 118, 345);   // 操作室で座った術者の目の位置（窓から 95 cm）
 
 /* ---- ガイド ---- */
