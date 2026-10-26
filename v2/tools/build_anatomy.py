@@ -4,7 +4,7 @@
   1. https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html から次の 2 つを 1 つのフォルダに落とす
      - partof_element_parts.txt
      - partof_BP3D_4.0_obj_99.zip
-  2. pip install numpy trimesh fast-simplification
+  2. pip install numpy scipy trimesh fast-simplification
   3. python3 tools/build_anatomy.py <落としたフォルダ> js/anatomy-data.js
 
 座標：BodyParts3D は mm、x = 左(+)、y = 腹側が負、z = 頭側(+)。
@@ -13,12 +13,14 @@ v2 の bodyGroup の座標は、胃の中心が原点、x = 左(+)、y = 頭側(
 """
 import sys, io, json, base64, zipfile
 import numpy as np, trimesh, fast_simplification
+from scipy.spatial import cKDTree
 
 SRC, OUT = sys.argv[1], sys.argv[2]
 BODY_SCALE = 1.2                                   # js/scene.js の BODY_SCALE と同じ
 PARTS = {                                          # 使う部品（FMA の概念 ID）
     'stomach': ['FMA7148'],
     'skin': ['FMA7163'],
+    'esophagus': ['FMA7131'],
     'bones': ['FMA7480', 'FMA9140', 'FMA16203'],    # 胸郭（肋骨・肋軟骨・胸骨）、胸椎、腰椎
 }
 SKIP = {'FMA16033', 'FMA16034', 'FMA16035', 'FMA16036', 'FMA16037'}   # 腰椎の椎間板は骨ではないので除く
@@ -36,7 +38,7 @@ def load(key):
         ms.append(trimesh.load(io.BytesIO(data), file_type='obj', process=False, force='mesh'))
     m = trimesh.util.concatenate(ms); m.merge_vertices(); return m
 
-stom, skin, bones = load('stomach'), load('skin'), load('bones')
+stom, skin, bones, eso = load('stomach'), load('skin'), load('bones'), load('esophagus')
 c = (stom.bounds[0] + stom.bounds[1]) / 2          # 胃の外接箱の中心（mm）
 def to_body(v):
     d = (v - c) / 10.0 / BODY_SCALE
@@ -60,6 +62,9 @@ meta = {                                            # 実寸 cm（胃の中心�
     'head': round(float((sk[:, 2].max() - c[2]) / 10), 2),     # 頭頂まで
     'nose': to_body(headv[headv[:, 1].argmin()][None])[0].round(3).tolist(),   # 鼻先（bodyGroup の座標）
     'dia': round(float((stom.bounds[1][2] + 15 - c[2]) / 10 / BODY_SCALE), 3), # 胃底部の上 1.5 cm を横隔膜とみなす（同上）
+    # 噴門（胃と食道の境目）：胃の頂点のうち食道の頂点から 6 mm 以内のものの重心（bodyGroup の座標）。
+    # 胃の型を体に合わせるときの基準点（噴門は横隔膜の食道裂孔のところで位置が決まっているため）
+    'cardia': to_body(stom.vertices[cKDTree(eso.vertices).query(stom.vertices)[0] < 6.0].mean(0)[None])[0].round(3).tolist(),
     'stomachMm': c.round(1).tolist(),
 }
 data = {'meta': meta, 'skin': pack(*simplify(skin, FACES['skin'])), 'bones': pack(*simplify(bones, FACES['bones']))}

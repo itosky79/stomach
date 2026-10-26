@@ -160,8 +160,19 @@ function buildSurface() {
 }
 
 /* ================= 組み立て ================= */
+/* 胃の型ごとに、BodyParts3D の体を噴門で胃に重ねる。噴門は横隔膜の食道裂孔のところで位置が決まっていて、
+   胃の残りの部分はそこから垂れ下がる形になるので、型による胃の形の違いを噴門を基準にして体に置く。
+   型の噴門は、食道の管の下端（胃につながるところ）の中心。体を動かした分だけ天板と足台も置き直す。 */
+const _fit = new THREE.Vector3();
+function fitBodyToStomach() {
+  const e = (NN - 1) * 3, c = BP3D.meta.cardia;
+  _fit.set(centers[e] - c[0], centers[e + 1] - c[1], centers[e + 2] - c[2]);
+  bodyFit.position.copy(_fit);
+  setTableToBody(_fit);
+}
 function rebuildAll() {
   rebuild();
+  fitBodyToStomach();
   anatGroup.position.set(-anatOff[0], -anatOff[1], -anatOff[2]);
   geom.attributes.aRug.needsUpdate = true;
 }
