@@ -177,6 +177,10 @@ VR の操作：
 
 PC での参考値（この開発環境はグラフィックを専用部品なしで描くので、fps そのものは目安にならない）：物理の計算時間は、粗い 590 頂点で約 2 ms、普通 1762 頂点で約 5 ms、細かい 4162 頂点で約 10 ms。
 
+## 評価モード
+
+学会発表用の定量評価（目的部位の描出率、体積の整合性、再現性、動作性能）。`?eval=1` のときだけ出る。定義と使い方は [EVAL.md](EVAL.md)。
+
 ## v2 のファイル構成
 
 ```
@@ -184,6 +188,7 @@ v2/
 ├── index.html        画面の骨組み（HTML）
 ├── ROADMAP.md        このファイル
 ├── DIMENSIONS.md     寸法
+├── EVAL.md           評価モードの定義と使い方
 ├── proto/physics/    胃の物理の試作（index.html と main.js）
 ├── tools/build_anatomy.py  BodyParts3D から js/anatomy-data.js を作る
 ├── lib/
@@ -207,6 +212,7 @@ v2/
     ├── ui.js         コンソール（学習・手順・フリー・問題）
     ├── perf.js       重さの表示（?perf=1）
     ├── xr.js         VR に入る・VR の中での置き方・VR の中の重さ表示
+    ├── eval.js       評価モード（?eval=1 のときだけ読み込む）
     ├── main.js       初期化と描画ループ
     └── fail.js       3D を表示できないときの案内（最初に読み込む）
 ```

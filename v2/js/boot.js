@@ -18,6 +18,7 @@ if (Q.get('xr') === 'emulate') {
 }
 
 const FILES = ['data', 'questions', 'anatomy-data', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'perf', 'xr', 'main'];
+if (Q.get('eval') === '1') FILES.push('eval');   // 評価モード（学会発表用の定量評価）は ?eval=1 のときだけ
 for (const f of FILES) {
   await new Promise((done, fail) => {
     const s = document.createElement('script');
