@@ -17,7 +17,3 @@ console.error = function () {
   if (/shader|WebGLProgram|GL_/i.test(m)) showFail('シェーダを処理できませんでした。' + m.slice(0, 200));
   _err.apply(console, arguments);
 };
-if (typeof THREE === 'undefined') {
-  showFail('three.js を読み込めませんでした。index.html と同じ場所に three.min.js を置いてください。');
-  throw new Error('three.js が読み込めない');
-}

@@ -222,15 +222,13 @@
 
 </div>
 
-<script src="three.min.js"></script>
-<script src="js/data.js"></script>
-<script src="js/questions.js"></script>
 <script src="js/fail.js"></script>
-<script src="js/model.js"></script>
-<script src="js/scene.js"></script>
-<script src="js/sim.js"></script>
-<script src="js/camera.js"></script>
-<script src="js/xray.js"></script>
-<script src="js/labels.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/main.js"></script>
+<script type="module" src="js/boot.js"></script>
+<script>
+// ES モジュールはファイルを直接開く（file://）と読み込めない。そのときは理由を出す
+addEventListener('load', function () {
+  if (!window.THREE) showFail(location.protocol === 'file:'
+    ? 'v2 はファイルを直接開いても動きません。公開 URL から開いてください。'
+    : 'three.js を読み込めませんでした。lib/three.module.min.js があるか確かめてください。');
+});
+</script>

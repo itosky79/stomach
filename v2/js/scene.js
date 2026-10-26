@@ -89,6 +89,7 @@ canvas.addEventListener('webglcontextlost', e => {
   e.preventDefault(); showFail('WebGL のコンテキストが失われました。ページを開き直してください。');
 });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // r128 と同じく、描いた色をそのまま出す
 { // 端末の素性を控えておく（うまく描けないときの切り分け用）
   const gl = renderer.getContext();
   const dbg = gl.getExtension('WEBGL_debug_renderer_info');
