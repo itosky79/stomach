@@ -1176,7 +1176,7 @@ void main(){
   float rg = rugae(vR, uRug);
   vec3 cBar = vec3(0.957,0.969,0.984);
   vec3 cMuc = vec3(0.760,0.400,0.428);
-  vec3 cDbl = vec3(0.92,0.92,0.90) * mix(1.0, rg, 0.45);
+  vec3 cDbl = vec3(0.74,0.76,0.79) * mix(1.0, rg, 0.50);   // 二重造影：粘膜に薄く付いたバリウム（灰色）
   vec3 base = mix(cMuc, cBar, below);
   base = mix(base, cDbl, dbl);
   float l1 = max(dot(n, normalize(vec3(0.42,0.80,0.62))), 0.0);
@@ -1340,7 +1340,7 @@ function prop(parent, geo, mat, x, y, z, rx) {
 }
 const roomProps = new THREE.Group(); scene.add(roomProps);          // 床・台座（傾かない）
 const roomBase = new THREE.Group(); roomProps.add(roomBase);         // 床・土台（台の起倒に合わせて上下する）
-const uprights = [];                                                 // 土台と回転軸をつなぐ柱（伸び縮みする）
+const uprights = [];                                                 // 台座と回転軸をつなぐ柱（伸び縮みする）
 /* 台を起こすと足側が回転軸より下へ回り込む。実機では台が柱に沿って持ち上がるが、
    ここではカメラが患者を基準にしているので、そのぶん床と土台を下げ、柱を伸ばす。
    天板と足台の角のうち一番低い点が、床より少し上に来るだけの量を求める。 */
@@ -1355,17 +1355,16 @@ function floorDrop(tiltDeg) {
 function placeRoom() {
   const d = floorDrop(tiltCur);
   roomBase.position.y = -d;
-  for (const u of uprights) { u.scale.y = (21 + d) / 21; u.position.y = -(21 + d) / 2; }
+  const h = 35 + d;                                 // 台座の上面（床 +3）から回転軸まで
+  for (const u of uprights) { u.scale.y = h / 21; u.position.y = -h / 2; }
 }
 const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・管球・受像器（傾く）
 {
   const grid2 = new THREE.GridHelper(180, 18, 0x243442, 0x172230);
   grid2.material.transparent = true; grid2.material.opacity = 0.30;
   grid2.position.y = -38; roomBase.add(grid2);
-  prop(roomBase, new THREE.BoxGeometry(40, 4, 46), matFrame, 0, -36, 0);
-  prop(roomBase, new THREE.BoxGeometry(15, 12, 15), matFrame, 0, -28, 0);
-  prop(roomBase, new THREE.BoxGeometry(6, 5, 64), matFrame, 0, -23, 0);
-  for (const sz of [1, -1]) {
+  for (const sz of [1, -1]) {   // 台座は天板の両脇だけに置き、立位で足台・足先と重ならないようにする
+    prop(roomBase, new THREE.BoxGeometry(14, 3, 9), matFrame, 0, -36.5, 30 * sz);
     uprights.push(prop(roomProps, new THREE.BoxGeometry(5, 21, 5), matFrame, 0, -10.5, 30 * sz));
     prop(roomProps, new THREE.CylinderGeometry(3.4, 3.4, 6, 16), matGear, 0, 0, 30 * sz, Math.PI / 2);
   }
