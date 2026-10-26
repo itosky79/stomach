@@ -329,6 +329,25 @@ async function evalRow(row, report) {
   return res;
 }
 
+/* ================= 国試の体位選択問題の再現 =================
+   「○○に異常が疑われた場合、適切な撮影（体位）はどれか」という問題で、選択肢の体位ごとに設問の部位の描出率を求め、
+   描出率の高い順に正答の数（1 つ、または「2 つ選べ」なら 2 つ）だけ選んだものが、
+   厚生労働省の正答値表の正答と一致するかを見る。体位の角度は docs/positions.md の対応（アプリの体位の定義）による。
+   部位の言葉の定義は parseTarget の前のコメント（噴門部は噴門から実寸 2 cm 以内）。 */
+const KOKUSHI_POSES = { '右側臥位像': [0, 270], '背臥位正面像': [0, 0], '背臥位第1斜位像': [0, 45], '背臥位第2斜位像': [0, 315],
+  '半立位第2斜位像': [45, 315], '再立位第1斜位像': [90, 45] };
+const KOKUSHI_Q = [
+  { src: '第71回 午前 第89問', target: '噴門部', choices: ['右側臥位像', '背臥位正面像', '背臥位第1斜位像', '背臥位第2斜位像', '半立位第2斜位像'], ans: ['右側臥位像', '半立位第2斜位像'] },
+  { src: '第73回 午前 第83問', target: '胃角部', choices: ['右側臥位像', '背臥位正面像', '再立位第1斜位像', '背臥位第1斜位像', '半立位第2斜位像'], ans: ['背臥位正面像'] }
+];
+function evalKokushi() {   // 選んだ胃型で 2 問を評価する。行ごとに結果を返す
+  return KOKUSHI_Q.map(q => {
+    const r = q.choices.map(c => { evalPrepare(KOKUSHI_POSES[c][0], KOKUSHI_POSES[c][1]); return [c, depictionRate(parseTarget(q.target)).rate]; });
+    const top = [...r].sort((a, b) => b[1] - a[1]).slice(0, q.ans.length).map(x => x[0]);
+    return { src: q.src, target: q.target, rates: r, top, ans: q.ans, hit: q.ans.every(a => top.includes(a)) };
+  });
+}
+
 /* ================= 画面 ================= */
 const evalStyle = document.createElement('style');
 evalStyle.textContent = `
@@ -365,7 +384,7 @@ evalPanel.innerHTML = `
 <div class="row"><button type="button" id="evSeq1">基準撮影法Ⅰを読み込む</button><button type="button" id="evSeq2">基準撮影法Ⅱを読み込む</button>
 <span>（data.js の撮影手順の表から。原典：日本消化器がん検診学会のマニュアル 表1-Ⅱ-1。読み込んだら原典と照合する）</span></div>
 <div class="row"><button type="button" id="evAdd">行を足す</button><button type="button" id="evRun">評価する</button>
-<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
+<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
 <table id="evOut"></table>`;
 document.body.appendChild(evalPanel);
 
@@ -454,6 +473,17 @@ $e('evRun').addEventListener('click', async () => {
     renderer.setAnimationLoop(loop);
     $e('evRun').disabled = false;
   }
+});
+$e('evKok').addEventListener('click', async () => {
+  renderer.setAnimationLoop(null);
+  const saved = evalSave();
+  $e('evalMsg').textContent = '国試の体位問題を評価中'; await nextFrame();
+  let res = [];
+  try { res = evalKokushi(); } finally { evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
+  $e('evalMsg').textContent = '国試の体位問題：' + res.filter(r => r.hit).length + ' / ' + res.length + ' 問で正答と一致（' + TYPES[EVAL.type].name + '）';
+  $e('evOut').innerHTML = '<thead><tr><th>問題</th><th>部位</th><th>選択肢ごとの描出率(%)</th><th>描出率で選んだ体位</th><th>正答</th><th>一致</th></tr></thead><tbody>' +
+    res.map(r => '<tr><td>' + r.src + '</td><td>' + r.target + '</td><td>' + r.rates.map(([c, v]) => c + ' ' + v.toFixed(1)).join(' / ') +
+      '</td><td>' + r.top.join('・') + '</td><td>' + r.ans.join('・') + '</td><td>' + (r.hit ? '一致' : '不一致') + '</td></tr>').join('') + '</tbody>';
 });
 $e('evCsv').addEventListener('click', () => {
   const esc = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
