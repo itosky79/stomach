@@ -1252,7 +1252,7 @@ matSkin.side = THREE.FrontSide;
 const meshSkin = new THREE.Mesh(torsoGeom, matSkin); meshSkin.renderOrder = 6;
 anatGroup.add(meshSkin);
 
-/* ---- 骨格 ---- */
+/* ---- 骨格（胸郭と脊椎だけ。目印として要るものに絞る）---- */
 const boneGroup = new THREE.Group(); anatGroup.add(boneGroup);
 const matBone = litMat(0xD6DEE6, 0.26, 0.07, 0.95), matBoneX = xrayMat(0.075, true, 2.1);
 {
@@ -1271,13 +1271,6 @@ const matBone = litMat(0xD6DEE6, 0.26, 0.07, 0.95), matBoneX = xrayMat(0.075, tr
       const m = new THREE.Mesh(new THREE.TubeGeometry(c, 28, 0.34, 6, false), matBone);
       m.renderOrder = 0; boneGroup.add(m);
     }
-  }
-  for (const sx of [1, -1]) {
-    const c = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(2.4 * sx, -17.5, -5.6), new THREE.Vector3(7.6 * sx, -14.6, -2.4),
-      new THREE.Vector3(11.4 * sx, -12.6, 2.2), new THREE.Vector3(9.6 * sx, -15.4, 5.0)]);
-    const m = new THREE.Mesh(new THREE.TubeGeometry(c, 26, 0.9, 7, false), matBone);
-    m.renderOrder = 0; boneGroup.add(m);
   }
 }
 
