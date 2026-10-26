@@ -1162,7 +1162,7 @@ float rugae(vec3 r, float on){
 }`;
 
 const FRAG_SOLID = `
-uniform vec3 uUp; uniform float uFlip; uniform float uHi; uniform float uRug;
+uniform vec3 uUp; uniform float uFlip; uniform float uRug;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
 varying vec3 vNL; varying vec3 vNW; varying vec3 vVd;
 ${RUGAE}
@@ -1176,7 +1176,7 @@ void main(){
   float rg = rugae(vR, uRug);
   vec3 cBar = vec3(0.957,0.969,0.984);
   vec3 cMuc = vec3(0.760,0.400,0.428);
-  vec3 cDbl = mix(vec3(0.92,0.92,0.90), vec3(0.980,0.745,0.330), uHi) * mix(1.0, rg, 0.45);
+  vec3 cDbl = vec3(0.92,0.92,0.90) * mix(1.0, rg, 0.45);
   vec3 base = mix(cMuc, cBar, below);
   base = mix(base, cDbl, dbl);
   float l1 = max(dot(n, normalize(vec3(0.42,0.80,0.62))), 0.0);
@@ -1204,11 +1204,11 @@ void main(){
 }`;
 
 const uUp = { value: new THREE.Vector3(0, 1, 0) };
-const uHi = { value: 1 }, uRug = { value: 1 };
+const uRug = { value: 1 };
 function solidMat(side, flip) {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG_SOLID,
-    uniforms: { uUp: uUp, uFlip: { value: flip }, uHi: uHi, uRug: uRug },
+    uniforms: { uUp: uUp, uFlip: { value: flip }, uRug: uRug },
     transparent: true, depthWrite: false, side: side
   });
 }
@@ -1339,16 +1339,34 @@ function prop(parent, geo, mat, x, y, z, rx) {
   m.renderOrder = 0; parent.add(m); return m;
 }
 const roomProps = new THREE.Group(); scene.add(roomProps);          // 床・台座（傾かない）
+const roomBase = new THREE.Group(); roomProps.add(roomBase);         // 床・土台（台の起倒に合わせて上下する）
+const uprights = [];                                                 // 土台と回転軸をつなぐ柱（伸び縮みする）
+/* 台を起こすと足側が回転軸より下へ回り込む。実機では台が柱に沿って持ち上がるが、
+   ここではカメラが患者を基準にしているので、そのぶん床と土台を下げ、柱を伸ばす。
+   天板と足台の角のうち一番低い点が、床より少し上に来るだけの量を求める。 */
+const FLOOR_Y = -38;
+const TABLE_CORNERS = [[-58, -14.5], [-58, -9.5], [74, -14.5], [76.5, -12], [76.5, 14]];
+function floorDrop(tiltDeg) {
+  const t = tiltDeg * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
+  let low = Infinity;
+  for (const [x, y] of TABLE_CORNERS) low = Math.min(low, -x * sn + y * cs);
+  return Math.max(0, low < FLOOR_Y + 1.5 ? (FLOOR_Y + 1.5) - low : 0);
+}
+function placeRoom() {
+  const d = floorDrop(tiltCur);
+  roomBase.position.y = -d;
+  for (const u of uprights) { u.scale.y = (21 + d) / 21; u.position.y = -(21 + d) / 2; }
+}
 const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・管球・受像器（傾く）
 {
-  const grid2 = new THREE.GridHelper(140, 14, 0x243442, 0x172230);
+  const grid2 = new THREE.GridHelper(180, 18, 0x243442, 0x172230);
   grid2.material.transparent = true; grid2.material.opacity = 0.30;
-  grid2.position.y = -38; roomProps.add(grid2);
-  prop(roomProps, new THREE.BoxGeometry(40, 4, 46), matFrame, 0, -36, 0);
-  prop(roomProps, new THREE.BoxGeometry(15, 12, 15), matFrame, 0, -28, 0);
-  prop(roomProps, new THREE.BoxGeometry(6, 5, 64), matFrame, 0, -23, 0);
+  grid2.position.y = -38; roomBase.add(grid2);
+  prop(roomBase, new THREE.BoxGeometry(40, 4, 46), matFrame, 0, -36, 0);
+  prop(roomBase, new THREE.BoxGeometry(15, 12, 15), matFrame, 0, -28, 0);
+  prop(roomBase, new THREE.BoxGeometry(6, 5, 64), matFrame, 0, -23, 0);
   for (const sz of [1, -1]) {
-    prop(roomProps, new THREE.BoxGeometry(5, 21, 5), matFrame, 0, -10.5, 30 * sz);
+    uprights.push(prop(roomProps, new THREE.BoxGeometry(5, 21, 5), matFrame, 0, -10.5, 30 * sz));
     prop(roomProps, new THREE.CylinderGeometry(3.4, 3.4, 6, 16), matGear, 0, 0, 30 * sz, Math.PI / 2);
   }
   prop(tableProps, new THREE.BoxGeometry(132, 5, 50), matPad, 8, -12, 0);       // 天板
@@ -1390,6 +1408,7 @@ function applyPose() {
   tiltGroup.quaternion.copy(qA);
   bodyGroup.quaternion.copy(qBase).multiply(qB);
   qWorldBody.copy(qA).multiply(bodyGroup.quaternion);
+  placeRoom();
 }
 function upLocal(out) {
   qA.copy(qWorldBody).invert();
@@ -1532,7 +1551,7 @@ function rebuildAll() {
 // 台の座標系の軸：AZ=管球の方向、AY=頭側（フィルムの上）、AX=フィルムの右
 const AX = new THREE.Vector3(0, 0, -1), AY = new THREE.Vector3(-1, 0, 0), AZ = new THREE.Vector3(0, 1, 0);
 const ctrl = { theta: 0.62, phi: 1.16, dist: 46, base: 46, target: new THREE.Vector3(0, 0, 0) };
-const VIEWS = { room: [0.62, 1.02, 2.90, -2], oblique: [1.05, 1.26, 1.45, -1] };
+const VIEWS = { room: [0.62, 1.06, 3.70, -10], oblique: [1.05, 1.26, 1.45, -1] };
 let viewPreset = 'room';
 const _dir = new THREE.Vector3(), _qt = new THREE.Quaternion();
 function applyCam() {
@@ -1559,7 +1578,8 @@ function setView(p) {
   if (VIEWS[p]) { ctrl.theta = VIEWS[p][0]; ctrl.phi = VIEWS[p][1]; ctrl.dist = ctrl.base * VIEWS[p][2]; ctrl.target.set(0, VIEWS[p][3], 0); }
   if (p === 'tube') { ctrl.dist = ctrl.base; ctrl.target.set(0, 0, 0); }
   if (p === 'room') {   // 横長・縦長どちらの画面でも寝台の全体が入るように
-    const need = 60 / (Math.tan(camera.fov * Math.PI / 360) * Math.max(0.5, camera.aspect));
+    const tn = Math.tan(camera.fov * Math.PI / 360);   // 立位の頭〜床（縦）と水平位の頭〜足（横）
+    const need = Math.max(84 / (tn * Math.max(0.5, camera.aspect)), 80 / tn);
     ctrl.dist = Math.max(ctrl.dist, need);
   }
   const seg = document.getElementById('viewpt');
@@ -1598,15 +1618,20 @@ canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('dblclick', fitCam);          // 視点を戻す
+function zoomTo(d) {   // 寄るほど注視点を胃（原点）へ近づける。引けば元に戻る
+  const nd = Math.max(bsRadius * 0.5, Math.min(bsRadius * 24, d));
+  ctrl.target.multiplyScalar(nd / ctrl.dist);
+  ctrl.dist = nd;
+  applyCam();
+}
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  ctrl.dist = Math.max(bsRadius * 0.5, Math.min(bsRadius * 10, ctrl.dist * (1 + Math.sign(e.deltaY) * 0.10)));
-  applyCam();
+  zoomTo(ctrl.dist * (1 + Math.sign(e.deltaY) * 0.10));
 }, { passive: false });
 canvas.addEventListener('touchmove', e => {
   if (e.touches.length === 2) {
     const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-    if (pinch) { ctrl.dist = Math.max(bsRadius * 0.5, Math.min(bsRadius * 10, ctrl.dist * pinch / d)); applyCam(); }
+    if (pinch) zoomTo(ctrl.dist * pinch / d);
     pinch = d; drag = null;
   }
 }, { passive: true });
