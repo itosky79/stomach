@@ -66,6 +66,10 @@ function loop(now) {
   perfEnd();
 }
 
+{ // 開発用：?type=bp3d などで最初の胃の型を選ぶ（画面には型を選ぶボタンがない）
+  const qt = new URLSearchParams(location.search).get('type');
+  if (qt && TYPES[qt]) curType = qt;
+}
 matSkin.uniforms.uO.value = skinOpacity;
 loadExam();
 matSkin.uniforms.uO.value = skinOpacity;
