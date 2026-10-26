@@ -1550,7 +1550,7 @@ function rebuildAll() {
 // 台の座標系の軸：AZ=管球の方向、AY=頭側（フィルムの上）、AX=フィルムの右
 const AX = new THREE.Vector3(0, 0, -1), AY = new THREE.Vector3(-1, 0, 0), AZ = new THREE.Vector3(0, 1, 0);
 const ctrl = { theta: 0.62, phi: 1.16, dist: 46, base: 46, target: new THREE.Vector3(0, 0, 0) };
-const VIEWS = { room: [0.62, 1.06, 3.70, -10], oblique: [1.05, 1.26, 1.45, -1] };
+const VIEWS = { room: [0.62, 1.02, 2.90, -2], oblique: [1.05, 1.26, 1.45, -1] };
 let viewPreset = 'room';
 const _dir = new THREE.Vector3(), _qt = new THREE.Quaternion();
 function applyCam() {
@@ -1577,8 +1577,7 @@ function setView(p) {
   if (VIEWS[p]) { ctrl.theta = VIEWS[p][0]; ctrl.phi = VIEWS[p][1]; ctrl.dist = ctrl.base * VIEWS[p][2]; ctrl.target.set(0, VIEWS[p][3], 0); }
   if (p === 'tube') { ctrl.dist = ctrl.base; ctrl.target.set(0, 0, 0); }
   if (p === 'room') {   // 横長・縦長どちらの画面でも寝台の全体が入るように
-    const tn = Math.tan(camera.fov * Math.PI / 360);   // 立位の頭〜床（縦）と水平位の頭〜足（横）
-    const need = Math.max(84 / (tn * Math.max(0.5, camera.aspect)), 80 / tn);
+    const need = 60 / (Math.tan(camera.fov * Math.PI / 360) * Math.max(0.5, camera.aspect));
     ctrl.dist = Math.max(ctrl.dist, need);
   }
   const seg = document.getElementById('viewpt');
@@ -2327,25 +2326,19 @@ new ResizeObserver(() => {          // 浮かせたパネルの手動リサイ�
   }
 }).observe(rail);
 
-/* ---- 初回だけ出す操作案内。端末に合わせて中身を変える ---- */
+/* ---- 開くたびに出す操作案内。端末に合わせて中身を変える ---- */
 {
   const touch = matchMedia('(pointer:coarse)').matches || innerWidth <= 900;
   const gd = document.getElementById('guide');
   document.getElementById('gTip').innerHTML = touch
     ? '<b>1 本指でドラッグ</b>すると回ります。<br>2 本指で拡大縮小、ダブルタップで視点が戻ります。'
     : '<b>ドラッグ</b>すると回ります。<br>ホイールで拡大縮小、ダブルクリックで視点が戻ります。';
-  const GKEY = 'stomach.guide.v1';
   const openGuide = () => gd.classList.add('on');
-  const closeGuide = () => {
-    gd.classList.remove('on');
-    try { localStorage.setItem(GKEY, '1'); } catch (e) { }
-  };
+  const closeGuide = () => gd.classList.remove('on');
   document.getElementById('gClose').addEventListener('click', closeGuide);
   gd.addEventListener('click', e => { if (e.target === gd) closeGuide(); });
   document.getElementById('bGuide').addEventListener('click', openGuide);
-  let seen = false;
-  try { seen = localStorage.getItem(GKEY) === '1'; } catch (e) { }
-  if (!seen) openGuide();
+  openGuide();
 }
 
 const lb = document.getElementById('lightbox');
