@@ -4,7 +4,7 @@
    同じ関数（settle / flowStep / levelOf / updateWet など）を決まった手順で呼んで測る。
 
    【評価の手順（各体位で共通。毎回同じ結果になるようにする）】
-   1. 条件を固定する：胃型 = 鉤状胃、バリウム量 = 120 mL（モデルの単位）、発泡剤 = 既定値（airLevel 0.6）、
+   1. 条件を固定する：胃型 = 評価画面で選んだ型（既定は鉤状胃）、バリウム量 = 120 mL（モデルの単位）、発泡剤 = 既定値（airLevel 0.6）、
       圧迫なし、幽門は閉じる。
    2. 起倒角と回転角をそのまま設定し（画面のようにゆっくり動かさない）、settle() で平衡にする。
       settle() はバリウムを入れ直して 1/60 秒の刻みで 150 回流し、胃の壁を全面「付着あり」（aWet = 1）にする。
@@ -23,8 +23,8 @@
    シェーダは画素ごとに補間した値で判定するが、ここでは頂点で判定して面積で重み付けしている（近似）。
 
    目的部位 =「部位」＋必要なら「壁」。
-     部位：胃の型のデータ（TYPES[型].regions）で、管の輪ごとに割り当てた部位（regionOf）。
-           胃底部・胃体部・胃角部・前庭部・幽門部・十二指腸球部。「胃全体」は十二指腸球部を除くすべて。
+     部位：胃の型のデータ（TYPES[型].regions）で、管の輪ごとに割り当てた部位（regionOf）と、
+           それを分けた胃体上部・胃上部・噴門部など。言葉と定義は parseTarget の前のコメントにまとめた。
      壁  ：壁が向いている方向（頂点の外向きの法線 n を、管の接線に垂直な面に写した向き）の角度 φ で 4 つに分ける。
            基準は、腹側の軸（モデルの z）を管の接線に垂直に直した向き A と、
            管の曲がりの内側（胃の中心線の重心の側）を向く横の向き S（= 小弯の側）。
@@ -51,7 +51,6 @@
 
 const EVAL = { type: 'hook', ml: 120, air: 0.6, dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
 const EVAL_KEY = 'stomach.v2.eval';
-const REGION_NAMES = ['胃底部', '胃体部', '胃角部', '前庭部', '幽門部', '十二指腸球部'];
 const WALLS = ['前壁', '小弯', '後壁', '大弯'];
 
 /* ---- 状態の控えと復元（評価のあとは元の画面に戻す）---- */
@@ -145,28 +144,78 @@ function doubleContrast() {   // 頂点ごとの dbl（FRAG_SOLID と同じ式�
   }
   return d;
 }
-function parseTarget(text) {   // 「胃体部後壁」「胃体部+胃角部後壁」「胃全体」など。わからなければ null
-  const parts = String(text || '').split(/[+＋、,，・]/).map(s => s.trim()).filter(Boolean);
+/* 目的部位の文字列を読む。
+   書き方：部位を「・」「+」「、」でつなぐ（どれかに入れば目的部位）。「A〜B」は A から B までの範囲。
+   最後に壁（前壁・小弯・後壁・大弯）が付いていれば、その項目全体に壁の条件がかかる。括弧書きは無視する。
+   部位の言葉と、その定義：
+     胃底部（穹窿部）・胃体部（体部）・胃角部・前庭部・幽門部・十二指腸球部（十二指腸）… 胃の型のデータの部位
+     胃体上部・胃体中部・胃体下部 … 胃体部の輪を、管の軸に沿って数で 3 等分したもの
+     胃上部・胃中部・胃下部 … 胃（十二指腸球部を除く）を、管の中心の線の長さで 3 等分したもの
+                             （胃癌取扱い規約の U・M・L は小弯と大弯をそれぞれ 3 等分する。ここでは中心の線で近似した）
+     噴門部 … 噴門（食道の管の下端）から実寸 2 cm 以内にある胃の壁
+     胃全体 … 十二指腸球部を除くすべて
+   食道は評価の対象外（胃の壁の面積しか数えないため）。読めない言葉があれば null を返す。 */
+const TERM_SYN = { '穹窿部': '胃底部', '体部': '胃体部', '十二指腸': '十二指腸球部' };
+const REGION_WORDS = ['胃底部', '胃体部', '胃角部', '前庭部', '幽門部', '十二指腸球部'];
+const SUB_WORDS = ['胃体上部', '胃体中部', '胃体下部', '胃上部', '胃中部', '胃下部', '噴門部', '胃全体'];
+const TERM_WORDS = [...REGION_WORDS, ...SUB_WORDS, ...Object.keys(TERM_SYN)];
+function parseTarget(text) {
+  const clean = String(text || '').replace(/[（(][^）)]*[）)]/g, '').replace(/\s/g, '');
+  const parts = clean.split(/[+＋、,，・]/).filter(Boolean);
   if (!parts.length) return null;
   const out = [];
-  for (const p of parts) {
-    let wall = -1, rest = p;
-    for (let w = 0; w < WALLS.length; w++) if (rest.endsWith(WALLS[w])) { wall = w; rest = rest.slice(0, -WALLS[w].length); break; }
-    if (rest === '胃全体' || rest === '') { out.push({ regions: null, wall }); continue; }
-    const k = REGION_NAMES.indexOf(rest);
-    if (k < 0) return null;
-    out.push({ regions: [rest], wall });
+  for (let p of parts) {
+    let wall = -1;
+    for (let w = 0; w < WALLS.length; w++) if (p.endsWith(WALLS[w])) { wall = w; p = p.slice(0, -WALLS[w].length); break; }
+    const ends = p.split(/[〜～~]/);
+    if (ends.length > 2) return null;
+    const words = ends.map(e => TERM_SYN[e] || e);
+    if (words.some(w => TERM_WORDS.indexOf(w) < 0 && !TERM_SYN[w])) return null;
+    if (words.length === 2 && words.some(w => w === '噴門部' || w === '胃全体')) return null;   // 範囲の端には使えない
+    out.push({ words, wall });
   }
   return out;
 }
+function ringsOf(word) {   // 言葉 → 胃の輪の番号の範囲 [最初, 最後]（噴門部・胃全体は別に扱う）
+  const rr = [];
+  for (let i = 0; i < NMAIN; i++) rr.push(regionList[regionOf[i]][1]);
+  const span = name => { const f = rr.indexOf(name), l = rr.lastIndexOf(name); return f < 0 ? null : [f, l]; };
+  if (REGION_WORDS.indexOf(word) >= 0) return span(word);
+  const body = span('胃体部');
+  if (word.startsWith('胃体') && body) {   // 胃体部を輪の数で 3 等分
+    const k = ['胃体上部', '胃体中部', '胃体下部'].indexOf(word), n = body[1] - body[0] + 1;
+    return [body[0] + Math.round(n * k / 3), body[0] + Math.round(n * (k + 1) / 3) - 1];
+  }
+  const k = ['胃上部', '胃中部', '胃下部'].indexOf(word);
+  if (k >= 0) {   // 胃（十二指腸球部を除く）を中心の線の長さで 3 等分
+    const last = rr.indexOf('十二指腸球部') - 1, acc = [0];
+    for (let i = 1; i <= last; i++) acc.push(acc[i - 1] + Math.hypot(centers[i * 3] - centers[i * 3 - 3], centers[i * 3 + 1] - centers[i * 3 - 2], centers[i * 3 + 2] - centers[i * 3 - 1]));
+    const L = acc[last], a = L * k / 3, b = L * (k + 1) / 3;
+    let f = -1, l = -1;
+    for (let i = 0; i <= last; i++) if (acc[i] >= a && acc[i] <= b) { if (f < 0) f = i; l = i; }
+    return [f, l];
+  }
+  return null;
+}
 function targetMask(target, sec) {   // 目的部位に入る頂点
   const m = new Uint8Array(NMAIN * CM);
-  for (let i = 0; i < NMAIN; i++) {
-    const name = regionList[regionOf[i]][1], duode = regionList[regionOf[i]][0] === 'duode';
-    for (const t of target) {
-      if (t.regions ? t.regions.indexOf(name) < 0 : duode) continue;
-      for (let j = 0; j < CM; j++) { const v = i * CM + j; if (t.wall < 0 || sec[v] === t.wall) m[v] = 1; }
+  const duodeFirst = (() => { for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] === 'duode') return i; return NMAIN; })();
+  const e = (NN - 1) * 3, R2 = Math.pow(2.0 / BODY_SCALE, 2);   // 噴門部：噴門から実寸 2 cm 以内
+  for (const t of target) {
+    const ok = new Uint8Array(NMAIN * CM);
+    if (t.words.length === 1 && t.words[0] === '胃全体') { for (let v = 0; v < duodeFirst * CM; v++) ok[v] = 1; }
+    else if (t.words.length === 1 && t.words[0] === '噴門部') {
+      for (let v = 0; v < duodeFirst * CM; v++) {
+        const dx = pos[v * 3] - centers[e], dy = pos[v * 3 + 1] - centers[e + 1], dz = pos[v * 3 + 2] - centers[e + 2];
+        if (dx * dx + dy * dy + dz * dz <= R2) ok[v] = 1;
+      }
+    } else {
+      const a = ringsOf(t.words[0]), b = ringsOf(t.words[t.words.length - 1]);
+      if (!a || !b) continue;
+      const f = Math.min(a[0], b[0]), l = Math.max(a[1], b[1]);
+      for (let i = f; i <= l; i++) for (let j = 0; j < CM; j++) ok[i * CM + j] = 1;
     }
+    for (let v = 0; v < NMAIN * CM; v++) if (ok[v] && (t.wall < 0 || sec[v] === t.wall)) m[v] = 1;
   }
   return m;
 }
@@ -248,7 +297,7 @@ const nextFrame = () => new Promise(r => setTimeout(r, 0));
 async function evalRow(row, report) {
   const tilt = +row.tilt, roll = +row.roll;
   const target = parseTarget(row.target);
-  const res = { name: row.name || poseName(tilt, roll), tilt, roll, target: row.target };
+  const res = { name: row.name || poseName(tilt, roll), tilt, roll, target: row.target, targetOk: !!target };
   // ①②
   const p = evalPrepare(tilt, roll);
   res.simMs = p.simMs;
@@ -292,6 +341,7 @@ evalStyle.textContent = `
 #evalPanel th,#evalPanel td{border:1px solid var(--line2); padding:4px 6px; text-align:left; white-space:nowrap}
 #evalPanel input{background:#0D161D; color:var(--text); border:1px solid var(--line2); border-radius:3px; padding:3px 5px; font:inherit; width:100%}
 #evalPanel input.num{width:70px}
+#evalPanel select{background:#0D161D; color:var(--text); border:1px solid var(--line2); border-radius:3px; padding:3px 5px; font:inherit}
 #evalPanel .bad{border-color:#C0563A}
 #evalPanel button{background:#13242F; color:var(--text); border:1px solid var(--line2); border-radius:3px; padding:5px 10px; font:inherit; cursor:pointer; margin-right:6px}
 #evalPanel .row{display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin:6px 0}
@@ -304,13 +354,16 @@ evalPanel.innerHTML = `
 <h2>評価モード</h2>
 <p>条件：胃型 鉤状胃、バリウム ${EVAL.ml} mL、発泡剤 既定、圧迫なし、幽門閉。各体位で settle() のあと Δt = 1/60 秒で計算を進めてから測る。
 定義は js/eval.js の先頭に書いてある。</p>
-<p>目的部位の書き方：部位（${REGION_NAMES.join('・')}・胃全体）＋必要なら壁（${WALLS.join('・')}）。例「胃体部後壁」。複数は「+」でつなぐ。</p>
+<p>目的部位の書き方：部位（${REGION_WORDS.join('・')}・${SUB_WORDS.join('・')}・穹窿部・体部・十二指腸）＋必要なら壁（${WALLS.join('・')}）。例「胃体部後壁」「胃角部〜前庭部後壁」「穹窿部・噴門部」。括弧書きは無視する。食道は対象外。</p>
 <div class="row">
+  <label>胃型<select id="evType"></select></label>
   <label>計算を進める秒数<input class="num" id="evSim" type="number" min="0" step="1"></label>
   <label>再現性の回数<input class="num" id="evRep" type="number" min="2" step="1"></label>
   <label>fps の計測秒数<input class="num" id="evFps" type="number" min="0" step="1"></label>
 </div>
 <table id="evIn"><thead><tr><th>体位名</th><th>起倒角</th><th>回転角</th><th>目的部位（ラベル名）</th><th></th></tr></thead><tbody></tbody></table>
+<div class="row"><button type="button" id="evSeq1">基準撮影法Ⅰを読み込む</button><button type="button" id="evSeq2">基準撮影法Ⅱを読み込む</button>
+<span>（data.js の撮影手順の表から。原典：日本消化器がん検診学会のマニュアル 表1-Ⅱ-1。読み込んだら原典と照合する）</span></div>
 <div class="row"><button type="button" id="evAdd">行を足す</button><button type="button" id="evRun">評価する</button>
 <button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
 <table id="evOut"></table>`;
@@ -325,9 +378,12 @@ document.getElementById('evClose').addEventListener('click', () => evalPanel.cla
 let evalRows = [{ name: '', tilt: '', roll: '', target: '' }];   // 目的部位は利用者がマニュアルから入れる（推測では埋めない）
 try { const s = JSON.parse(localStorage.getItem(EVAL_KEY) || 'null'); if (s && s.rows && s.rows.length) evalRows = s.rows; if (s && s.p) Object.assign(EVAL, s.p); } catch (e) { }
 const $e = id => document.getElementById(id);
+for (const k of Object.keys(TYPES)) { const o = document.createElement('option'); o.value = k; o.textContent = TYPES[k].name; $e('evType').appendChild(o); }
+$e('evType').value = TYPES[EVAL.type] ? EVAL.type : 'hook';
+$e('evType').addEventListener('change', () => { EVAL.type = $e('evType').value; evalPersist(); });
 $e('evSim').value = EVAL.simSec; $e('evRep').value = EVAL.repeat; $e('evFps').value = EVAL.fpsSec;
 function evalPersist() {
-  try { localStorage.setItem(EVAL_KEY, JSON.stringify({ rows: evalRows, p: { simSec: EVAL.simSec, repeat: EVAL.repeat, fpsSec: EVAL.fpsSec } })); } catch (e) { }
+  try { localStorage.setItem(EVAL_KEY, JSON.stringify({ rows: evalRows, p: { type: EVAL.type, simSec: EVAL.simSec, repeat: EVAL.repeat, fpsSec: EVAL.fpsSec } })); } catch (e) { }
 }
 function drawInputs() {
   const tb = $e('evIn').querySelector('tbody'); tb.innerHTML = '';
@@ -348,19 +404,26 @@ function drawInputs() {
   });
 }
 drawInputs();
+function loadSeq(list, label) {   // 撮影手順の表の体位名・角度・目的部位をそのまま入れる（圧迫の行は印を付ける）
+  evalRows = list.map((q, i) => ({ name: label + NOS[i] + ' ' + q.name + (q.comp ? '（圧迫：評価は圧迫なし）' : ''),
+    tilt: String(q.tilt), roll: String(q.roll), target: q.tgt }));
+  evalPersist(); drawInputs();
+}
+$e('evSeq1').addEventListener('click', () => loadSeq(SEQ1, 'Ⅰ'));
+$e('evSeq2').addEventListener('click', () => loadSeq(SEQ2, 'Ⅱ'));
 $e('evAdd').addEventListener('click', () => { evalRows.push({ name: '', tilt: '', roll: '', target: '' }); evalPersist(); drawInputs(); });
 for (const [id, key] of [['evSim', 'simSec'], ['evRep', 'repeat'], ['evFps', 'fpsSec']])
   $e(id).addEventListener('input', () => { const v = +$e(id).value; if (v >= 0) { EVAL[key] = v; evalPersist(); } });
 
 const CSV_HEAD = ['体位名', '起倒角', '回転角', '目的部位', '描出率(%)', '体積変動率(%)', '再現性(一致/不一致)', '描画時間(ms)',
   '平均fps', '体積変動率_モデル(%)', '液量_メッシュ(mL)', '液量_投与(mL)', '目的部位の面積(cm2)', '計算時間(ms)', '不一致の画素数',
-  '胃型', '計算を進めた秒数', '再現性の回数'];
+  '胃型', '計算を進めた秒数', '再現性の回数', '目的部位の判定'];
 let evalResults = [];
 function resultRow(r) {
   const f = (x, d) => Number.isFinite(x) ? x.toFixed(d) : '';
   return [r.name, r.tilt, r.roll, r.target, f(r.rate, 2), f(r.dVol, 3), r.repro ? '一致' : '不一致', f(r.renderMs, 2),
     f(r.fps, 1), f(r.dVolModel, 5), f(r.vMesh, 2), f(r.vRef, 2), f(r.area, 2), f(r.simMs, 1), r.diffPx,
-    TYPES[EVAL.type].name, EVAL.simSec, EVAL.repeat];
+    TYPES[EVAL.type].name, EVAL.simSec, EVAL.repeat, r.targetOk ? '可' : '対象外（読めない言葉・食道など）'];
 }
 function drawResults() {
   const t = $e('evOut');
@@ -370,8 +433,6 @@ function drawResults() {
 $e('evRun').addEventListener('click', async () => {
   const rows = evalRows.filter(r => r.tilt !== '' && r.roll !== '');
   if (!rows.length) { $e('evalMsg').textContent = '起倒角と回転角を入れた行がありません'; return; }
-  const bad = rows.find(r => r.target && !parseTarget(r.target));
-  if (bad) { $e('evalMsg').textContent = '目的部位が読めない行があります：' + bad.target; return; }
   $e('evRun').disabled = true; $e('evCsv').disabled = true;
   renderer.setAnimationLoop(null);                 // 評価のあいだは通常の描画ループを止める
   const saved = evalSave();
