@@ -27,7 +27,7 @@ function applyPose() {
   tiltGroup.quaternion.copy(qA);
   bodyGroup.quaternion.copy(qBase).multiply(qB);
   qWorldBody.copy(qA).multiply(bodyGroup.quaternion);
-  placeRoom();
+  placeTable();
 }
 function upLocal(out) {
   qA.copy(qWorldBody).invert();

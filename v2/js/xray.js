@@ -15,12 +15,13 @@ function viewRects() {
 }
 function setXcam(aspect) {
   // 管球も受像器も台に固定されているので、向きは体位によらず一定
-  xcam.position.copy(AZ).multiplyScalar(bsRadius * 3.2);
+  const br = bsRadius * BODY_SCALE;
+  xcam.position.copy(AZ).multiplyScalar(br * 3.2);
   const x = new THREE.Vector3().crossVectors(AY, AZ);
   xcam.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, AY.clone(), AZ.clone()));
-  const hh = bsRadius * 1.06, hw = hh * aspect;
+  const hh = br * 1.06, hw = hh * aspect;
   xcam.left = -hw; xcam.right = hw; xcam.top = hh; xcam.bottom = -hh;
-  xcam.near = 1; xcam.far = bsRadius * 9;
+  xcam.near = 1; xcam.far = br * 9;
   xcam.updateProjectionMatrix();
   xcam.updateMatrixWorld();
 }
@@ -48,8 +49,9 @@ function setXray(on) {
   figureGroup.visible = !on && skinOpacity > 0.005;
   orientGroup.visible = !on && showOri;
   // 引いているときだけ装置を出す。寄ったときは解剖の邪魔をしない
-  const showRoom = !on && viewMode !== 2 && viewPreset !== 'tube' && ctrl.dist >= ctrl.base * 1.9;
-  roomProps.visible = showRoom; tableProps.visible = showRoom;
+  const showRoom = !on && viewMode !== 2 && viewPreset !== 'tube' && (viewPreset === 'operator' || ctrl.dist >= ctrl.base * 1.9);
+  roomProps.visible = showRoom; tableProps.visible = showRoom; cradle.visible = showRoom;
+  partition.visible = viewPreset === 'operator' || camera.position.z < ROOM_Z0 - 10;
   boneGroup.visible = on || showBone;
   boneGroup.traverse(o => { if (o.isMesh) o.material = on ? matBoneX : matBone; });
   guides.visible = !on && viewMode !== 2;

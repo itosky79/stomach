@@ -102,11 +102,13 @@ renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // r128 と同じく�
 }
 renderer.autoClear = false;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 500);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 2000);
 const xcam = new THREE.OrthographicCamera(-12, 12, 16, -16, 1, 500);
 const tiltGroup = new THREE.Group(); scene.add(tiltGroup);       // 撮影台（起倒する）
 const bodyGroup = new THREE.Group(); tiltGroup.add(bodyGroup);   // 台の上の患者（体軸回転する）
 const anatGroup = new THREE.Group(); bodyGroup.add(anatGroup);   // 体表・骨格（解剖座標）
+const BODY_SCALE = 1.2;          // 胃と体の模型を実寸（身長およそ 170 cm）に合わせる倍率（DIMENSIONS.md）
+bodyGroup.scale.setScalar(BODY_SCALE);
 tiltGroup.add(xcam);                                             // 管球・受像器も台に固定
 
 const geom = new THREE.BufferGeometry();
@@ -256,18 +258,18 @@ function addFig(g, x, y, z) {
   figureGroup.add(m); return m;
 }
 {
-  addFig(new THREE.CylinderGeometry(3.9, 4.6, 7, 16), 0, 27, 1);
-  addFig(new THREE.SphereGeometry(7.8, 20, 16), 0, 34.5, 1.5);
+  addFig(new THREE.CylinderGeometry(3.9, 4.6, 9, 16), 0, 29, 1);
+  addFig(new THREE.SphereGeometry(7.8, 20, 16), 0, 38.5, 1.5);
   for (const sx of [1, -1]) {
     const arm = new THREE.CatmullRomCurve3([
       new THREE.Vector3(12.0 * sx, 21.5, 1), new THREE.Vector3(15.8 * sx, 10, 2.4),
       new THREE.Vector3(15.4 * sx, -1, 3.4), new THREE.Vector3(13.6 * sx, -9, 4.2)]);
     addFig(new THREE.TubeGeometry(arm, 24, 3.1, 10, false), 0, 0, 0);
     const leg = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(6.2 * sx, -22, 1), new THREE.Vector3(7.2 * sx, -38, 2),
-      new THREE.Vector3(6.6 * sx, -52, 2.6), new THREE.Vector3(6.4 * sx, -60, 3)]);
-    addFig(new THREE.TubeGeometry(leg, 26, 5.1, 12, false), 0, 0, 0);
-    addFig(new THREE.BoxGeometry(7, 4.5, 12), 6.4 * sx, -62, 7.5);
+      new THREE.Vector3(6.2 * sx, -22, 1), new THREE.Vector3(7.2 * sx, -46, 2),
+      new THREE.Vector3(6.6 * sx, -72, 2.6), new THREE.Vector3(6.4 * sx, -91, 3)]);
+    addFig(new THREE.TubeGeometry(leg, 30, 5.1, 12, false), 0, 0, 0);
+    addFig(new THREE.BoxGeometry(7, 4.5, 12), 6.4 * sx, -93.5, 7.5);
   }
 }
 
@@ -277,7 +279,7 @@ matAnt.side = THREE.FrontSide; matAnt.depthWrite = true;
 const orientGroup = new THREE.Group(); anatGroup.add(orientGroup);
 {
   const nose = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3.6, 14), matAnt);
-  nose.position.set(0, 33.6, 8.2); nose.rotation.x = Math.PI / 2;
+  nose.position.set(0, 37.6, 8.2); nose.rotation.x = Math.PI / 2;
   nose.renderOrder = 7; orientGroup.add(nose);
 }
 
@@ -306,43 +308,115 @@ function prop(parent, geo, mat, x, y, z, rx) {
   if (rx) m.rotation.x = rx;
   m.renderOrder = 0; parent.add(m); return m;
 }
-const roomProps = new THREE.Group(); scene.add(roomProps);          // 床・台座（傾かない）
-const roomBase = new THREE.Group(); roomProps.add(roomBase);         // 床・土台（台の起倒に合わせて上下する）
-const uprights = [];                                                 // 台座と回転軸をつなぐ柱（伸び縮みする）
-/* 台を起こすと足側が回転軸より下へ回り込む。実機では台が柱に沿って持ち上がるが、
-   ここではカメラが患者を基準にしているので、そのぶん床と土台を下げ、柱を伸ばす。
-   天板と足台の角のうち一番低い点が、床より少し上に来るだけの量を求める。 */
-const FLOOR_Y = -38;
-const TABLE_CORNERS = [[-58, -14.5], [-58, -9.5], [74, -14.5], [76.5, -12], [76.5, 14]];
-function floorDrop(tiltDeg) {
-  const t = tiltDeg * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
-  let low = Infinity;
-  for (const [x, y] of TABLE_CORNERS) low = Math.min(low, -x * sn + y * cs);
-  return Math.max(0, low < FLOOR_Y + 1.5 ? (FLOOR_Y + 1.5) - low : 0);
-}
-function placeRoom() {
-  const d = floorDrop(tiltCur);
-  roomBase.position.y = -d;
-  const h = 35 + d;                                 // 台座の上面（床 +3）から回転軸まで
-  for (const u of uprights) { u.scale.y = h / 21; u.position.y = -h / 2; }
-}
-const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・管球・受像器（傾く）
-{
-  const grid2 = new THREE.GridHelper(180, 18, 0x243442, 0x172230);
-  grid2.material.transparent = true; grid2.material.opacity = 0.30;
-  grid2.position.y = -38; roomBase.add(grid2);
-  for (const sz of [1, -1]) {   // 台座は天板の両脇だけに置き、立位で足台・足先と重ならないようにする
-    prop(roomBase, new THREE.BoxGeometry(14, 3, 9), matFrame, 0, -36.5, 33 * sz);
-    uprights.push(prop(roomProps, new THREE.BoxGeometry(5, 21, 5), matFrame, 0, -10.5, 33 * sz));
-    prop(roomProps, new THREE.CylinderGeometry(3.4, 3.4, 6, 16), matGear, 0, 0, 32 * sz, Math.PI / 2);   // 回転軸
+const roomProps = new THREE.Group(); scene.add(roomProps);          // 透視室・操作室・台座（動かない）
+const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・受像器・X 線管（台といっしょに傾く）
+const cradle = new THREE.Group(); scene.add(cradle);                // 回転軸のまわりの受け枠（傾くが、滑らない）
+const partition = new THREE.Group(); roomProps.add(partition);      // 仕切り壁・窓・操作室の机（画面でカメラが操作室側に出たら隠す）
+const ROOM_Z0 = 250;                                                 // 仕切り壁の位置（z）
+
+/* 透視台（tiltGroup の座標。原点 = 胃、x = 足側、y = X 線管の側（天板の法線）、z = 左右）。
+   台は回転軸を中心に起倒する。立位や逆傾斜で天板の端が床に当たらないよう、
+   実機と同じく天板が長手方向に滑る（回転軸に対する天板の位置 tablePx が変わる）。 */
+const TB = {
+  top: -9.6,              // 天板の上面（胃の中心から背中側へ）
+  thick: 5, house: 17,    // 天板の厚さ、天板の下の受像器の箱の厚さ
+  x0: -86.5, x1: 123.5,   // 天板の頭側・足側の端（長さ 210）
+  w: 75,                  // 天板の幅
+  foot: 25,               // 足台の高さ
+  pivotY: -22.6,          // 回転軸の高さ（天板の上面から 13 cm 下）
+  pivotH: 67,             // 回転軸の床からの高さ（水平のとき天板の上面が床から 80 cm）
+  sid: 120,               // X 線管の焦点と受像器の距離
+  clear: 3                // 起倒したとき、台の一番低い点を床から離しておく距離
+};
+const TB_BOTTOM = TB.top - TB.thick - TB.house;
+const TB_CORNERS = [[TB.x0, TB.top], [TB.x0, TB_BOTTOM], [TB.x1, TB_BOTTOM], [TB.x1, TB.top + TB.foot]];
+const PX0 = (TB.x0 + TB.x1) / 2;   // 水平のときは天板の真ん中に回転軸がある
+let tablePx = PX0;
+const _tv = new THREE.Vector3();
+function placeTable() {
+  const t = tiltCur * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
+  let px = PX0;
+  for (let k = 0; k < 3 && Math.abs(sn) > 1e-3; k++) {
+    let low = Infinity;
+    for (const [x, y] of TB_CORNERS) low = Math.min(low, TB.pivotH - (x - px) * sn + (y - TB.pivotY) * cs);
+    if (low >= TB.clear - 1e-6) break;
+    px += (TB.clear - low) / sn;
   }
-  prop(tableProps, new THREE.BoxGeometry(132, 5, 50), matPad, 8, -12, 0);       // 天板
-  prop(tableProps, new THREE.BoxGeometry(5, 26, 50), matPad, 74, 1, 0);         // 足台
-  prop(tableProps, new THREE.BoxGeometry(120, 2.5, 6), matFrame, 8, -9, 26);    // 側レール
-  prop(tableProps, new THREE.BoxGeometry(120, 2.5, 6), matFrame, 8, -9, -26);
-  for (const sz of [1, -1])                                                     // 側レールから回転軸までの腕
-    prop(tableProps, new THREE.BoxGeometry(10, 14.5, 2), matFrame, 0, -3.5, 29 * sz);
+  tablePx = px;
+  // 胃（tiltGroup の原点）の床上の位置 = 回転軸 − 回転した（回転軸の天板上の位置）
+  tiltGroup.position.set(0, TB.pivotH, 0).sub(_tv.set(px, TB.pivotY, 0).applyQuaternion(tiltGroup.quaternion));
+  cradle.position.set(0, TB.pivotH, 0);
+  cradle.quaternion.copy(tiltGroup.quaternion);
 }
+const matWall = solidProp(0x202C37), matFloor = solidProp(0x18222B), matCeil = solidProp(0x141C24);
+const matDark = solidProp(0x0D1318), matScreen = solidProp(0x0A2230);
+const matGlass = new THREE.MeshBasicMaterial({ color: 0x6FA4B8, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide });
+function plane(w, h, mat, x, y, z, ry, rx) {   // 表（内側）だけ見える壁。外から見ると透ける
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, 0, 'YXZ');
+  roomProps.add(m); return m;
+}
+function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxGeometry(w, h, d), mat, x, y, z); }
+{
+  /* ---- 天板・足台・受像器の箱（台といっしょに傾き、滑る）---- */
+  const len = TB.x1 - TB.x0, cx = (TB.x0 + TB.x1) / 2;
+  box(tableProps, len, TB.thick, TB.w, matPad, cx, TB.top - TB.thick / 2, 0);                    // 天板
+  box(tableProps, len - 10, TB.house, TB.w - 6, matFrame, cx - 3, TB.top - TB.thick - TB.house / 2, 0);   // 受像器の箱
+  box(tableProps, 4, TB.foot, TB.w - 10, matPad, TB.x1 - 2, TB.top + TB.foot / 2, 0);            // 足台
+  for (const sz of [1, -1]) box(tableProps, len - 20, 2.5, 4, matFrame, cx, TB.top - 1, sz * (TB.w / 2 + 2));   // 側レール
+
+  /* ---- X 線管（オーバーチューブ）。映像系は胃の位置に合わせて天板の上を動く ---- */
+  const fpdY = TB.top - TB.thick - 3, fy = fpdY + TB.sid;         // 受像器の面、焦点
+  box(tableProps, 47, 3, 47, matDark, 0, fpdY, 0);                 // 受像器（FPD 43 × 43 cm）
+  const tube = prop(tableProps, new THREE.CylinderGeometry(9, 9, 34, 20), matGear, 0, fy + 10, 0, Math.PI / 2);   // 管球
+  tube.rotation.set(Math.PI / 2, 0, 0);
+  box(tableProps, 22, 12, 22, matFrame, 0, fy - 6, 0);             // 絞り
+  prop(tableProps, new THREE.CylinderGeometry(5, 5, 10, 20), matGear, 0, fy - 17, 0);   // 圧迫筒（たたんだ状態。第 3 段階で動かす）
+  const armZ = -(TB.w / 2 + 16);                                  // 支柱は窓と反対側（−z）に置く
+  box(tableProps, 10, 10, armZ, matFrame, 0, fy + 10, armZ / 2);   // 横の腕
+  box(tableProps, 12, fy + 15 - TB_BOTTOM, 12, matFrame, 0, (fy + 15 + TB_BOTTOM) / 2, armZ);   // 支柱
+
+  /* ---- 回転軸の受け枠（傾くが滑らない）と、床に立つ 2 本の柱 ---- */
+  for (const sz of [1, -1]) {
+    const zr = sz * (TB.w / 2 + 6);
+    box(cradle, 70, TB.house + TB.thick, 3, matFrame, 0, (TB.top - TB.pivotY) - (TB.house + TB.thick) / 2, zr);
+    prop(cradle, new THREE.CylinderGeometry(6, 6, 6, 20), matGear, 0, 0, sz * (TB.w / 2 + 10), Math.PI / 2);
+    box(roomProps, 10, TB.pivotH, 10, matFrame, 0, TB.pivotH / 2, sz * (TB.w / 2 + 14));
+    box(roomProps, 36, 3, 18, matFrame, 0, 1.5, sz * (TB.w / 2 + 14));
+  }
+
+  /* ---- 透視室（5.0 × 6.0 m、天井 2.8 m）と操作室（隣、5.0 × 3.0 m）---- */
+  const H = 280, X = 250, Z0 = ROOM_Z0, Z1 = -350, ZC = 550;      // 仕切り壁は z = +250。操作室はその向こう（+z）
+  const D = Math.abs(ZC - Z1), ZM = (Z1 + ZC) / 2;                     // 両室あわせた奥行き
+  plane(2 * X, D, matFloor, 0, 0, ZM, 0, -Math.PI / 2);                  // 床（両室）
+  plane(2 * X, D, matCeil, 0, H, ZM, 0, Math.PI / 2);                    // 天井
+  plane(D, H, matWall, -X, H / 2, ZM, Math.PI / 2);                      // 左右の壁
+  plane(D, H, matWall, X, H / 2, ZM, -Math.PI / 2);
+  plane(2 * X, H, matWall, 0, H / 2, Z1, 0);                                // 奥の壁
+  plane(2 * X, H, matWall, 0, H / 2, ZC, Math.PI);                          // 操作室の奥の壁
+  const g = new THREE.GridHelper(500, 20, 0x2A3B4A, 0x1D2935);
+  g.material.transparent = true; g.material.opacity = 0.35; g.position.set(0, 0.2, -50); roomProps.add(g);
+  // 仕切り壁と鉛ガラスの窓（幅 1.2 m × 高さ 0.9 m、床から 0.9 m）
+  const WX = 60, WY0 = 90, WY1 = 180, T = 15;
+  box(partition, X - WX, H, T, matWall, -(X + WX) / 2, H / 2, Z0);
+  box(partition, X - WX, H, T, matWall, (X + WX) / 2, H / 2, Z0);
+  box(partition, 2 * WX, WY0, T, matWall, 0, WY0 / 2, Z0);
+  box(partition, 2 * WX, H - WY1, T, matWall, 0, (H + WY1) / 2, Z0);
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(2 * WX, WY1 - WY0), matGlass);
+  glass.position.set(0, (WY0 + WY1) / 2, Z0); glass.renderOrder = 8; partition.add(glass);
+
+  /* ---- 透視室のモニタ（55 インチ）、近接操作卓、操作室の遠隔操作卓 ---- */
+  box(roomProps, 122, 69, 5, matDark, 60, 175, Z1 + 4);                // 奥の壁のモニタ
+  box(roomProps, 116, 63, 1, matScreen, 60, 175, Z1 + 7);
+  box(roomProps, 6, 100, 6, matFrame, -150, 50, 70);                   // 近接操作卓（台の頭側、窓の側）
+  box(roomProps, 40, 6, 28, matFrame, -150, 102, 70);
+  box(partition, 180, 6, 70, matFrame, 0, 75, Z0 + 50);                // 遠隔操作卓の机
+  for (const sx of [1, -1]) box(partition, 6, 72, 60, matFrame, sx * 84, 36, Z0 + 50);
+  box(partition, 60, 36, 4, matDark, -40, 100, Z0 + 70);               // 机の上のモニタ 2 台
+  box(partition, 60, 36, 4, matDark, 40, 100, Z0 + 70);
+  box(partition, 70, 4, 26, matDark, 0, 80, Z0 + 40);                  // 操作盤
+}
+const OPERATOR_EYE = new THREE.Vector3(0, 118, 345);   // 操作室で座った術者の目の位置（窓から 95 cm）
 
 /* ---- ガイド ---- */
 const guides = new THREE.Group(); scene.add(guides);

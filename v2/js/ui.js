@@ -128,7 +128,7 @@ const epins = EXAMPOSE.map(e => {
   const d = document.createElement('div');
   d.className = 'epin';
   d.style.left = (50 + (r / 180) * 44) + '%';
-  d.style.top = (50 - ((e.t + 30) / 60 - 1) * 44) + '%';
+  d.style.top = (50 - (e.t / 90) * 44) + '%';
   stick.appendChild(d);
   return d;
 });
@@ -153,7 +153,7 @@ function syncExamPose() {
 }
 function syncFree() {
   let r = ((rollT % 360) + 360) % 360; if (r > 180) r -= 360;
-  knobTo(r / 180, (tiltT + 30) / 60 - 1);
+  knobTo(r / 180, tiltT / 90);
   lhandle.style.top = (100 - compAmt * 100) + '%';
   document.getElementById('freePos').textContent = poseName(tiltT, rollT);
   document.getElementById('freeAng').textContent = Math.round(tiltT) + '° / ' + Math.round(((rollT % 360) + 360) % 360) + '°';
@@ -161,7 +161,7 @@ function syncFree() {
 }
 function setFree(tilt, roll) {
   playing = false;
-  tiltT = Math.max(-30, Math.min(90, tilt));
+  tiltT = Math.max(-90, Math.min(90, tilt));   // 起倒は立位 +90° 〜 逆傾斜 −90°（DIMENSIONS.md）
   rollT = rollCur + (((roll - rollCur) % 360 + 540) % 360 - 180);
   syncFree(); updateNotes();
 }
@@ -170,7 +170,7 @@ function stickAt(e) {
   const b = stick.getBoundingClientRect();
   const nx = Math.max(-1, Math.min(1, ((e.clientX - b.left) / b.width) * 2 - 1));
   const ny = Math.max(-1, Math.min(1, 1 - ((e.clientY - b.top) / b.height) * 2));
-  setFree(-30 + (ny + 1) * 60, nx * 180);
+  setFree(ny * 90, nx * 180);
   knobTo(nx, ny);
 }
 function snap(v, list, tol) { for (const t of list) if (Math.abs(v - t) < tol) return t; return v; }
@@ -179,7 +179,7 @@ stick.addEventListener('pointermove', e => { if (sdrag) stickAt(e); });
 stick.addEventListener('pointerup', () => {
   if (!sdrag) return; sdrag = false;
   let r = ((rollT % 360) + 360) % 360; if (r > 180) r -= 360;
-  setFree(snap(tiltT, [-30, 0, 45, 90], 7), snap(r, [-180, -135, -90, -45, 0, 45, 90, 135, 180], 9));
+  setFree(snap(tiltT, [-90, -30, 0, 45, 90], 7), snap(r, [-180, -135, -90, -45, 0, 45, 90, 135, 180], 9));
 });
 stick.addEventListener('pointercancel', () => { sdrag = false; });
 stick.addEventListener('keydown', e => {
