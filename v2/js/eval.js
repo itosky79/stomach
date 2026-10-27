@@ -695,6 +695,31 @@ function textbookPath(dwell) {
   } finally { EVAL.type = saveType; }
   return out;
 }
+/* 基準撮影法Ⅱを教科書の順番と経路で通して計算し、各撮影の体位で、10 体位すべての目的部位の描出率を測る。
+   経路は textbookPath と同じ（②〜⑩）。⑪ 立位第1斜位は、⑩ のあと水平で背臥位を経て第1斜位（45°）にし、台を立位まで起こす
+   （本の経路の記載を確かめていないので仮の経路）。① と ⑫ は対象外（seqRows と同じ）。
+   各体位で入れ直す evalPrepare と違い、前の体位から流れてきたバリウムと付着がそのまま残る。
+   返り値：shots[k] = { name, tilt, roll, rates[j] }（j は seqRows の順の目的部位）。 */
+function depictionPath(dwell) {
+  const rows = seqRows(), T = rows.map(q => parseTarget(q.tgt)), shots = [];
+  const shoot = name => { pathShoot(); buildSurface(); shots.push({ name, tilt: Math.round(tiltCur), roll: Math.round(((rollCur % 360) + 360) % 360), rates: T.map(t => depictionRate(t).rate) }); };
+  evalPrepare(90, 45);
+  const r2 = rollCardiaRightEdge() - 360;
+  evalPrepare(90, 45); rollCur = rollT = 45; tiltCur = tiltT = 90;
+  pathMove([[0, 45], [0, 0], [0, -1080]], dwell); rollCur = rollT = 0; shoot(rows[0].name);
+  pathMove([[0, -360], [0, -325]], dwell); rollCur = rollT = 35; shoot(rows[1].name);
+  pathMove([[0, 0], [0, -360], [0, -360 + r2], [-30, -360 + r2]], dwell); rollCur = rollT = 360 + r2; shoot(rows[2].name);
+  pathMove([[0, 360 + r2], [0, 360], [0, 180]], dwell); rollCur = rollT = 180;
+  pathMove([[25, 180], [-30, 180]], dwell); shoot(rows[3].name);
+  pathMove([[0, 180], [0, 155], [-30, 155]], dwell); shoot(rows[4].name);
+  pathMove([[0, 155], [0, -205], [0, -135], [25, -135]], dwell); rollCur = rollT = 225; shoot(rows[5].name);
+  const rl = (() => { const t = tiltCur, ro = rollCur; const v = rightLateralRoll(); tiltCur = tiltT = t; rollCur = rollT = ro; return v; })();
+  pathMove([[0, 225], [0, 180], [0, 90], [0, 0], [0, rl - 360]], dwell); rollCur = rollT = rl; shoot(rows[6].name);
+  pathMove([[0, 360], [0, 450], [0, 270], [25, 270], [25, 360 + r2]], dwell); shoot(rows[7].name);
+  pathMove([[0, 360 + r2], [0, 360], [0, 450], [0, 270], [0, 360], [0, 315]], dwell); shoot(rows[8].name);
+  pathMove([[0, 315], [0, 360], [0, 405], [90, 405]], dwell); rollCur = rollT = 45; shoot(rows[9].name);
+  return { targets: rows.map(q => q.tgt), shots };
+}
 const TB_HEAD = ['項目', '胃型', '体位', '起倒角', '回転角', '測ったもの', '値', '教科書の記載・基準', '判定', '計算を進めた秒数', '手順'];
 function textbookCsv(rows) {
   return '﻿' + [TB_HEAD, ...rows.map(r => [r.no, TYPES[r.type].name, r.pose, r.tilt, r.roll, r.what, r.value, r.crit, r.judge, r.sec, r.proto])]
