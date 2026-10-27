@@ -492,40 +492,63 @@ function twistKeys(rl) {
   ];
 }
 function calibrateTwist(report) {
-  const T = TYPES[EVAL.type]; T.twist = [];
+  /* ねじれの決め方（TEXTBOOK_CHECK.md「ねじれ」）：
+     1. 回転は教科書に書いてある 2 つの動きだけ：α = 噴門と幽門を結ぶ線のまわり（p.90）、β = 前後の軸のまわりの正面での振れ（p.94）。
+        α は −60〜60°、β は −30〜30°（10° 刻み）
+     2. 基準撮影法の体位ごとに、その体位の項目を満たす (α, β) をすべて挙げる（ねじれなしで満たす体位は 0 に固定）
+     3. 挙げた中から、Σ|回転|² + λ Σ w_ij |回転_i − 回転_j|² がいちばん小さくなる組を選ぶ
+        （w_ij は 2 つの体位の重力の向きが近いほど大きい。近い体位どうしで向きが急に変わらないようにする）
+     4. 補間は表の体位でちょうど表の値になるので、選んだ組で全体位を確かめ直す */
+  const T = TYPES[EVAL.type];
+  T.twist = []; twistCur = [NaN, 0, 0];
   evalPrepare(0, 270); const rl = rollRightLateral();
-  // 回転は教科書に書いてある 2 つの動きだけにする（TEXTBOOK_CHECK.md「ねじれ」）：
-  //   α：噴門と幽門を結ぶ線のまわりの回転（「大弯を腹側に捻る」p.90）
-  //   β：前後の軸（体の z）のまわりの、正面での振れ（「Ba の重みで尾側方向に引き伸ばされ」p.94）
   const B = twistBase, e = (NN - 1) * 3, pi = pylIdx * 3;
   const ax = new THREE.Vector3(B.centers[pi] - B.centers[e], B.centers[pi + 1] - B.centers[e + 1], B.centers[pi + 2] - B.centers[e + 2]).normalize();
-  const toRot = (a, b) => {   // α のあとに β を回す回転を、回転ベクトル（度）にする
+  const toRot = (a, b) => {
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), b * Math.PI / 180)
       .multiply(new THREE.Quaternion().setFromAxisAngle(ax, a * Math.PI / 180));
-    const ang = 2 * Math.acos(Math.min(1, Math.abs(q.w))), s = Math.sqrt(Math.max(1e-12, 1 - q.w * q.w)) * Math.sign(q.w || 1);
+    if (q.w < 0) { q.x = -q.x; q.y = -q.y; q.z = -q.z; q.w = -q.w; }
+    const ang = 2 * Math.acos(Math.min(1, q.w)), s = Math.sqrt(Math.max(1e-12, 1 - q.w * q.w));
     return ang < 1e-6 ? [0, 0, 0] : [q.x / s, q.y / s, q.z / s].map(v => Math.round(v * ang * 180 / Math.PI * 10) / 10);
   };
   const cand = [];
-  for (let a = -60; a <= 60; a += 10) for (let b = -30; b <= 30; b += 10) cand.push({ a, b, rot: toRot(a, b) });
-  cand.sort((p, q) => Math.hypot(p.a, p.b) - Math.hypot(q.a, q.b));
-  const keys = twistKeys(rl).map(K => ({ K, key: { tilt: K.tilt, roll: K.roll, rot: [0, 0, 0], items: K.items }, hit: true, tried: 0 }));
-  const check = k => { twistCur = [NaN, 0, 0]; evalPrepare(k.K.tilt, k.K.roll); return k.K.ok(); };
-  // ほかの体位のねじれも入れた状態で満たすまで、外れた体位だけを探し直す（最大 4 回）
-  for (let pass = 0; pass < 4; pass++) {
-    let changed = false;
-    for (const k of keys) {
-      T.twist = keys.filter(x => x.key.rot.some(v => v !== 0) || x === k).map(x => x.key);
-      if (check(k)) continue;
-      changed = true; k.hit = false;
-      for (const c of cand) { k.key.rot = c.rot; k.key.ab = [c.a, c.b]; k.tried++; if (check(k)) { k.hit = true; break; } }
-      if (!k.hit) k.key.rot = [0, 0, 0];
-      if (report) report(k.K.items + ' ' + (k.hit ? JSON.stringify(k.key.rot) : '見つからない'));
-    }
-    T.twist = keys.filter(x => x.key.rot.some(v => v !== 0)).map(x => x.key);
-    if (!changed) break;
+  for (let a = -60; a <= 60; a += 10) for (let b = -30; b <= 30; b += 10) cand.push({ ab: [a, b], rot: toRot(a, b) });
+  // ねじれのいらない体位（表の体位で項目を満たすもの）と、基準撮影法のほかの体位（立位・左側臥位）も 0 として置く
+  const keys = twistKeys(rl).map(K => ({ K, tilt: K.tilt, roll: K.roll, items: K.items, list: null }));
+  const extra = [{ tilt: 90, roll: 45, items: '立位第1斜位（項目なし）' }, { tilt: 0, roll: 90, items: '左側臥位（項目なし）' }, { tilt: 90, roll: 0, items: '立位（項目なし）' }];
+  const zeroKey = k => ({ tilt: k.tilt, roll: k.roll, rot: [0, 0, 0], ab: [0, 0], items: k.items });
+  const check = (k, rot) => {
+    T.twist = keys.filter(x => x !== k).map(zeroKey).concat(extra.map(zeroKey), [{ tilt: k.tilt, roll: k.roll, rot, ab: [0, 0], items: k.items }]);
+    twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, k.roll); return k.K.ok();
+  };
+  for (const k of keys) {
+    if (check(k, [0, 0, 0])) { k.list = [{ ab: [0, 0], rot: [0, 0, 0] }]; continue; }
+    k.list = cand.filter(c => check(k, c.rot));
+    if (report) report(k.items + '：満たす組 ' + k.list.length);
   }
+  // 3. なめらかさで選ぶ（座標ごとの降下を収まるまで）
+  const all = keys.concat(extra.map(x => ({ ...x, list: [{ ab: [0, 0], rot: [0, 0, 0] }] })));
+  const U = all.map(k => upOf(k.tilt, k.roll)), LAMBDA = 4;
+  const W = U.map(u => U.map(v => Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2)));
+  const d2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+  all.forEach(k => { k.pick = k.list.length ? k.list.slice().sort((p, q) => d2(p.rot, [0, 0, 0]) - d2(q.rot, [0, 0, 0]))[0] : { ab: [0, 0], rot: [0, 0, 0] }; });
+  const cost = () => { let J = 0; all.forEach((k, i) => { J += d2(k.pick.rot, [0, 0, 0]); all.forEach((m, j) => { if (j > i) J += LAMBDA * W[i][j] * d2(k.pick.rot, m.pick.rot); }); }); return J; };
+  for (let it = 0; it < 20; it++) {
+    let moved = false;
+    for (const k of all) {
+      if (k.list.length < 2) continue;
+      let best = k.pick, bJ = cost();
+      for (const c of k.list) { k.pick = c; const J = cost(); if (J < bJ - 1e-9) { bJ = J; best = c; } }
+      if (best !== k.pick) moved = true;
+      k.pick = best;
+      if (moved) continue;
+    }
+    if (!moved) break;
+  }
+  T.twist = all.map(k => ({ tilt: k.tilt, roll: k.roll, ab: k.pick.ab, rot: k.pick.rot, items: k.items }));
+  // 4. 確かめ直す
   twistCur = [NaN, 0, 0];
-  return keys.map(k => ({ ...k.key, hit: k.hit, tried: k.tried, ok: check(k) }));
+  return keys.map(k => { twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, k.roll); return { tilt: k.tilt, roll: k.roll, items: k.items, ab: k.pick.ab, rot: k.pick.rot, n: k.list.length, ok: k.K.ok() }; });
 }
 
 const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };

@@ -33,24 +33,37 @@ function applyPose() {
 /* ---- 体位による胃のねじれ（TYPES[型].twist）----
    胃は噴門と十二指腸で緩く留まっているだけで、体位によって腹の中で回り、ねじれる（胃X線検診 上部消化管検査必携テキスト
    pp.90-94）。教科書の各体位の記載（チェック項目）どおりのバリウムの位置になるよう、基準撮影法の体位ごとに胃の向き
-   （噴門を中心にした回転。体の座標の x 左・y 頭側・z 腹側のまわりの角度、度）を決めて twist に置く（TEXTBOOK_CHECK.md）。
-   ほかの体位では、重力の向きが近い体位の値をガウスの重み（σ = TWIST_SIG°）で混ぜ、どの体位からも遠いときは 0 に近づける。
-   食道は回さない（噴門の位置は変わらない）。 */
-const TWIST_SIG = 8, TWIST_W0 = 0.02;
-let twistBase = null, twistCur = [NaN, 0, 0];
+   （噴門を中心にした回転ベクトル。体の座標の x 左・y 頭側・z 腹側、度）を決めて twist に置く（TEXTBOOK_CHECK.md「ねじれ」）。
+   ねじれのいらない体位も rot = [0,0,0] として置く。
+   ほかの体位の値は、重力の向きの角度の差を距離にしたガウスの RBF 補間（幅 TWIST_SIG°）で求める。表の体位ではちょうど表の値になり、
+   その間はなめらかにつながり、どの体位からも遠いときは 0 に近づく。食道は回さない（噴門の位置は変わらない）。 */
+const TWIST_SIG = 20;
+let twistBase = null, twistCur = [NaN, 0, 0], twistRbf = null;
 function upOf(tilt, roll) {   // 体の座標での上向き（upLocal と同じ。評価モードで確かめた式）
   const t = tilt * Math.PI / 180, r = roll * Math.PI / 180;
   return [-Math.sin(r) * Math.cos(t), Math.sin(t), Math.cos(r) * Math.cos(t)];
 }
+function angDeg(u, v) { return Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2]))) * 180 / Math.PI; }
+function twistCoef(T) {   // RBF の係数 c を解く：Φ c = rot（3 成分それぞれ）
+  const n = T.length, U = T.map(k => upOf(k.tilt, k.roll));
+  const M = U.map(u => U.map(v => Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2)));
+  const C = [0, 1, 2].map(d => {
+    const A = M.map((row, i) => [...row, T[i].rot[d]]);
+    for (let i = 0; i < n; i++) {   // ガウスの消去法（部分ピボット）
+      let p = i; for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+      [A[i], A[p]] = [A[p], A[i]];
+      for (let r = 0; r < n; r++) if (r !== i) { const f = A[r][i] / A[i][i]; for (let c = i; c <= n; c++) A[r][c] -= f * A[i][c]; }
+    }
+    return A.map((row, i) => row[n] / row[i]);
+  });
+  return { T, U, C };
+}
 function twistFor(tilt, roll) {
   const T = TYPES[curType].twist; if (!T || !T.length) return [0, 0, 0];
-  const u = upOf(tilt, roll); let ws = TWIST_W0; const r = [0, 0, 0];
-  for (const k of T) {
-    const v = upOf(k.tilt, k.roll), c = Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2]));
-    const a = Math.acos(c) * 180 / Math.PI, w = Math.exp(-0.5 * (a / TWIST_SIG) ** 2);
-    ws += w; r[0] += w * k.rot[0]; r[1] += w * k.rot[1]; r[2] += w * k.rot[2];
-  }
-  return r.map(x => x / ws);
+  if (!twistRbf || twistRbf.T !== T || twistRbf.sig !== JSON.stringify(T.map(k => k.rot))) { twistRbf = twistCoef(T); twistRbf.sig = JSON.stringify(T.map(k => k.rot)); }
+  const u = upOf(tilt, roll), r = [0, 0, 0];
+  twistRbf.U.forEach((v, i) => { const w = Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2); for (let d = 0; d < 3; d++) r[d] += w * twistRbf.C[d][i]; });
+  return r;
 }
 function twistSave() { twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0, 0]; }
 const _twq = new THREE.Quaternion(), _twv = new THREE.Vector3(), _twa = new THREE.Vector3();
