@@ -31,9 +31,10 @@ def elements(fmas):
     skip = {r[2] for r in rows if r[0] in SKIP}
     return sorted({r[2] for r in rows if r[0] in fmas} - skip)
 zf = zipfile.ZipFile(f'{SRC}/partof_BP3D_4.0_obj_99.zip')
-def load(key):
+def load(key): return load_ids(PARTS[key])
+def load_ids(fmas):
     ms = []
-    for e in elements(PARTS[key]):
+    for e in elements(fmas):
         data = zf.read(f'partof_BP3D_4.0_obj_99/{e}.obj')
         ms.append(trimesh.load(io.BytesIO(data), file_type='obj', process=False, force='mesh'))
     m = trimesh.util.concatenate(ms); m.merge_vertices(); return m
@@ -67,9 +68,21 @@ meta = {                                            # 実寸 cm（胃の中心�
     'cardia': to_body(stom.vertices[cKDTree(eso.vertices).query(stom.vertices)[0] < 6.0].mean(0)[None])[0].round(3).tolist(),
     'stomachMm': c.round(1).tolist(),
 }
+# 椎体（胸椎・腰椎の前の部分）の左右の縁。教科書の斜位の目安（「噴門部が椎体右縁に重なる」など）から角度を求めるのに使う。
+# 高さ y（bodyGroup の座標、0.5 刻み）ごとに、前後 0.5 の範囲の骨の頂点のうち、いちばん腹側から実寸 3 cm までを椎体とみなし
+# （横突起・棘突起などの後ろの部分を除く）、その [y, x の最小, x の最大, z の最小, z の最大] を並べる
+sp = to_body(load_ids(['FMA9140', 'FMA16203']).vertices)
+spine = []
+for y in np.arange(np.floor(sp[:, 1].min()), np.ceil(sp[:, 1].max()), 0.5):
+    s_ = sp[(sp[:, 1] >= y - 0.5) & (sp[:, 1] < y + 0.5)]
+    if len(s_) < 20: continue
+    b = s_[s_[:, 2] >= s_[:, 2].max() - 3.0 / BODY_SCALE]
+    spine.append([round(float(y), 2), round(float(b[:, 0].min()), 3), round(float(b[:, 0].max()), 3),
+                  round(float(b[:, 2].min()), 3), round(float(b[:, 2].max()), 3)])
+meta['spine'] = spine
 data = {'meta': meta, 'skin': pack(*simplify(skin, FACES['skin'])), 'bones': pack(*simplify(bones, FACES['bones']))}
 with open(OUT, 'w', encoding='utf-8') as fo:
     fo.write('"use strict";\n/* BodyParts3D から作った患者の体表と骨（tools/build_anatomy.py で生成。手で直さない）\n'
              '   BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International */\n')
     fo.write('const BP3D = ' + json.dumps(data, separators=(',', ':')) + ';\n')
-print(meta)
+print({k: v for k, v in meta.items() if k != 'spine'}, len(meta['spine']), 'spine rows')

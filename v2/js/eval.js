@@ -424,6 +424,42 @@ function cardiaSubmerged() {
   for (let v = 0; v < NMAIN * CM; v++) if (m[v]) { all += A[v]; if (hArr[v] <= lvl[(v / CM) | 0]) sub += A[v]; }
   return all > 0 ? sub / all * 100 : NaN;
 }
+/* 教科書の目印から回転角を求める（天板に垂直な X 線の投影で比べる。起倒角によらない）
+   rollCardiaRightEdge：背臥位第2斜位の側（回転角 360° → 270°）へ 1° ずつ回し、噴門（BP3D.meta.cardia）が
+     椎体（噴門の高さの BP3D.meta.spine の行。椎体の前後左右の 4 隅を投影した範囲）の右縁に初めて重なる回転角。
+   rollRightLateral：右側臥位（270°）の前後 ±30° を 1° ずつ見て、噴門が胃上部（ringsOf('胃上部') の輪）の
+     投影の腹背方向の幅のちょうど中央（0.5）にいちばん近い回転角。 */
+function projAxis(roll, axis) {   // その回転角で、透視像の横方向（axis を天板に垂直な向きに直交させたもの）
+  tiltCur = 0; rollCur = roll; applyPose(); tiltGroup.updateMatrixWorld(true);
+  const u = upLocal(new THREE.Vector3());
+  return axis.clone().addScaledVector(u, -axis.dot(u)).normalize();
+}
+function rollCardiaRightEdge() {
+  const c = new THREE.Vector3(...BP3D.meta.cardia);
+  const row = BP3D.meta.spine.reduce((a, b) => Math.abs(b[0] - c.y) < Math.abs(a[0] - c.y) ? b : a);
+  const corners = [[row[1], row[3]], [row[1], row[4]], [row[2], row[3]], [row[2], row[4]]].map(([x, z]) => new THREE.Vector3(x, c.y, z));
+  for (let r = 360; r >= 280; r--) {
+    const L = projAxis(r % 360, new THREE.Vector3(1, 0, 0));   // 患者の左が +
+    if (c.dot(L) >= Math.min(...corners.map(p => p.dot(L)))) continue;   // まだ椎体の右縁より左
+    return r + 1;
+  }
+  return null;
+}
+function rollRightLateral() {
+  const e = (NN - 1) * 3, c = new THREE.Vector3(centers[e], centers[e + 1], centers[e + 2]), rr = ringsOf('胃上部');
+  let best = 270, bd = 1e9;
+  for (let r = 240; r <= 300; r++) {
+    const L = projAxis(r, new THREE.Vector3(0, 0, 1));   // 側臥位の像の横方向（腹側が +）
+    let lo = 1e9, hi = -1e9;
+    for (let i = rr[0]; i <= rr[1]; i++) for (let j = 0; j < CM; j++) {
+      const v = (i * CM + j) * 3, d = pos[v] * L.x + pos[v + 1] * L.y + pos[v + 2] * L.z;
+      if (d < lo) lo = d; if (d > hi) hi = d;
+    }
+    const t = Math.abs((c.dot(L) - lo) / (hi - lo) - 0.5);
+    if (t < bd) { bd = t; best = r; }
+  }
+  return best;
+}
 const TB_TYPES = ['hook', 'horn', 'casc', 'ptos'];
 const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };
 function textbookCheck() {
@@ -471,16 +507,18 @@ function textbookCheck() {
           f1(r0.antPyl) + '→' + f1(r.antPyl) + '／' + f1(r.fundus + r.body), '頭低位で幽門前庭部が減り、胃底部＋胃体部が 50% 超',
           r.antPyl < r0.antPyl && r.fundus + r.body > 50);
       // 項目 5b〜5d：幽門前庭部に残らない
-      for (const [no, pose, t, ro] of [['5b', '背臥位第1斜位', 0, 35], ['5c', '背臥位第2斜位（頭低位）', -30, 315], ['5d', '腹臥位第2斜位（頭低位）', -30, 155]]) {
+      const r2 = rollCardiaRightEdge();
+      for (const [no, pose, t, ro] of [['5b', '背臥位第1斜位', 0, 35], ['5c', '背臥位第2斜位（頭低位）', -30, r2], ['5d', '腹臥位第2斜位（頭低位）', -30, 155]]) {
         evalPrepare(t, ro); r = regionShares().sh;
         add(no, type, pose, t, ro, '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
       }
       // 項目 6：右側臥位で噴門部に停留がない
-      evalPrepare(0, 270); let c = cardiaSubmerged();
-      add('6', type, '右側臥位', 0, 270, '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
+      evalPrepare(0, 270); const rl = rollRightLateral();
+      evalPrepare(0, rl); let c = cardiaSubmerged();
+      add('6', type, '右側臥位', 0, rl, '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
       // 項目 7：半臥位第2斜位で穹窿部に残存がない
-      evalPrepare(25, 315); r = regionShares().sh;
-      add('7', type, '半臥位第2斜位', 25, 315, '胃底部の割合（%）', f1(r.fundus), '5% 以下', r.fundus <= 5);
+      evalPrepare(25, r2); r = regionShares().sh;
+      add('7', type, '半臥位第2斜位', 25, r2, '胃底部の割合（%）', f1(r.fundus), '5% 以下', r.fundus <= 5);
       // 項目 8：腹臥位第1斜位（半臥位）で噴門部に残留がない
       evalPrepare(25, 225); c = cardiaSubmerged();
       add('8', type, '腹臥位第1斜位（半臥位）', 25, 225, '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
@@ -488,9 +526,76 @@ function textbookCheck() {
   } finally { EVAL.type = saveType; }
   return out;
 }
-const TB_HEAD = ['項目', '胃型', '体位', '起倒角', '回転角', '測ったもの', '値', '教科書の記載・基準', '判定', '計算を進めた秒数'];
+/* 改良 2：基準撮影法Ⅱを教科書の順番と体位変換の経路で通して計算する（TEXTBOOK_CHECK.md「改良 2」）。
+   経路は [起倒角, 回転角] の点の並び。回転角は 360° を超えてよい（回す向きを表すため）。
+   点から点へ 5° ずつ動かし、1 段ごとに dwell 秒流す。撮影の体位に着いたら EVAL.simSec 秒流してから測る。 */
+function pathMove(points, dwell) {
+  const n = Math.round(dwell / EVAL.dt);
+  for (const [t1, r1] of points) {
+    const t0 = tiltCur, r0 = rollCur, k = Math.max(1, Math.ceil(Math.max(Math.abs(t1 - t0), Math.abs(r1 - r0)) / 5));
+    for (let i = 1; i <= k; i++) {
+      tiltCur = tiltT = t0 + (t1 - t0) * i / k; rollCur = rollT = r0 + (r1 - r0) * i / k;
+      for (let s = 0; s < n; s++) evalStep(EVAL.dt);
+    }
+  }
+}
+function pathShoot() { const n = Math.round(EVAL.simSec / EVAL.dt); for (let s = 0; s < n; s++) evalStep(EVAL.dt); }
+function textbookPath(dwell) {
+  const out = [], saveType = EVAL.type;
+  const f1 = x => Number.isFinite(x) ? x.toFixed(1) : '';
+  const add = (no, type, pose, what, value, crit, ok) =>
+    out.push({ no, type, pose, tilt: Math.round(tiltCur), roll: Math.round(((rollCur % 360) + 360) % 360), what, value, crit, judge: ok ? '一致' : '不一致' });
+  const anal = () => regionShares().sh;
+  try {
+    for (const type of TB_TYPES) {
+      EVAL.type = type;
+      evalPrepare(90, 45);                                         // ① 立位第1斜位（食道）
+      const r2 = rollCardiaRightEdge() - 360;                      // 第2斜位の角度（例 307 → −53）
+      evalPrepare(90, 45); rollCur = rollT = 45; tiltCur = tiltT = 90;
+      // ② 第1斜位のまま台を倒し、水平で右方向に 360° を 3 回
+      pathMove([[0, 45], [0, 0], [0, -1080]], dwell); rollCur = rollT = 0; pathShoot();
+      let r = anal();
+      const big = Object.keys(r).filter(k => k !== 'antPyl').sort((a, b) => r[b] - r[a])[0];
+      add('2', type, '② 背臥位正面位', '胃底部の割合（%）／一番多い部位', f1(r.fundus) + '／' + (regionList.find(x => x[0] === big) || [0, big])[1], '胃底部が一番多い', big === 'fundus');
+      add('5a', type, '② 背臥位正面位', '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
+      // ③ 右方向に 360° 回転し、第1斜位 35°
+      pathMove([[0, -360], [0, -325]], dwell); rollCur = rollT = 35; pathShoot();
+      r = anal(); add('5b', type, '③ 背臥位第1斜位', '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
+      // ④ 背臥位に戻し、右方向に 360° 回転して第2斜位、頭低位 −30°
+      pathMove([[0, 0], [0, -360], [0, -360 + r2], [-30, -360 + r2]], dwell); rollCur = rollT = 360 + r2; pathShoot();
+      r = anal(); add('5c', type, '④ 背臥位第2斜位（頭低位）', '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
+      // ⑤ 背臥位に戻し、右回転で腹臥位、半臥位 25°（フトンを入れる）、頭低位 −30°
+      pathMove([[0, 360 + r2], [0, 360], [0, 180]], dwell); rollCur = rollT = 180; pathShoot();
+      const r0 = anal();
+      pathMove([[25, 180], [-30, 180]], dwell); pathShoot();
+      r = anal();
+      add('4', type, '⑤ 腹臥位正面位 水平→頭低位', '幽門前庭部の割合 水平→頭低位（%）／頭低位の胃底部＋胃体部（%）',
+          f1(r0.antPyl) + '→' + f1(r.antPyl) + '／' + f1(r.fundus + r.body), '頭低位で幽門前庭部が減り、胃底部＋胃体部が 50% 超',
+          r.antPyl < r0.antPyl && r.fundus + r.body > 50);
+      // ⑥ 台を水平に戻して第2斜位 25°、再び頭低位
+      pathMove([[0, 180], [0, 155], [-30, 155]], dwell); pathShoot();
+      r = anal(); add('5d', type, '⑥ 腹臥位第2斜位（頭低位）', '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
+      // ⑦ 台を水平に戻し、右回りに 360° 回転して第1斜位 45°、半臥位 25°
+      pathMove([[0, 155], [0, -205], [0, -135], [25, -135]], dwell); rollCur = rollT = 225; pathShoot();
+      let c = cardiaSubmerged(); add('8', type, '⑦ 腹臥位第1斜位（半臥位）', '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
+      // ⑧ 水平で、腹臥位から左側臥位を経て背臥位、素早く右側臥位
+      const rl = (() => { const t = tiltCur, ro = rollCur; const v = rollRightLateral(); tiltCur = tiltT = t; rollCur = rollT = ro; return v; })();
+      pathMove([[0, 225], [0, 180], [0, 90], [0, 0], [0, rl - 360]], dwell); rollCur = rollT = rl; pathShoot();
+      c = cardiaSubmerged(); add('6', type, '⑧ 右側臥位', '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
+      // ⑨ 水平で左右の交互体位変換（背臥位から左側臥位・右側臥位まで 1 回ずつ）、半臥位 25° で右側臥位から第2斜位へ
+      pathMove([[0, 360], [0, 450], [0, 270], [25, 270], [25, 360 + r2]], dwell); pathShoot();
+      r = anal(); add('7', type, '⑨ 半臥位第2斜位', '胃底部の割合（%）', f1(r.fundus), '5% 以下', r.fundus <= 5);
+      // ⑩ 水平で背臥位から左右の交互体位変換をしたあと、軽い第2斜位（表の 45°）
+      pathMove([[0, 360 + r2], [0, 360], [0, 450], [0, 270], [0, 360], [0, 315]], dwell); pathShoot();
+      r = anal(); add('3', type, '⑩ 背臥位第2斜位（振り分け）', '胃底部／幽門前庭部／胃体部の割合（%）', f1(r.fundus) + '／' + f1(r.antPyl) + '／' + f1(r.body),
+          '胃底部と幽門前庭部が 10% 以上、胃体部がその両方より少ない', r.fundus >= 10 && r.antPyl >= 10 && r.body < r.fundus && r.body < r.antPyl);
+    }
+  } finally { EVAL.type = saveType; }
+  return out;
+}
+const TB_HEAD = ['項目', '胃型', '体位', '起倒角', '回転角', '測ったもの', '値', '教科書の記載・基準', '判定', '計算を進めた秒数', '手順'];
 function textbookCsv(rows) {
-  return '﻿' + [TB_HEAD, ...rows.map(r => [r.no, TYPES[r.type].name, r.pose, r.tilt, r.roll, r.what, r.value, r.crit, r.judge, r.sec])]
+  return '﻿' + [TB_HEAD, ...rows.map(r => [r.no, TYPES[r.type].name, r.pose, r.tilt, r.roll, r.what, r.value, r.crit, r.judge, r.sec, r.proto])]
     .map(a => a.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n') + '\r\n';
 }
 
@@ -650,11 +755,16 @@ $e('evBook').addEventListener('click', async () => {
   try {   // 決めた秒数（既定 10 秒）と 30 秒の 2 通りで計算し、秒数で判定が変わらないかを見る
     for (const sec of [saveSec, 30]) {
       EVAL.simSec = sec; $e('evalMsg').textContent = '教科書と比べています（' + sec + ' 秒）'; await nextFrame();
-      rows = rows.concat(textbookCheck().map(r => ({ ...r, sec })));
+      rows = rows.concat(textbookCheck().map(r => ({ ...r, sec, proto: '各体位で入れ直し' })));
+    }
+    EVAL.simSec = saveSec;
+    for (const dw of [0.1, 0.5, 2]) {   // 改良 2：教科書の経路で通して計算（1 段 5° あたりの時間を 3 通り）
+      $e('evalMsg').textContent = '教科書の経路で計算しています（5° あたり ' + dw + ' 秒）'; await nextFrame();
+      rows = rows.concat(textbookPath(dw).map(r => ({ ...r, sec: saveSec, proto: '教科書の経路 5°あたり' + dw + '秒' })));
     }
   } finally { EVAL.simSec = saveSec; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
   window.TEXTBOOK_ROWS = rows;
-  const main = rows.filter(r => r.sec === saveSec && r.judge !== '記載なし');
+  const main = rows.filter(r => r.sec === saveSec && r.proto === '各体位で入れ直し' && r.judge !== '記載なし');
   $e('evalMsg').textContent = '教科書との比較：' + main.filter(r => r.judge === '一致').length + ' / ' + main.length + ' で一致。CSV を保存しました';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([textbookCsv(rows)], { type: 'text/csv' }));
