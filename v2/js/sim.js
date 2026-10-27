@@ -31,24 +31,26 @@ function applyPose() {
   applyTwist();
 }
 /* ---- 体位による胃のねじれ（TYPES[型].twist）----
-   胃は噴門と十二指腸で緩く留まっているだけで、体位によって腹の中で回り、ねじれる（胃X線検診 上部消化管検査必携テキスト
-   pp.90-94）。教科書の各体位の記載（チェック項目）どおりのバリウムの位置になるよう、基準撮影法の体位ごとに胃の向き
-   （噴門を中心にした回転ベクトル。体の座標の x 左・y 頭側・z 腹側、度）を決めて twist に置く（TEXTBOOK_CHECK.md「ねじれ」）。
-   ねじれのいらない体位も rot = [0,0,0] として置く。
+   胃は噴門部と幽門部が緩く固定されているだけで、体位によって腹の中でねじれ、振れる（胃X線検診 上部消化管検査必携テキスト
+   pp.90-94）。動きは教科書に書いてある 2 つだけにする（TEXTBOOK_CHECK.md「ねじれ」）。
+     α：噴門と幽門を結ぶ線のまわりのねじれ（「大弯を腹側に捻る」p.90）。噴門と幽門は動かさず、間をねじる。
+        ねじれの角度は、噴門より口側（胃底部・胃体上部）で α、そこから幽門に向かって直線的に減り、幽門で 0
+     β：前後の軸（体の z）のまわりの、噴門を中心にした正面での振れ（「Ba の重みで尾側方向に引き伸ばされ」p.94）
+   基準撮影法の体位ごとに、教科書の各体位の記載を満たす [α, β]（度）を twist に置く。ねじれのいらない体位も [0, 0] として置く。
    ほかの体位の値は、重力の向きの角度の差を距離にしたガウスの RBF 補間（幅 TWIST_SIG°）で求める。表の体位ではちょうど表の値になり、
-   その間はなめらかにつながり、どの体位からも遠いときは 0 に近づく。食道は回さない（噴門の位置は変わらない）。 */
+   その間はなめらかにつながり、どの体位からも遠いときは 0 に近づく。食道は動かさない。 */
 const TWIST_SIG = 20;
-let twistBase = null, twistCur = [NaN, 0, 0], twistRbf = null;
+let twistBase = null, twistCur = [NaN, 0], twistRbf = null;
 function upOf(tilt, roll) {   // 体の座標での上向き（upLocal と同じ。評価モードで確かめた式）
   const t = tilt * Math.PI / 180, r = roll * Math.PI / 180;
   return [-Math.sin(r) * Math.cos(t), Math.sin(t), Math.cos(r) * Math.cos(t)];
 }
 function angDeg(u, v) { return Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2]))) * 180 / Math.PI; }
-function twistCoef(T) {   // RBF の係数 c を解く：Φ c = rot（3 成分それぞれ）
+function twistCoef(T) {   // RBF の係数 c を解く：Φ c = [α, β]
   const n = T.length, U = T.map(k => upOf(k.tilt, k.roll));
   const M = U.map(u => U.map(v => Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2)));
-  const C = [0, 1, 2].map(d => {
-    const A = M.map((row, i) => [...row, T[i].rot[d]]);
+  const C = [0, 1].map(d => {
+    const A = M.map((row, i) => [...row, T[i].ab[d]]);
     for (let i = 0; i < n; i++) {   // ガウスの消去法（部分ピボット）
       let p = i; for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
       [A[i], A[p]] = [A[p], A[i]];
@@ -59,29 +61,35 @@ function twistCoef(T) {   // RBF の係数 c を解く：Φ c = rot（3 成分�
   return { T, U, C };
 }
 function twistFor(tilt, roll) {
-  const T = TYPES[curType].twist; if (!T || !T.length) return [0, 0, 0];
-  if (!twistRbf || twistRbf.T !== T || twistRbf.sig !== JSON.stringify(T.map(k => k.rot))) { twistRbf = twistCoef(T); twistRbf.sig = JSON.stringify(T.map(k => k.rot)); }
-  const u = upOf(tilt, roll), r = [0, 0, 0];
-  if (twistRbf.C.some(c => c.some(x => !Number.isFinite(x)))) return r;   // 解けない表（同じ重力の向きの体位が 2 つある等）はねじれなし
-  twistRbf.U.forEach((v, i) => { const w = Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2); for (let d = 0; d < 3; d++) r[d] += w * twistRbf.C[d][i]; });
+  const T = TYPES[curType].twist; if (!T || !T.length) return [0, 0];
+  const sig = JSON.stringify(T.map(k => [k.tilt, k.roll, k.ab]));
+  if (!twistRbf || twistRbf.sig !== sig) { twistRbf = twistCoef(T); twistRbf.sig = sig; }
+  if (twistRbf.C.some(c => c.some(x => !Number.isFinite(x)))) return [0, 0];   // 解けない表（同じ重力の向きの体位が 2 つある等）はねじれなし
+  const u = upOf(tilt, roll), r = [0, 0];
+  twistRbf.U.forEach((v, i) => { const w = Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2); r[0] += w * twistRbf.C[0][i]; r[1] += w * twistRbf.C[1][i]; });
   return r;
 }
-function twistSave() { twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0, 0]; }
-const _twq = new THREE.Quaternion(), _twv = new THREE.Vector3(), _twa = new THREE.Vector3();
+function twistSave() { twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0]; }
+const _twq = new THREE.Quaternion(), _twb = new THREE.Quaternion(), _twv = new THREE.Vector3(), _twa = new THREE.Vector3(), _twz = new THREE.Vector3(0, 0, 1);
 function applyTwist() {
   if (!twistBase) return;
-  const rv = twistFor(tiltCur, rollCur);
-  if (Math.abs(rv[0] - twistCur[0]) < 0.05 && Math.abs(rv[1] - twistCur[1]) < 0.05 && Math.abs(rv[2] - twistCur[2]) < 0.05) return;
-  twistCur = rv;
-  const ang = Math.hypot(rv[0], rv[1], rv[2]) * Math.PI / 180;
-  if (ang < 1e-6) _twq.identity(); else _twq.setFromAxisAngle(_twa.set(rv[0], rv[1], rv[2]).normalize(), ang);
+  const ab = twistFor(tiltCur, rollCur);
+  if (Math.abs(ab[0] - twistCur[0]) < 0.05 && Math.abs(ab[1] - twistCur[1]) < 0.05) return;
+  twistCur = ab;
   const B = twistBase, e = (NN - 1) * 3, cx = B.centers[e], cy = B.centers[e + 1], cz = B.centers[e + 2];   // 噴門（食道の下端）
-  const rot = (src, dst, k, piv) => {
-    _twv.set(src[k] - (piv ? cx : 0), src[k + 1] - (piv ? cy : 0), src[k + 2] - (piv ? cz : 0)).applyQuaternion(_twq);
-    dst[k] = _twv.x + (piv ? cx : 0); dst[k + 1] = _twv.y + (piv ? cy : 0); dst[k + 2] = _twv.z + (piv ? cz : 0);
-  };
-  for (let i = 0; i < NMAIN * CM; i++) rot(B.pos, pos, i * 3, true);
-  for (let i = 0; i < NMAIN; i++) { rot(B.centers, centers, i * 3, true); rot(B.fu, frameU, i * 3, false); rot(B.fv, frameV, i * 3, false); }
+  const pi = pylIdx * 3;
+  _twa.set(B.centers[pi] - cx, B.centers[pi + 1] - cy, B.centers[pi + 2] - cz).normalize();               // 噴門 → 幽門
+  _twb.setFromAxisAngle(_twz, ab[1] * Math.PI / 180);
+  for (let i = 0; i < NMAIN; i++) {
+    const w = i <= cardiaIdx ? 1 : Math.max(0, (pylIdx - i) / Math.max(1, pylIdx - cardiaIdx));
+    _twq.setFromAxisAngle(_twa, ab[0] * w * Math.PI / 180).premultiply(_twb);   // ねじってから振る
+    const rot = (src, dst, k, piv) => {
+      _twv.set(src[k] - (piv ? cx : 0), src[k + 1] - (piv ? cy : 0), src[k + 2] - (piv ? cz : 0)).applyQuaternion(_twq);
+      dst[k] = _twv.x + (piv ? cx : 0); dst[k + 1] = _twv.y + (piv ? cy : 0); dst[k + 2] = _twv.z + (piv ? cz : 0);
+    };
+    for (let j = 0; j < CM; j++) rot(B.pos, pos, (i * CM + j) * 3, true);
+    rot(B.centers, centers, i * 3, true); rot(B.fu, frameU, i * 3, false); rot(B.fv, frameV, i * 3, false);
+  }
   geom.attributes.position.needsUpdate = true;
   geom.computeVertexNormals();
 }

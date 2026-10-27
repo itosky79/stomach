@@ -487,7 +487,7 @@ function twistKeys(rl) {
     { tilt: 0, roll: 35, items: '5b', ok: () => sh().antPyl <= 5 },
     { tilt: -30, roll: 307, items: '5c', ok: () => sh().antPyl <= 5 },
     { tilt: -30, roll: 180, items: '4', ok: () => { const r = sh(); const t = TYPES[curType].twist, save = t.slice(); TYPES[curType].twist = t.filter(k => !(k.tilt === -30 && k.roll === 180));
-        evalPrepare(0, 180); const r0 = sh(); TYPES[curType].twist = save; twistCur = [NaN, 0, 0]; evalPrepare(-30, 180); return r.antPyl < r0.antPyl && r.fundus + r.body > 50; } },
+        evalPrepare(0, 180); const r0 = sh(); TYPES[curType].twist = save; twistCur = [NaN, 0]; evalPrepare(-30, 180); return r.antPyl < r0.antPyl && r.fundus + r.body > 50; } },
     { tilt: -30, roll: 155, items: '5d', ok: () => sh().antPyl <= 5 },
     { tilt: 25, roll: 225, items: '8', ok: () => cardiaSubmerged() <= 5 },
     { tilt: 0, roll: rl, items: '6', ok: () => cardiaSubmerged() <= 5 },
@@ -505,42 +505,33 @@ function calibrateTwist(report) {
         （w_ij は 2 つの体位の重力の向きが近いほど大きい。近い体位どうしで向きが急に変わらないようにする）
      4. 補間は表の体位でちょうど表の値になるので、選んだ組で全体位を確かめ直す */
   const T = TYPES[EVAL.type];
-  T.twist = []; twistCur = [NaN, 0, 0];
+  T.twist = []; twistCur = [NaN, 0];
   evalPrepare(0, 270); const rl = rollRightLateral();
-  const B = twistBase, e = (NN - 1) * 3, pi = pylIdx * 3;
-  const ax = new THREE.Vector3(B.centers[pi] - B.centers[e], B.centers[pi + 1] - B.centers[e + 1], B.centers[pi + 2] - B.centers[e + 2]).normalize();
-  const toRot = (a, b) => {
-    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), b * Math.PI / 180)
-      .multiply(new THREE.Quaternion().setFromAxisAngle(ax, a * Math.PI / 180));
-    if (q.w < 0) { q.x = -q.x; q.y = -q.y; q.z = -q.z; q.w = -q.w; }
-    const ang = 2 * Math.acos(Math.min(1, q.w)), s = Math.sqrt(Math.max(1e-12, 1 - q.w * q.w));
-    return ang < 1e-6 ? [0, 0, 0] : [q.x / s, q.y / s, q.z / s].map(v => Math.round(v * ang * 180 / Math.PI * 10) / 10);
-  };
   const AB = [];
   for (let a = -90; a <= 90; a += 10) for (let b = -40; b <= 40; b += 10) AB.push([a, b]);
   const keys = twistKeys(rl).map(K => ({ K, tilt: K.tilt, roll: K.roll, items: K.items, list: null,
     rolls: K.items === '6' ? [270, 275, 280, 285, rl].filter((v, i, a) => a.indexOf(v) === i) : [K.roll] }));
   const extra = [{ tilt: 90, roll: 45, items: '立位第1斜位（項目なし）' }, { tilt: 0, roll: 90, items: '左側臥位（項目なし）' }];
-  const zeroKey = k => ({ tilt: k.tilt, roll: k.roll, rot: [0, 0, 0], ab: [0, 0], items: k.items });
-  const check = (k, roll, rot) => {
-    T.twist = keys.filter(x => x !== k).map(zeroKey).concat(extra.map(zeroKey), [{ tilt: k.tilt, roll, rot, ab: [0, 0], items: k.items }]);
-    twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, roll); return k.K.ok();
+  const zeroKey = k => ({ tilt: k.tilt, roll: k.roll, ab: [0, 0], items: k.items });
+  const check = (k, roll, ab) => {
+    T.twist = keys.filter(x => x !== k).map(zeroKey).concat(extra.map(zeroKey), [{ tilt: k.tilt, roll, ab, items: k.items }]);
+    twistCur = [NaN, 0]; evalPrepare(k.tilt, roll); return k.K.ok();
   };
   for (const k of keys) {
-    if (check(k, k.roll, [0, 0, 0])) { k.list = [{ roll: k.roll, ab: [0, 0], rot: [0, 0, 0] }]; continue; }
+    if (check(k, k.roll, [0, 0])) { k.list = [{ roll: k.roll, ab: [0, 0], rot: [0, 0] }]; continue; }
     k.list = [];
-    for (const roll of k.rolls) for (const ab of AB) { const rot = toRot(...ab); if (check(k, roll, rot)) k.list.push({ roll, ab, rot }); }
+    for (const roll of k.rolls) for (const ab of AB) if (check(k, roll, ab)) k.list.push({ roll, ab, rot: ab });
     if (report) report(k.items + '：満たす組 ' + k.list.length);
   }
   // 3. なめらかさで選ぶ（座標ごとの降下を収まるまで）
-  const all = keys.concat(extra.map(x => ({ ...x, list: [{ roll: x.roll, ab: [0, 0], rot: [0, 0, 0] }] })));
-  const LAMBDA = 4, d2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+  const all = keys.concat(extra.map(x => ({ ...x, list: [{ roll: x.roll, ab: [0, 0], rot: [0, 0] }] })));
+  const LAMBDA = 4, d2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2;
   const cost = () => {
     const U = all.map(k => upOf(k.tilt, k.pick.roll)); let J = 0;
-    all.forEach((k, i) => { J += d2(k.pick.rot, [0, 0, 0]); all.forEach((m, j) => { if (j > i) J += LAMBDA * Math.exp(-0.5 * (angDeg(U[i], U[j]) / TWIST_SIG) ** 2) * d2(k.pick.rot, m.pick.rot); }); });
+    all.forEach((k, i) => { J += d2(k.pick.rot, [0, 0]); all.forEach((m, j) => { if (j > i) J += LAMBDA * Math.exp(-0.5 * (angDeg(U[i], U[j]) / TWIST_SIG) ** 2) * d2(k.pick.rot, m.pick.rot); }); });
     return J;
   };
-  all.forEach(k => { k.pick = k.list.length ? k.list.slice().sort((p, q) => d2(p.rot, [0, 0, 0]) - d2(q.rot, [0, 0, 0]))[0] : { roll: k.roll, ab: [0, 0], rot: [0, 0, 0] }; });
+  all.forEach(k => { k.pick = k.list.length ? k.list.slice().sort((p, q) => d2(p.rot, [0, 0]) - d2(q.rot, [0, 0]))[0] : { roll: k.roll, ab: [0, 0], rot: [0, 0] }; });
   for (let it = 0; it < 30; it++) {
     let moved = false;
     for (const k of all) {
@@ -552,9 +543,9 @@ function calibrateTwist(report) {
     }
     if (!moved) break;
   }
-  T.twist = all.map(k => ({ tilt: k.tilt, roll: k.pick.roll, ab: k.pick.ab, rot: k.pick.rot, items: k.items }));
-  twistCur = [NaN, 0, 0];
-  return keys.map(k => { twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, k.pick.roll); return { tilt: k.tilt, roll: k.pick.roll, items: k.items, ab: k.pick.ab, rot: k.pick.rot, n: k.list.length, ok: k.K.ok() }; });
+  T.twist = all.map(k => ({ tilt: k.tilt, roll: k.pick.roll, ab: k.pick.ab, items: k.items }));
+  twistCur = [NaN, 0];
+  return keys.map(k => { twistCur = [NaN, 0]; evalPrepare(k.tilt, k.pick.roll); return { tilt: k.tilt, roll: k.pick.roll, items: k.items, ab: k.pick.ab, n: k.list.length, ok: k.K.ok() }; });
 }
 
 const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };
@@ -893,7 +884,7 @@ $e('evTwist').addEventListener('click', async () => {   // 体位ごとのねじ
   let res = [];
   try { EVAL.type = 'bp3d'; EVAL.ml = 150 / Math.pow(BODY_SCALE, 3); res = calibrateTwist(m => { $e('evalMsg').textContent = 'ねじれを探しています：' + m; }); }
   finally { const found = TYPES.bp3d.twist; TYPES.bp3d.twist = keep; window.TWIST_FOUND = found; EVAL.ml = saveMl; EVAL.type = saveType; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
-  $e('evalMsg').textContent = 'ねじれ：' + res.filter(r => r.ok).length + ' / ' + res.length + ' 体位で項目を満たす。' + JSON.stringify(window.TWIST_FOUND.map(k => [k.tilt, k.roll, k.rot]));
+  $e('evalMsg').textContent = 'ねじれ：' + res.filter(r => r.ok).length + ' / ' + res.length + ' 体位で項目を満たす。' + JSON.stringify(window.TWIST_FOUND.map(k => [k.tilt, k.roll, k.ab]));
 });
 $e('evCsv').addEventListener('click', () => {
   const esc = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
