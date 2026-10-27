@@ -52,6 +52,15 @@
 const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), gas: 250, air: 0.6, pylorus: false, twistMax: [30, 30], dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
 const EVAL_KEY = 'stomach.v2.eval';
 const WALLS = ['前壁', '小弯', '後壁', '大弯'];
+// 壁の半分（マニュアルの「大弯側」「小弯側」）。前壁・後壁の扇形（90°）を、小弯と大弯の向きの境の 0°・180° で 2 つに分けたもの。
+// 前壁小弯側 0 < φ ≦ 45°、前壁大弯側 −45° ≦ φ < 0、後壁小弯側 φ > 135°、後壁大弯側 φ < −135°。番号は 4〜7
+const HALF_WALLS = ['前壁小弯側', '前壁大弯側', '後壁小弯側', '後壁大弯側'];
+function wallHit(w, sec, phi, v) {
+  if (w < 0) return true;
+  if (w < 4) return sec[v] === w;
+  const f = phi[v];
+  return w === 4 ? f > 0 && f <= 45 : w === 5 ? f >= -45 && f < 0 : w === 6 ? f > 135 : f < -135;
+}
 
 /* ---- 状態の控えと復元（評価のあとは元の画面に戻す）---- */
 function evalSave() {
@@ -109,7 +118,8 @@ function vertexAreas() {   // 頂点の受け持ち面積（隣の三角形の�
   return A;
 }
 function wallSectors() {   // 頂点ごとの壁（0 前壁、1 小弯、2 後壁、3 大弯）
-  const sec = new Int8Array(NMAIN * CM), nrm = geom.attributes.normal.array;
+  const sec = new Int8Array(NMAIN * CM), phiA = new Float32Array(NMAIN * CM), nrm = geom.attributes.normal.array;
+  sec.phi = phiA;   // 壁の向きの角度 φ（度）。壁の半分の判定に使う
   let gx = 0, gy = 0, gz = 0, gn = 0;   // 胃の中心線の重心（十二指腸球部を除く）
   for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] !== 'duode') { gx += centers[i * 3]; gy += centers[i * 3 + 1]; gz += centers[i * 3 + 2]; gn++; }
   const G = new THREE.Vector3(gx / gn, gy / gn, gz / gn);
@@ -129,6 +139,7 @@ function wallSectors() {   // 頂点ごとの壁（0 前壁、1 小弯、2 後�
       const v = i * CM + j;
       r.set(nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]);   // 壁の外向きの法線
       const phi = Math.atan2(r.dot(S), r.dot(A)) * 180 / Math.PI;
+      phiA[v] = phi;
       sec[v] = Math.abs(phi) <= 45 ? 0 : phi > 45 && phi <= 135 ? 1 : Math.abs(phi) > 135 ? 2 : 3;
     }
   }
@@ -168,7 +179,8 @@ function parseTarget(text) {
   const out = [];
   for (let p of parts) {
     let wall = -1;
-    for (let w = 0; w < WALLS.length; w++) if (p.endsWith(WALLS[w])) { wall = w; p = p.slice(0, -WALLS[w].length); break; }
+    for (let w = 0; w < HALF_WALLS.length; w++) if (p.endsWith(HALF_WALLS[w])) { wall = 4 + w; p = p.slice(0, -HALF_WALLS[w].length); break; }
+    if (wall < 0) for (let w = 0; w < WALLS.length; w++) if (p.endsWith(WALLS[w])) { wall = w; p = p.slice(0, -WALLS[w].length); break; }
     const ends = p.split(/[〜～~]/);
     if (ends.length > 2) return null;
     const words = ends.map(e => TERM_SYN[e] || e);
@@ -217,7 +229,7 @@ function targetMask(target, sec) {   // 目的部位に入る頂点
       const f = Math.min(a[0], b[0]), l = Math.max(a[1], b[1]);
       for (let i = f; i <= l; i++) for (let j = 0; j < CM; j++) ok[i * CM + j] = 1;
     }
-    for (let v = 0; v < NMAIN * CM; v++) if (ok[v] && (t.wall < 0 || sec[v] === t.wall)) m[v] = 1;
+    for (let v = 0; v < NMAIN * CM; v++) if (ok[v] && wallHit(t.wall, sec, sec.phi, v)) m[v] = 1;
   }
   return m;
 }
@@ -357,7 +369,7 @@ function evalKokushi() {   // 選んだ胃型で 2 問を評価する。行ご�
      斜位の両隣の正面・側面の間（例：45° なら 0〜90°）で 5° ずつ変え、描出率がいちばん高い回転角を求める。
    ・頭低位の角度：頭低位の体位（起倒角が負）について、回転角はそのままで、起倒角を 0〜−45° で 5° ずつ変える。
    それ以外の条件と手順は評価モードと同じ（settle のあと Δt = 1/60 秒で 10 秒）。 */
-function seqRows() { return SEQ2.filter(q => !q.comp && q.tgt.indexOf('食道') < 0); }
+function seqRows() { return SEQ2.filter(q => !q.comp && q.tgt.indexOf('食道') < 0).map(q => ({ ...q, tgt: q.etgt || q.tgt })); }   // 評価には etgt（マニュアルの大弯側・小弯側まで書いたもの）を使う
 function capacityNow() {   // 胃の容量（十二指腸球部を除く、模型の mL）
   let c = 0; for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] !== 'duode') c += cap[i]; return c;
 }
@@ -714,7 +726,7 @@ evalPanel.innerHTML = `
 <h2>評価モード</h2>
 <p>条件：胃型 下で選んだ型（既定は解剖モデル）、バリウム 150 mL（実寸。模型の単位では ${EVAL.ml.toFixed(1)}）、発泡剤 既定、圧迫なし、幽門閉。各体位で settle() のあと Δt = 1/60 秒で計算を進めてから測る。
 定義は js/eval.js の先頭に書いてある。</p>
-<p>目的部位の書き方：部位（${REGION_WORDS.join('・')}・${SUB_WORDS.join('・')}・穹窿部・体部・十二指腸）＋必要なら壁（${WALLS.join('・')}）。例「胃体部後壁」「胃角部〜前庭部後壁」「穹窿部・噴門部」。括弧書きは無視する。食道は対象外。</p>
+<p>目的部位の書き方：部位（${REGION_WORDS.join('・')}・${SUB_WORDS.join('・')}・穹窿部・体部・十二指腸）＋必要なら壁（${WALLS.join('・')}・${HALF_WALLS.join('・')}）。例「胃体部後壁」「胃角部〜前庭部後壁」「穹窿部・噴門部」。括弧書きは無視する。食道は対象外。</p>
 <div class="row">
   <label>胃型<select id="evType"></select></label>
   <label>計算を進める秒数<input class="num" id="evSim" type="number" min="0" step="1"></label>
@@ -766,7 +778,7 @@ function drawInputs() {
 drawInputs();
 function loadSeq(list, label) {   // 撮影手順の表の体位名・角度・目的部位をそのまま入れる（圧迫の行は印を付ける）
   evalRows = list.map((q, i) => ({ name: label + NOS[i] + ' ' + q.name + (q.comp ? '（圧迫：評価は圧迫なし）' : ''),
-    tilt: String(q.tilt), roll: String(q.roll), target: q.tgt }));
+    tilt: String(q.tilt), roll: String(q.roll), target: q.etgt || q.tgt }));
   evalPersist(); drawInputs();
 }
 $e('evSeq1').addEventListener('click', () => loadSeq(SEQ1, 'Ⅰ'));
