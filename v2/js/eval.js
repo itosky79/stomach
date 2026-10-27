@@ -85,6 +85,7 @@ function evalPrepare(tilt, roll) {
   curType = EVAL.type; targetMl = EVAL.ml; gasMl = EVAL.gas; airLevel = EVAL.air; compRegion = ''; compAmt = 0; pylorusOpen = EVAL.pylorus;   // 幽門は既定で閉じる
   if (changed) { rebuildAll(); buildLabels(); }
   tiltCur = tiltT = tilt; rollCur = rollT = roll;
+  sagS.fill(0);   // たわみは毎回まっすぐの形から始める（前の体位の形を持ち越さない）
   settle();
   const vRef = wVol.reduce((a, b) => a + b, 0);
   const t0 = performance.now();
