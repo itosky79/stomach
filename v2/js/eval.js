@@ -467,8 +467,8 @@ function rollRightLateral() {   // ねじれる前の胃の形で求める（ね
 }
 /* 解剖モデルを決まった内腔の容積（実寸 mL）にした型を作る（TEXTBOOK_CHECK.md「解剖モデル」）。
    BodyParts3D のままの太さ rad0 に同じ倍率 k を掛け、胃（十二指腸球部を除く）の容量 × 1.2³ が目標になる k を二分法で求める */
-function makeLumenType(ml) {
-  const key = 'bp3d_' + ml, base = TYPES.bp3d, S3 = Math.pow(BODY_SCALE, 3);
+function makeLumenType(ml, baseKey = 'bp3d', key = baseKey + '_' + ml) {
+  const base = TYPES[baseKey], S3 = Math.pow(BODY_SCALE, 3);
   const capFor = k => { TYPES[key] = { ...base, name: base.name + '（内腔 ' + ml + ' mL）', rad: base.rad0.map(r => r * k) }; curType = key; rebuildAll(); return capacityNow() * S3; };
   let lo = 0.2, hi = 2;
   for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (capFor(m) < ml) lo = m; else hi = m; }
@@ -549,7 +549,7 @@ function calibrateTwist(report) {
 }
 
 const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };
-function textbookCheck() {
+function textbookCheck(opt = {}) {   // opt.skipDrain：項目 1（台を起こしていく計算）を飛ばす
   const out = [], saveType = EVAL.type;
   const f1 = x => Number.isFinite(x) ? x.toFixed(1) : '';
   const add = (no, type, pose, tilt, roll, what, value, crit, ok) =>
@@ -558,6 +558,7 @@ function textbookCheck() {
     for (const type of TB_TYPES) {
       EVAL.type = type;
       // 項目 1：背臥位正面位から台を 5° ずつ起こし、胃底部のバリウムが背臥位の半分以下になった最初の角度
+      if (!opt.skipDrain) {
       evalPrepare(0, 0);
       const f0 = regionShares().vol.fundus || 0;
       let drain = null;
@@ -575,6 +576,7 @@ function textbookCheck() {
       add('1', type, '背臥位正面位から起こす', '0→90', 0, '胃底部のバリウムが背臥位の半分以下になった角度（°）',
           drain === null ? '90° でも流れ出さない' : drain, d ? d[2] : '（記載なし）', ok1);
       add('1（経過）', type, '背臥位正面位から起こす', '0→90', 0, '胃底部のバリウム（背臥位を 100%）', trace.join(' '), '', null);
+      }
       // 項目 2：背臥位では穹窿部にたまる
       evalPrepare(0, 0);
       let r = regionShares().sh;
