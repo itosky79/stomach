@@ -399,6 +399,101 @@ function sweepCsv(rows) {
     .map(a => a.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n') + '\r\n';
 }
 
+/* ================= 教科書のバリウムの動きとの比較（TEXTBOOK_CHECK.md）=================
+   教科書（胃X線検診 上部消化管検査必携テキスト，ぱーそん書房，2022）に書いてあるバリウムの位置を、
+   シミュレーターが再現するかを判定する。判定の基準は TEXTBOOK_CHECK.md に計算の前に決めたもの。
+   条件と手順は評価モードと同じ（settle のあと Δt = 1/60 秒で EVAL.simSec 秒）。流れの速さは実測と照合していないので、
+   バリウムの動きが止まった状態だけを使う。秒数を変えても判定が変わらないことを別に確かめる。
+     部位のバリウムの割合(%) = その部位の断面の水量の合計 ÷ 胃（十二指腸球部を除く）の水量の合計 × 100
+     幽門前庭部 = 前庭部 + 幽門部
+     噴門部が沈んでいる割合(%) = 噴門部（噴門から実寸 2 cm 以内の壁）の面積のうち、液面より下にある面積の割合
+     「残らない」= 5% 以下 */
+function regionShares() {
+  const v = {}; let tot = 0;
+  for (let i = 0; i < NMAIN; i++) {
+    const k = regionList[regionOf[i]][0]; if (k === 'duode') continue;
+    v[k] = (v[k] || 0) + wVol[i]; tot += wVol[i];
+  }
+  const sh = {}; for (const k of Object.keys(v)) sh[k] = tot > 0 ? v[k] / tot * 100 : 0;
+  sh.antPyl = (sh.antrum || 0) + (sh.pylorus || 0);
+  return { sh, vol: v, tot };
+}
+function cardiaSubmerged() {
+  const A = vertexAreas(), m = targetMask(parseTarget('噴門部'), wallSectors());
+  let all = 0, sub = 0;
+  for (let v = 0; v < NMAIN * CM; v++) if (m[v]) { all += A[v]; if (hArr[v] <= lvl[(v / CM) | 0]) sub += A[v]; }
+  return all > 0 ? sub / all * 100 : NaN;
+}
+const TB_TYPES = ['hook', 'horn', 'casc', 'ptos'];
+const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };
+function textbookCheck() {
+  const out = [], saveType = EVAL.type;
+  const f1 = x => Number.isFinite(x) ? x.toFixed(1) : '';
+  const add = (no, type, pose, tilt, roll, what, value, crit, ok) =>
+    out.push({ no, type, pose, tilt, roll, what, value, crit, judge: ok === null ? '記載なし' : ok ? '一致' : '不一致' });
+  try {
+    for (const type of TB_TYPES) {
+      EVAL.type = type;
+      // 項目 1：背臥位正面位から台を 5° ずつ起こし、胃底部のバリウムが背臥位の半分以下になった最初の角度
+      evalPrepare(0, 0);
+      const f0 = regionShares().vol.fundus || 0;
+      let drain = null;
+      const trace = [];
+      for (let t = 5; t <= 90; t += 5) {
+        tiltCur = tiltT = t;
+        const steps = Math.round(EVAL.simSec / EVAL.dt);
+        for (let s = 0; s < steps; s++) evalStep(EVAL.dt);
+        const fv = regionShares().vol.fundus || 0;
+        trace.push(t + '°:' + f1(f0 > 0 ? fv / f0 * 100 : NaN));
+        if (drain === null && fv <= f0 * 0.5) drain = t;
+      }
+      const d = TB_DRAIN[type];
+      const ok1 = !d ? null : d[0] === null ? drain === null : drain !== null && drain >= d[0] && drain <= d[1];
+      add('1', type, '背臥位正面位から起こす', '0→90', 0, '胃底部のバリウムが背臥位の半分以下になった角度（°）',
+          drain === null ? '90° でも流れ出さない' : drain, d ? d[2] : '（記載なし）', ok1);
+      add('1（経過）', type, '背臥位正面位から起こす', '0→90', 0, '胃底部のバリウム（背臥位を 100%）', trace.join(' '), '', null);
+      // 項目 2：背臥位では穹窿部にたまる
+      evalPrepare(0, 0);
+      let r = regionShares().sh;
+      const big = Object.keys(r).filter(k => k !== 'antPyl').sort((a, b) => r[b] - r[a])[0];
+      add('2', type, '背臥位正面位', 0, 0, '胃底部の割合（%）／一番多い部位', f1(r.fundus) + '／' + (regionList.find(x => x[0] === big) || [0, big])[1],
+          '胃底部が一番多い', big === 'fundus');
+      // 項目 5a
+      add('5a', type, '背臥位正面位', 0, 0, '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
+      // 項目 3：振り分け
+      evalPrepare(0, 315); r = regionShares().sh;
+      add('3', type, '背臥位第2斜位（振り分け）', 0, 315, '胃底部／幽門前庭部／胃体部の割合（%）', f1(r.fundus) + '／' + f1(r.antPyl) + '／' + f1(r.body),
+          '胃底部と幽門前庭部が 10% 以上、胃体部がその両方より少ない', r.fundus >= 10 && r.antPyl >= 10 && r.body < r.fundus && r.body < r.antPyl);
+      // 項目 4：腹臥位頭低位で胃下部から上部へ流れ去る
+      evalPrepare(0, 180); const r0 = regionShares().sh;
+      evalPrepare(-30, 180); r = regionShares().sh;
+      add('4', type, '腹臥位正面位 水平→頭低位', '0→−30', 180, '幽門前庭部の割合 水平→頭低位（%）／頭低位の胃底部＋胃体部（%）',
+          f1(r0.antPyl) + '→' + f1(r.antPyl) + '／' + f1(r.fundus + r.body), '頭低位で幽門前庭部が減り、胃底部＋胃体部が 50% 超',
+          r.antPyl < r0.antPyl && r.fundus + r.body > 50);
+      // 項目 5b〜5d：幽門前庭部に残らない
+      for (const [no, pose, t, ro] of [['5b', '背臥位第1斜位', 0, 35], ['5c', '背臥位第2斜位（頭低位）', -30, 315], ['5d', '腹臥位第2斜位（頭低位）', -30, 155]]) {
+        evalPrepare(t, ro); r = regionShares().sh;
+        add(no, type, pose, t, ro, '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
+      }
+      // 項目 6：右側臥位で噴門部に停留がない
+      evalPrepare(0, 270); let c = cardiaSubmerged();
+      add('6', type, '右側臥位', 0, 270, '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
+      // 項目 7：半臥位第2斜位で穹窿部に残存がない
+      evalPrepare(25, 315); r = regionShares().sh;
+      add('7', type, '半臥位第2斜位', 25, 315, '胃底部の割合（%）', f1(r.fundus), '5% 以下', r.fundus <= 5);
+      // 項目 8：腹臥位第1斜位（半臥位）で噴門部に残留がない
+      evalPrepare(25, 225); c = cardiaSubmerged();
+      add('8', type, '腹臥位第1斜位（半臥位）', 25, 225, '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
+    }
+  } finally { EVAL.type = saveType; }
+  return out;
+}
+const TB_HEAD = ['項目', '胃型', '体位', '起倒角', '回転角', '測ったもの', '値', '教科書の記載・基準', '判定', '計算を進めた秒数'];
+function textbookCsv(rows) {
+  return '﻿' + [TB_HEAD, ...rows.map(r => [r.no, TYPES[r.type].name, r.pose, r.tilt, r.roll, r.what, r.value, r.crit, r.judge, r.sec])]
+    .map(a => a.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n') + '\r\n';
+}
+
 /* ================= 画面 ================= */
 const evalStyle = document.createElement('style');
 evalStyle.textContent = `
@@ -433,9 +528,9 @@ evalPanel.innerHTML = `
 </div>
 <table id="evIn"><thead><tr><th>体位名</th><th>起倒角</th><th>回転角</th><th>目的部位（ラベル名）</th><th></th></tr></thead><tbody></tbody></table>
 <div class="row"><button type="button" id="evSeq1">基準撮影法Ⅰを読み込む</button><button type="button" id="evSeq2">基準撮影法Ⅱを読み込む</button>
-<span>（data.js の撮影手順の表から。原典：日本消化器がん検診学会のマニュアル 表1-Ⅱ-1。読み込んだら原典と照合する）</span></div>
+<span>（data.js の撮影手順の表から。順序は日本消化器がん検診学会のマニュアル 表1-Ⅱ-1、目的部位と角度は「胃X線検診 上部消化管検査必携テキスト」pp.76-84）</span></div>
 <div class="row"><button type="button" id="evAdd">行を足す</button><button type="button" id="evRun">評価する</button>
-<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evSweep">条件を振って評価</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
+<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evSweep">条件を振って評価</button><button type="button" id="evBook">教科書と比べる</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
 <table id="evOut"></table>`;
 document.body.appendChild(evalPanel);
 
@@ -547,6 +642,23 @@ $e('evSweep').addEventListener('click', async () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([sweepCsv(rows)], { type: 'text/csv' }));
   a.download = 'stomach_sweep.csv'; document.body.appendChild(a); a.click(); a.remove();
+});
+$e('evBook').addEventListener('click', async () => {
+  renderer.setAnimationLoop(null);
+  const saved = evalSave(), saveSec = EVAL.simSec;
+  let rows = [];
+  try {   // 決めた秒数（既定 10 秒）と 30 秒の 2 通りで計算し、秒数で判定が変わらないかを見る
+    for (const sec of [saveSec, 30]) {
+      EVAL.simSec = sec; $e('evalMsg').textContent = '教科書と比べています（' + sec + ' 秒）'; await nextFrame();
+      rows = rows.concat(textbookCheck().map(r => ({ ...r, sec })));
+    }
+  } finally { EVAL.simSec = saveSec; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
+  window.TEXTBOOK_ROWS = rows;
+  const main = rows.filter(r => r.sec === saveSec && r.judge !== '記載なし');
+  $e('evalMsg').textContent = '教科書との比較：' + main.filter(r => r.judge === '一致').length + ' / ' + main.length + ' で一致。CSV を保存しました';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([textbookCsv(rows)], { type: 'text/csv' }));
+  a.download = 'stomach_textbook.csv'; document.body.appendChild(a); a.click(); a.remove();
 });
 $e('evCsv').addEventListener('click', () => {
   const esc = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
