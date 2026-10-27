@@ -49,7 +49,7 @@
    30 回測った平均。シミュレーションの計算時間は別の列に出す。
    平均 fps：その体位のまま、通常の描画ループを 10 秒動かしたときの 1 秒あたりの描画回数。 */
 
-const EVAL = { type: 'hook', ml: 120, air: 0.6, dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
+const EVAL = { type: 'hook', ml: 120, air: 0.6, pylorus: false, dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
 const EVAL_KEY = 'stomach.v2.eval';
 const WALLS = ['前壁', '小弯', '後壁', '大弯'];
 
@@ -80,8 +80,8 @@ function evalStep(dt) {   // main.js の loop と同じ順（カメラ・ラベ�
   updateWet(dt);
 }
 function evalPrepare(tilt, roll) {
-  const changed = curType !== EVAL.type || airLevel !== EVAL.air || compAmt !== 0 || pylorusOpen;
-  curType = EVAL.type; targetMl = EVAL.ml; airLevel = EVAL.air; compRegion = ''; compAmt = 0; pylorusOpen = false;
+  const changed = curType !== EVAL.type || airLevel !== EVAL.air || compAmt !== 0 || pylorusOpen !== EVAL.pylorus;
+  curType = EVAL.type; targetMl = EVAL.ml; airLevel = EVAL.air; compRegion = ''; compAmt = 0; pylorusOpen = EVAL.pylorus;   // 幽門は既定で閉じる
   if (changed) { rebuildAll(); buildLabels(); }
   tiltCur = tiltT = tilt; rollCur = rollT = roll;
   settle();
