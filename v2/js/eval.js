@@ -445,6 +445,10 @@ function rollCardiaRightEdge() {
   }
   return null;
 }
+function rightLateralRoll() {   // 右側臥位の角度：ねじれの表で決めた角度があればそれ（calibrateTwist）、なければ目印から求める
+  const k = (TYPES[curType].twist || []).find(x => String(x.items || '').startsWith('6'));
+  return k ? k.roll : rollRightLateral();
+}
 function rollRightLateral() {   // ねじれる前の胃の形で求める（ねじれで角度が変わらないように）
   const PP = twistBase ? twistBase.pos : pos, CC = twistBase ? twistBase.centers : centers;
   const e = (NN - 1) * 3, c = new THREE.Vector3(CC[e], CC[e + 1], CC[e + 2]), rr = ringsOf('胃上部');
@@ -494,8 +498,9 @@ function twistKeys(rl) {
 function calibrateTwist(report) {
   /* ねじれの決め方（TEXTBOOK_CHECK.md「ねじれ」）：
      1. 回転は教科書に書いてある 2 つの動きだけ：α = 噴門と幽門を結ぶ線のまわり（p.90）、β = 前後の軸のまわりの正面での振れ（p.94）。
-        α は −60〜60°、β は −30〜30°（10° 刻み）
-     2. 基準撮影法の体位ごとに、その体位の項目を満たす (α, β) をすべて挙げる（ねじれなしで満たす体位は 0 に固定）
+        α は −90〜90°、β は −40〜40°（10° 刻み）
+     2. 基準撮影法の体位ごとに、その体位の項目を満たす (α, β) をすべて挙げる（ねじれなしで満たす体位は 0 に固定）。
+        右側臥位は、教科書が目印で角度を合わせる体位なので、回転角 270°（真横）〜目印の角度の間も候補にする
      3. 挙げた中から、Σ|回転|² + λ Σ w_ij |回転_i − 回転_j|² がいちばん小さくなる組を選ぶ
         （w_ij は 2 つの体位の重力の向きが近いほど大きい。近い体位どうしで向きが急に変わらないようにする）
      4. 補間は表の体位でちょうど表の値になるので、選んだ組で全体位を確かめ直す */
@@ -511,29 +516,32 @@ function calibrateTwist(report) {
     const ang = 2 * Math.acos(Math.min(1, q.w)), s = Math.sqrt(Math.max(1e-12, 1 - q.w * q.w));
     return ang < 1e-6 ? [0, 0, 0] : [q.x / s, q.y / s, q.z / s].map(v => Math.round(v * ang * 180 / Math.PI * 10) / 10);
   };
-  const cand = [];
-  for (let a = -60; a <= 60; a += 10) for (let b = -30; b <= 30; b += 10) cand.push({ ab: [a, b], rot: toRot(a, b) });
-  // ねじれのいらない体位（表の体位で項目を満たすもの）と、基準撮影法のほかの体位（立位・左側臥位）も 0 として置く
-  const keys = twistKeys(rl).map(K => ({ K, tilt: K.tilt, roll: K.roll, items: K.items, list: null }));
-  const extra = [{ tilt: 90, roll: 45, items: '立位第1斜位（項目なし）' }, { tilt: 0, roll: 90, items: '左側臥位（項目なし）' }];   // 立位は回転角によらず重力の向きが同じなので 1 つだけ置く
+  const AB = [];
+  for (let a = -90; a <= 90; a += 10) for (let b = -40; b <= 40; b += 10) AB.push([a, b]);
+  const keys = twistKeys(rl).map(K => ({ K, tilt: K.tilt, roll: K.roll, items: K.items, list: null,
+    rolls: K.items === '6' ? [270, 275, 280, 285, rl].filter((v, i, a) => a.indexOf(v) === i) : [K.roll] }));
+  const extra = [{ tilt: 90, roll: 45, items: '立位第1斜位（項目なし）' }, { tilt: 0, roll: 90, items: '左側臥位（項目なし）' }];
   const zeroKey = k => ({ tilt: k.tilt, roll: k.roll, rot: [0, 0, 0], ab: [0, 0], items: k.items });
-  const check = (k, rot) => {
-    T.twist = keys.filter(x => x !== k).map(zeroKey).concat(extra.map(zeroKey), [{ tilt: k.tilt, roll: k.roll, rot, ab: [0, 0], items: k.items }]);
-    twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, k.roll); return k.K.ok();
+  const check = (k, roll, rot) => {
+    T.twist = keys.filter(x => x !== k).map(zeroKey).concat(extra.map(zeroKey), [{ tilt: k.tilt, roll, rot, ab: [0, 0], items: k.items }]);
+    twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, roll); return k.K.ok();
   };
   for (const k of keys) {
-    if (check(k, [0, 0, 0])) { k.list = [{ ab: [0, 0], rot: [0, 0, 0] }]; continue; }
-    k.list = cand.filter(c => check(k, c.rot));
+    if (check(k, k.roll, [0, 0, 0])) { k.list = [{ roll: k.roll, ab: [0, 0], rot: [0, 0, 0] }]; continue; }
+    k.list = [];
+    for (const roll of k.rolls) for (const ab of AB) { const rot = toRot(...ab); if (check(k, roll, rot)) k.list.push({ roll, ab, rot }); }
     if (report) report(k.items + '：満たす組 ' + k.list.length);
   }
   // 3. なめらかさで選ぶ（座標ごとの降下を収まるまで）
-  const all = keys.concat(extra.map(x => ({ ...x, list: [{ ab: [0, 0], rot: [0, 0, 0] }] })));
-  const U = all.map(k => upOf(k.tilt, k.roll)), LAMBDA = 4;
-  const W = U.map(u => U.map(v => Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2)));
-  const d2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
-  all.forEach(k => { k.pick = k.list.length ? k.list.slice().sort((p, q) => d2(p.rot, [0, 0, 0]) - d2(q.rot, [0, 0, 0]))[0] : { ab: [0, 0], rot: [0, 0, 0] }; });
-  const cost = () => { let J = 0; all.forEach((k, i) => { J += d2(k.pick.rot, [0, 0, 0]); all.forEach((m, j) => { if (j > i) J += LAMBDA * W[i][j] * d2(k.pick.rot, m.pick.rot); }); }); return J; };
-  for (let it = 0; it < 20; it++) {
+  const all = keys.concat(extra.map(x => ({ ...x, list: [{ roll: x.roll, ab: [0, 0], rot: [0, 0, 0] }] })));
+  const LAMBDA = 4, d2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
+  const cost = () => {
+    const U = all.map(k => upOf(k.tilt, k.pick.roll)); let J = 0;
+    all.forEach((k, i) => { J += d2(k.pick.rot, [0, 0, 0]); all.forEach((m, j) => { if (j > i) J += LAMBDA * Math.exp(-0.5 * (angDeg(U[i], U[j]) / TWIST_SIG) ** 2) * d2(k.pick.rot, m.pick.rot); }); });
+    return J;
+  };
+  all.forEach(k => { k.pick = k.list.length ? k.list.slice().sort((p, q) => d2(p.rot, [0, 0, 0]) - d2(q.rot, [0, 0, 0]))[0] : { roll: k.roll, ab: [0, 0], rot: [0, 0, 0] }; });
+  for (let it = 0; it < 30; it++) {
     let moved = false;
     for (const k of all) {
       if (k.list.length < 2) continue;
@@ -541,14 +549,12 @@ function calibrateTwist(report) {
       for (const c of k.list) { k.pick = c; const J = cost(); if (J < bJ - 1e-9) { bJ = J; best = c; } }
       if (best !== k.pick) moved = true;
       k.pick = best;
-      if (moved) continue;
     }
     if (!moved) break;
   }
-  T.twist = all.map(k => ({ tilt: k.tilt, roll: k.roll, ab: k.pick.ab, rot: k.pick.rot, items: k.items }));
-  // 4. 確かめ直す
+  T.twist = all.map(k => ({ tilt: k.tilt, roll: k.pick.roll, ab: k.pick.ab, rot: k.pick.rot, items: k.items }));
   twistCur = [NaN, 0, 0];
-  return keys.map(k => { twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, k.roll); return { tilt: k.tilt, roll: k.roll, items: k.items, ab: k.pick.ab, rot: k.pick.rot, n: k.list.length, ok: k.K.ok() }; });
+  return keys.map(k => { twistCur = [NaN, 0, 0]; evalPrepare(k.tilt, k.pick.roll); return { tilt: k.tilt, roll: k.pick.roll, items: k.items, ab: k.pick.ab, rot: k.pick.rot, n: k.list.length, ok: k.K.ok() }; });
 }
 
 const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };
@@ -603,7 +609,7 @@ function textbookCheck() {
         add(no, type, pose, t, ro, '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
       }
       // 項目 6：右側臥位で噴門部に停留がない
-      evalPrepare(0, 270); const rl = rollRightLateral();
+      evalPrepare(0, 270); const rl = rightLateralRoll();
       evalPrepare(0, rl); let c = cardiaSubmerged();
       add('6', type, '右側臥位', 0, rl, '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
       // 項目 7：半臥位第2斜位で穹窿部に残存がない
@@ -669,7 +675,7 @@ function textbookPath(dwell) {
       pathMove([[0, 155], [0, -205], [0, -135], [25, -135]], dwell); rollCur = rollT = 225; pathShoot();
       let c = cardiaSubmerged(); add('8', type, '⑦ 腹臥位第1斜位（半臥位）', '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
       // ⑧ 水平で、腹臥位から左側臥位を経て背臥位、素早く右側臥位
-      const rl = (() => { const t = tiltCur, ro = rollCur; const v = rollRightLateral(); tiltCur = tiltT = t; rollCur = rollT = ro; return v; })();
+      const rl = (() => { const t = tiltCur, ro = rollCur; const v = rightLateralRoll(); tiltCur = tiltT = t; rollCur = rollT = ro; return v; })();
       pathMove([[0, 225], [0, 180], [0, 90], [0, 0], [0, rl - 360]], dwell); rollCur = rollT = rl; pathShoot();
       c = cardiaSubmerged(); add('6', type, '⑧ 右側臥位', '噴門部が沈んでいる割合（%）', f1(c), '5% 以下', c <= 5);
       // ⑨ 水平で左右の交互体位変換（背臥位から左側臥位・右側臥位まで 1 回ずつ）、半臥位 25° で右側臥位から第2斜位へ
