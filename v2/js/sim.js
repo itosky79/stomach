@@ -62,6 +62,7 @@ function twistFor(tilt, roll) {
   const T = TYPES[curType].twist; if (!T || !T.length) return [0, 0, 0];
   if (!twistRbf || twistRbf.T !== T || twistRbf.sig !== JSON.stringify(T.map(k => k.rot))) { twistRbf = twistCoef(T); twistRbf.sig = JSON.stringify(T.map(k => k.rot)); }
   const u = upOf(tilt, roll), r = [0, 0, 0];
+  if (twistRbf.C.some(c => c.some(x => !Number.isFinite(x)))) return r;   // 解けない表（同じ重力の向きの体位が 2 つある等）はねじれなし
   twistRbf.U.forEach((v, i) => { const w = Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2); for (let d = 0; d < 3; d++) r[d] += w * twistRbf.C[d][i]; });
   return r;
 }

@@ -515,7 +515,7 @@ function calibrateTwist(report) {
   for (let a = -60; a <= 60; a += 10) for (let b = -30; b <= 30; b += 10) cand.push({ ab: [a, b], rot: toRot(a, b) });
   // ねじれのいらない体位（表の体位で項目を満たすもの）と、基準撮影法のほかの体位（立位・左側臥位）も 0 として置く
   const keys = twistKeys(rl).map(K => ({ K, tilt: K.tilt, roll: K.roll, items: K.items, list: null }));
-  const extra = [{ tilt: 90, roll: 45, items: '立位第1斜位（項目なし）' }, { tilt: 0, roll: 90, items: '左側臥位（項目なし）' }, { tilt: 90, roll: 0, items: '立位（項目なし）' }];
+  const extra = [{ tilt: 90, roll: 45, items: '立位第1斜位（項目なし）' }, { tilt: 0, roll: 90, items: '左側臥位（項目なし）' }];   // 立位は回転角によらず重力の向きが同じなので 1 つだけ置く
   const zeroKey = k => ({ tilt: k.tilt, roll: k.roll, rot: [0, 0, 0], ab: [0, 0], items: k.items });
   const check = (k, rot) => {
     T.twist = keys.filter(x => x !== k).map(zeroKey).concat(extra.map(zeroKey), [{ tilt: k.tilt, roll: k.roll, rot, ab: [0, 0], items: k.items }]);
