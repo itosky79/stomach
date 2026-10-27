@@ -52,6 +52,7 @@ function loop(now) {
   flowStep(dt);
   for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
   updateWet(dt);
+  shapeStep(dt);
   buildSurface();
   updateLabels();
   if (viewMode !== 0) fluoroTime += dt;

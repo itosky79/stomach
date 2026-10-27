@@ -372,6 +372,11 @@ const bind = (id, fn) => document.getElementById(id).addEventListener('change', 
 bind('tBone', v => { showBone = v; });
 bind('tOri', v => { showOri = v; });
 bind('tPyl', v => { pylorusOpen = v; rebuildAll(); });
+{ // 胃の中身：バリウム（120〜150 mL）と発泡剤のガス（100〜400 mL）。胃の大きさは合計に合わせる（model.js の rebuild）
+  const S3 = Math.pow(BODY_SCALE, 3), rBa = document.getElementById('rBa'), rGas = document.getElementById('rGas');
+  rBa.addEventListener('input', () => { targetMl = +rBa.value / S3; document.getElementById('oBa').textContent = rBa.value + ' mL'; rebuildAll(); buildLabels(); });
+  rGas.addEventListener('input', () => { gasMl = +rGas.value; document.getElementById('oGas').textContent = rGas.value + ' mL'; rebuildAll(); buildLabels(); });
+}
 document.getElementById('bDrink').addEventListener('click', () => {
   for (let n = 0; n < NN; n++) wVol[n] = 0;
   for (let i = 0; i < NV; i++) { aWet[i] = 0; aLevel[i] = -1e3; }

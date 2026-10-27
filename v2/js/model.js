@@ -39,7 +39,7 @@ const area = new Float32Array(NN), dl = new Float32Array(NN), cap = new Float32A
 const wVol = new Float32Array(NN), hmin = new Float32Array(NN), hmax = new Float32Array(NN), lvl = new Float32Array(NN);
 const regionOf = new Int8Array(NN);
 let edges = [], regionList = [], cardiaIdx = 0, pylIdx = 0, bsRadius = 12, boxHalf = [8, 10, 6];
-let anatOff = [0, 0, 0];
+let anatOff = [0, 0, 0], lumenK = 1;
 let totalCap = 0, drained = 0;
 
 /* ---- 管の生成 ---- */
@@ -130,9 +130,14 @@ function rebuild() {
   const nCtl = S.pts.length - 1;
   regionList = S.regions;
   const pylStart = S.regions.find(r => r[0] === 'pylorus')[2];
-  const scale = 1 + (air - 0.5) * 0.56;                    // 発泡剤による拡張
-  const mul = (ci) => 1 + (scale - 1) * Math.max(0, Math.min(1, (pylStart - ci) / 1.6));
-  buildRings(S.pts, S.rad, NMAIN, 0, 0.06, mul);
+  // 胃の大きさ：胃の中身（バリウム＋発泡剤のガス、実寸 mL）に容量が合うよう、太さ（rad0、なければ rad）に同じ倍率 k を掛ける。
+  // 断面積は太さの 2 乗に比例し、長さは変わらないので、k = √(目標 ÷ 倍率 1 のときの容量)。十二指腸球部は数えない
+  const R0 = S.rad0 || S.rad, S3 = Math.pow(BODY_SCALE, 3), want = targetMl * S3 + gasMl;
+  buildRings(S.pts, R0, NMAIN, 0, 0.06, null);
+  const cap1 = (() => { let c = 0; const pc = S.regions.find(r => r[0] === 'duode')[2], nC = S.pts.length - 1;
+    for (let i = 0; i < NMAIN; i++) if (i / (NMAIN - 1) * nC < pc) c += cap[i]; return c * S3; })();
+  lumenK = Math.sqrt(want / cap1);
+  buildRings(S.pts, R0.map(r => r * lumenK), NMAIN, 0, 0.06, null);
 
   cardiaIdx = Math.round(S.cardia / nCtl * (NMAIN - 1));
   pylIdx = Math.round((pylStart + 0.5) / nCtl * (NMAIN - 1));

@@ -49,17 +49,17 @@
    30 回測った平均。シミュレーションの計算時間は別の列に出す。
    平均 fps：その体位のまま、通常の描画ループを 10 秒動かしたときの 1 秒あたりの描画回数。 */
 
-const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), air: 0.6, pylorus: false, twistMax: [30, 30], dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
+const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), gas: 250, air: 0.6, pylorus: false, twistMax: [30, 30], dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
 const EVAL_KEY = 'stomach.v2.eval';
 const WALLS = ['前壁', '小弯', '後壁', '大弯'];
 
 /* ---- 状態の控えと復元（評価のあとは元の画面に戻す）---- */
 function evalSave() {
-  return { curType, targetMl, airLevel, compRegion, compAmt, pylorusOpen, tiltCur, tiltT, rollCur, rollT,
+  return { curType, targetMl, gasMl, airLevel, compRegion, compAmt, pylorusOpen, tiltCur, tiltT, rollCur, rollT,
            administered, drained, wVol: wVol.slice(), aWet: aWet.slice() };
 }
 function evalRestore(s) {
-  curType = s.curType; targetMl = s.targetMl; airLevel = s.airLevel; compRegion = s.compRegion; compAmt = s.compAmt;
+  curType = s.curType; targetMl = s.targetMl; gasMl = s.gasMl; airLevel = s.airLevel; compRegion = s.compRegion; compAmt = s.compAmt;
   pylorusOpen = s.pylorusOpen; tiltCur = s.tiltCur; tiltT = s.tiltT; rollCur = s.rollCur; rollT = s.rollT;
   rebuildAll(); buildLabels();
   wVol.set(s.wVol); aWet.set(s.aWet); administered = s.administered; drained = s.drained;
@@ -78,10 +78,11 @@ function evalStep(dt) {   // main.js の loop と同じ順（カメラ・ラベ�
   flowStep(dt);
   for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
   updateWet(dt);
+  shapeStep(dt);
 }
 function evalPrepare(tilt, roll) {
-  const changed = curType !== EVAL.type || airLevel !== EVAL.air || compAmt !== 0 || pylorusOpen !== EVAL.pylorus;
-  curType = EVAL.type; targetMl = EVAL.ml; airLevel = EVAL.air; compRegion = ''; compAmt = 0; pylorusOpen = EVAL.pylorus;   // 幽門は既定で閉じる
+  const changed = curType !== EVAL.type || airLevel !== EVAL.air || compAmt !== 0 || pylorusOpen !== EVAL.pylorus || gasMl !== EVAL.gas || targetMl !== EVAL.ml;
+  curType = EVAL.type; targetMl = EVAL.ml; gasMl = EVAL.gas; airLevel = EVAL.air; compRegion = ''; compAmt = 0; pylorusOpen = EVAL.pylorus;   // 幽門は既定で閉じる
   if (changed) { rebuildAll(); buildLabels(); }
   tiltCur = tiltT = tilt; rollCur = rollT = roll;
   settle();
@@ -467,12 +468,11 @@ function rollRightLateral() {   // ねじれる前の胃の形で求める（ね
 }
 /* 解剖モデルを決まった内腔の容積（実寸 mL）にした型を作る（TEXTBOOK_CHECK.md「解剖モデル」）。
    BodyParts3D のままの太さ rad0 に同じ倍率 k を掛け、胃（十二指腸球部を除く）の容量 × 1.2³ が目標になる k を二分法で求める */
-function makeLumenType(ml, baseKey = 'bp3d', key = baseKey + '_' + ml) {
+function makeLumenType(ml, baseKey = 'bp3d', key = baseKey + '_' + ml) {   // 胃の中身を ml（実寸）にする：ガス = ml − バリウム
   const base = TYPES[baseKey], S3 = Math.pow(BODY_SCALE, 3);
-  const capFor = k => { TYPES[key] = { ...base, name: base.name + '（内腔 ' + ml + ' mL）', rad: base.rad0.map(r => r * k) }; curType = key; rebuildAll(); return capacityNow() * S3; };
-  let lo = 0.2, hi = 2;
-  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (capFor(m) < ml) lo = m; else hi = m; }
-  capFor(lo); TYPES[key].k = lo;
+  TYPES[key] = { ...base, name: base.name + '（内腔 ' + ml + ' mL）' };
+  EVAL.gas = ml - EVAL.ml * S3; gasMl = EVAL.gas; curType = key; rebuildAll();
+  TYPES[key].k = lumenK;
   return key;
 }
 let TB_TYPES = ['hook', 'horn', 'casc', 'ptos'];

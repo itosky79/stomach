@@ -5,6 +5,7 @@ let pylorusOpen = false, labelMode = 1, showBone = true;
 let showOri = true;
 let autoSpin = false, viewMode = 1, skinOpacity = 0.30;
 let airLevel = 0.6, targetMl = 150 / Math.pow(BODY_SCALE, 3), administered = 0;   // バリウム 150 mL（実寸。学会マニュアル）。targetMl は模型の単位
+let gasMl = 250;   // 発泡剤のガス（実寸 mL）。添付文書の 100〜400 mL の真ん中。胃の大きさはバリウム＋ガスに合わせる（model.js の rebuild）
 let compRegion = '', compAmt = 0;
 let tiltCur = 90, rollCur = 0, tiltT = 90, rollT = 0;
 let seqIdx = -1, playing = false, playT = 0;
@@ -69,7 +70,10 @@ function twistFor(tilt, roll) {
   twistRbf.U.forEach((v, i) => { const w = Math.exp(-0.5 * (angDeg(u, v) / TWIST_SIG) ** 2); r[0] += w * twistRbf.C[0][i]; r[1] += w * twistRbf.C[1][i]; });
   return r;
 }
-function twistSave() { twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0]; }
+function twistSave() {
+  twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0];
+  posTw = pos.slice(); centersTw = centers.slice(); sagS.fill(0); sagTgt.fill(0);
+}
 const _twq = new THREE.Quaternion(), _twb = new THREE.Quaternion(), _twv = new THREE.Vector3(), _twa = new THREE.Vector3(), _twz = new THREE.Vector3(0, 0, 1);
 function applyTwist() {
   if (!twistBase) return;
@@ -87,8 +91,54 @@ function applyTwist() {
       _twv.set(src[k] - (piv ? cx : 0), src[k + 1] - (piv ? cy : 0), src[k + 2] - (piv ? cz : 0)).applyQuaternion(_twq);
       dst[k] = _twv.x + (piv ? cx : 0); dst[k + 1] = _twv.y + (piv ? cy : 0); dst[k + 2] = _twv.z + (piv ? cz : 0);
     };
-    for (let j = 0; j < CM; j++) rot(B.pos, pos, (i * CM + j) * 3, true);
-    rot(B.centers, centers, i * 3, true); rot(B.fu, frameU, i * 3, false); rot(B.fv, frameV, i * 3, false);
+    for (let j = 0; j < CM; j++) rot(B.pos, posTw, (i * CM + j) * 3, true);
+    rot(B.centers, centersTw, i * 3, true); rot(B.fu, frameU, i * 3, false); rot(B.fv, frameV, i * 3, false);
+  }
+  shapeApply();
+}
+
+/* ---- 体位による胃の形の変化（たわみ）----
+   胃は噴門と幽門部で留まり、その間は柔らかい（胃X線検診 上部消化管検査必携テキスト p.90）。バリウムの溜まったところは
+   重さで沈み（「Ba の重みで尾側方向に引き伸ばされ」p.94）、ガスの溜まったところはまわりの組織より軽いので浮く。
+   胃の中心の線を、両端を留めた張力 T の弦と、まわりの組織へのつなぎ止め（ばね K）として、断面ごとの正味の重さ
+     L_i = (ρ_Ba − ρ_組織) × バリウムの量_i − ρ_組織 × ガスの量_i     （ρ_Ba = 2.56、ρ_組織 = 1.0 g/mL。200 w/v% の懸濁液の密度）
+   とつり合う重力の向きのずれ s_i を求める：T (2 s_i − s_{i−1} − s_{i+1}) + K s_i = L_i。
+   留めるのは噴門の断面と、幽門より先（十二指腸）。胃底部の側の端は自由。
+   形は時定数 SHAPE.tau 秒で、つり合いの形に近づく（バリウムが流れると重さの分布が変わり、形も変わる）。 */
+const SHAPE = { on: false, T: 40, K: 2, tau: 0.5, rhoBa: 2.56, rhoT: 1.0 };
+let posTw = null, centersTw = null;
+const sagS = new Float64Array(NMAIN), sagTgt = new Float64Array(NMAIN);
+const _sa = new Float64Array(NMAIN), _sb = new Float64Array(NMAIN), _sc = new Float64Array(NMAIN), _sd = new Float64Array(NMAIN);
+function shapeTarget() {
+  const P = TYPES[curType].shape || SHAPE, T = P.T, K = P.K;
+  for (let i = 0; i < NMAIN; i++) {
+    const fixed = i === cardiaIdx || i >= pylIdx;
+    if (fixed) { _sa[i] = 0; _sb[i] = 1; _sc[i] = 0; _sd[i] = 0; continue; }
+    const L = (SHAPE.rhoBa - SHAPE.rhoT) * wVol[i] - SHAPE.rhoT * Math.max(0, cap[i] - wVol[i]);
+    _sa[i] = i > 0 ? -T : 0; _sc[i] = i < NMAIN - 1 ? -T : 0;
+    _sb[i] = (i > 0 ? T : 0) + (i < NMAIN - 1 ? T : 0) + K; _sd[i] = L;
+  }
+  for (let i = 1; i < NMAIN; i++) { const m = _sa[i] / _sb[i - 1]; _sb[i] -= m * _sc[i - 1]; _sd[i] -= m * _sd[i - 1]; }   // 三重対角（Thomas 法）
+  sagTgt[NMAIN - 1] = _sd[NMAIN - 1] / _sb[NMAIN - 1];
+  for (let i = NMAIN - 2; i >= 0; i--) sagTgt[i] = (_sd[i] - _sc[i] * sagTgt[i + 1]) / _sb[i];
+}
+function shapeStep(dt) {
+  if (!posTw) return;
+  const P = TYPES[curType].shape || SHAPE;
+  if (!(P.on ?? SHAPE.on)) return;
+  shapeTarget();
+  const a = Math.min(1, dt / (P.tau || SHAPE.tau));
+  let mx = 0;
+  for (let i = 0; i < NMAIN; i++) { const d = (sagTgt[i] - sagS[i]) * a; sagS[i] += d; mx = Math.max(mx, Math.abs(d)); }
+  if (mx > 1e-4) shapeApply();
+}
+function shapeApply() {   // 位置 = ねじったあとの位置 − s_i × 上向き（s が正なら下へ）
+  if (!posTw) return;
+  const u = uUp.value, ux = u.x, uy = u.y, uz = u.z;
+  for (let i = 0; i < NMAIN; i++) {
+    const s = sagS[i], dx = -s * ux, dy = -s * uy, dz = -s * uz, c = i * 3;
+    centers[c] = centersTw[c] + dx; centers[c + 1] = centersTw[c + 1] + dy; centers[c + 2] = centersTw[c + 2] + dz;
+    for (let j = 0; j < CM; j++) { const k = (i * CM + j) * 3; pos[k] = posTw[k] + dx; pos[k + 1] = posTw[k + 1] + dy; pos[k + 2] = posTw[k + 2] + dz; }
   }
   geom.attributes.position.needsUpdate = true;
   geom.computeVertexNormals();
