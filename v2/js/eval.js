@@ -460,7 +460,17 @@ function rollRightLateral() {
   }
   return best;
 }
-const TB_TYPES = ['hook', 'horn', 'casc', 'ptos'];
+/* 解剖モデルを決まった内腔の容積（実寸 mL）にした型を作る（TEXTBOOK_CHECK.md「解剖モデル」）。
+   BodyParts3D のままの太さ rad0 に同じ倍率 k を掛け、胃（十二指腸球部を除く）の容量 × 1.2³ が目標になる k を二分法で求める */
+function makeLumenType(ml) {
+  const key = 'bp3d_' + ml, base = TYPES.bp3d, S3 = Math.pow(BODY_SCALE, 3);
+  const capFor = k => { TYPES[key] = { ...base, name: base.name + '（内腔 ' + ml + ' mL）', rad: base.rad0.map(r => r * k) }; curType = key; rebuildAll(); return capacityNow() * S3; };
+  let lo = 0.2, hi = 2;
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (capFor(m) < ml) lo = m; else hi = m; }
+  capFor(lo); TYPES[key].k = lo;
+  return key;
+}
+let TB_TYPES = ['hook', 'horn', 'casc', 'ptos'];
 const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };
 function textbookCheck() {
   const out = [], saveType = EVAL.type;
@@ -635,7 +645,7 @@ evalPanel.innerHTML = `
 <div class="row"><button type="button" id="evSeq1">基準撮影法Ⅰを読み込む</button><button type="button" id="evSeq2">基準撮影法Ⅱを読み込む</button>
 <span>（data.js の撮影手順の表から。順序は日本消化器がん検診学会のマニュアル 表1-Ⅱ-1、目的部位と角度は「胃X線検診 上部消化管検査必携テキスト」pp.76-84）</span></div>
 <div class="row"><button type="button" id="evAdd">行を足す</button><button type="button" id="evRun">評価する</button>
-<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evSweep">条件を振って評価</button><button type="button" id="evBook">教科書と比べる</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
+<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evSweep">条件を振って評価</button><button type="button" id="evBook">教科書と比べる</button><button type="button" id="evBook2">解剖モデルで教科書と比べる</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
 <table id="evOut"></table>`;
 document.body.appendChild(evalPanel);
 
@@ -769,6 +779,26 @@ $e('evBook').addEventListener('click', async () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([textbookCsv(rows)], { type: 'text/csv' }));
   a.download = 'stomach_textbook.csv'; document.body.appendChild(a); a.click(); a.remove();
+});
+$e('evBook2').addEventListener('click', async () => {
+  renderer.setAnimationLoop(null);
+  const saved = evalSave(), saveTypes = TB_TYPES, saveMl = EVAL.ml;
+  let rows = [];
+  try {
+    EVAL.ml = 150 / Math.pow(BODY_SCALE, 3);   // バリウム 150 mL（実寸）
+    for (const ml of [400, 250, 550]) {
+      $e('evalMsg').textContent = '解剖モデル（内腔 ' + ml + ' mL）で教科書と比べています'; await nextFrame();
+      TB_TYPES = [makeLumenType(ml)];
+      rows = rows.concat(textbookCheck().map(r => ({ ...r, sec: EVAL.simSec, proto: '各体位で入れ直し' })));
+      rows = rows.concat(textbookPath(0.5).map(r => ({ ...r, sec: EVAL.simSec, proto: '教科書の経路 5°あたり0.5秒' })));
+    }
+  } finally { TB_TYPES = saveTypes; EVAL.ml = saveMl; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
+  window.TEXTBOOK_BP3D_ROWS = rows;
+  const main = rows.filter(r => r.type === 'bp3d_400' && r.proto === '各体位で入れ直し' && r.judge !== '記載なし');
+  $e('evalMsg').textContent = '解剖モデル（内腔 400 mL）：' + main.filter(r => r.judge === '一致').length + ' / ' + main.length + ' で一致。CSV を保存しました';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([textbookCsv(rows)], { type: 'text/csv' }));
+  a.download = 'stomach_textbook_bp3d.csv'; document.body.appendChild(a); a.click(); a.remove();
 });
 $e('evCsv').addEventListener('click', () => {
   const esc = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
