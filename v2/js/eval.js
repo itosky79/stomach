@@ -49,7 +49,7 @@
    30 回測った平均。シミュレーションの計算時間は別の列に出す。
    平均 fps：その体位のまま、通常の描画ループを 10 秒動かしたときの 1 秒あたりの描画回数。 */
 
-const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), air: 0.6, pylorus: false, dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
+const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), air: 0.6, pylorus: false, twistMax: [30, 30], dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
 const EVAL_KEY = 'stomach.v2.eval';
 const WALLS = ['前壁', '小弯', '後壁', '大弯'];
 
@@ -507,8 +507,8 @@ function calibrateTwist(report) {
   const T = TYPES[EVAL.type];
   T.twist = []; twistCur = [NaN, 0];
   evalPrepare(0, 270); const rl = rollRightLateral();
-  const AB = [];
-  for (let a = -90; a <= 90; a += 10) for (let b = -40; b <= 40; b += 10) AB.push([a, b]);
+  const AB = [], LIM = EVAL.twistMax || [90, 40];   // 見た目が胃らしく保てる範囲に絞るときは EVAL.twistMax = [α, β]
+  for (let a = -LIM[0]; a <= LIM[0]; a += 10) for (let b = -LIM[1]; b <= LIM[1]; b += 10) AB.push([a, b]);
   const keys = twistKeys(rl).map(K => ({ K, tilt: K.tilt, roll: K.roll, items: K.items, list: null,
     rolls: K.items === '6' ? [270, 275, 280, 285, rl].filter((v, i, a) => a.indexOf(v) === i) : [K.roll] }));
   const extra = [{ tilt: 90, roll: 45, items: '立位第1斜位（項目なし）' }, { tilt: 0, roll: 90, items: '左側臥位（項目なし）' }];
