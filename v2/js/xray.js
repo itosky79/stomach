@@ -144,7 +144,7 @@ function capture() {
   capCx.fillStyle = 'rgba(110,150,175,0.7)'; capCx.font = '11px monospace';
   capCx.fillText('SIMULATION', capW - 18, capH - 18);
   capCx.textAlign = 'left';
-  capCx.fillText('Ba ' + Math.round(targetMl) + ' mL / gas ' + Math.round(airLevel * 100) + '%', 18, capH - 18);
+  capCx.fillText('Ba ' + Math.round(targetMl * Math.pow(BODY_SCALE, 3)) + ' mL / gas ' + Math.round(airLevel * 100) + '%', 18, capH - 18);
 
   const url = capCv.toDataURL('image/png');
   films.push({ url: url, cap: String(shotCount).padStart(2, '0') + ' ' + name, sub: sub });

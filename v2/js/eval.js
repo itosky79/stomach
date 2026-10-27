@@ -49,7 +49,7 @@
    30 回測った平均。シミュレーションの計算時間は別の列に出す。
    平均 fps：その体位のまま、通常の描画ループを 10 秒動かしたときの 1 秒あたりの描画回数。 */
 
-const EVAL = { type: 'hook', ml: 120, air: 0.6, pylorus: false, dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
+const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), air: 0.6, pylorus: false, dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
 const EVAL_KEY = 'stomach.v2.eval';
 const WALLS = ['前壁', '小弯', '後壁', '大弯'];
 
@@ -445,14 +445,15 @@ function rollCardiaRightEdge() {
   }
   return null;
 }
-function rollRightLateral() {
-  const e = (NN - 1) * 3, c = new THREE.Vector3(centers[e], centers[e + 1], centers[e + 2]), rr = ringsOf('胃上部');
+function rollRightLateral() {   // ねじれる前の胃の形で求める（ねじれで角度が変わらないように）
+  const PP = twistBase ? twistBase.pos : pos, CC = twistBase ? twistBase.centers : centers;
+  const e = (NN - 1) * 3, c = new THREE.Vector3(CC[e], CC[e + 1], CC[e + 2]), rr = ringsOf('胃上部');
   let best = 270, bd = 1e9;
   for (let r = 240; r <= 300; r++) {
     const L = projAxis(r, new THREE.Vector3(0, 0, 1));   // 側臥位の像の横方向（腹側が +）
     let lo = 1e9, hi = -1e9;
     for (let i = rr[0]; i <= rr[1]; i++) for (let j = 0; j < CM; j++) {
-      const v = (i * CM + j) * 3, d = pos[v] * L.x + pos[v + 1] * L.y + pos[v + 2] * L.z;
+      const v = (i * CM + j) * 3, d = PP[v] * L.x + PP[v + 1] * L.y + PP[v + 2] * L.z;
       if (d < lo) lo = d; if (d > hi) hi = d;
     }
     const t = Math.abs((c.dot(L) - lo) / (hi - lo) - 0.5);
@@ -471,6 +472,62 @@ function makeLumenType(ml) {
   return key;
 }
 let TB_TYPES = ['hook', 'horn', 'casc', 'ptos'];
+/* 体位ごとの胃のねじれを決める（TEXTBOOK_CHECK.md「ねじれ」）。
+   基準撮影法の体位ごとに、その体位の教科書の項目を、ねじれなしで満たしていればそのまま（0）にする。
+   満たしていなければ、x・y・z のまわりを 0・±10・±20・±30・±40° で組み合わせた回転を、回転の大きさの小さい順に試し、
+   その体位の項目を満たす最初の回転にする（必要最小限の回転）。項目 4 は腹臥位の水平と頭低位を比べるので、頭低位の側を回す。 */
+function twistKeys(rl) {
+  const sh = () => regionShares().sh;
+  return [
+    { tilt: 0, roll: 0, items: '2・5a', ok: () => { const r = sh(); const big = Object.keys(r).filter(k => k !== 'antPyl').sort((a, b) => r[b] - r[a])[0]; return big === 'fundus' && r.antPyl <= 5; } },
+    { tilt: 0, roll: 35, items: '5b', ok: () => sh().antPyl <= 5 },
+    { tilt: -30, roll: 307, items: '5c', ok: () => sh().antPyl <= 5 },
+    { tilt: -30, roll: 180, items: '4', ok: () => { const r = sh(); const t = TYPES[curType].twist, save = t.slice(); TYPES[curType].twist = t.filter(k => !(k.tilt === -30 && k.roll === 180));
+        evalPrepare(0, 180); const r0 = sh(); TYPES[curType].twist = save; twistCur = [NaN, 0, 0]; evalPrepare(-30, 180); return r.antPyl < r0.antPyl && r.fundus + r.body > 50; } },
+    { tilt: -30, roll: 155, items: '5d', ok: () => sh().antPyl <= 5 },
+    { tilt: 25, roll: 225, items: '8', ok: () => cardiaSubmerged() <= 5 },
+    { tilt: 0, roll: rl, items: '6', ok: () => cardiaSubmerged() <= 5 },
+    { tilt: 25, roll: 307, items: '7', ok: () => sh().fundus <= 5 },
+    { tilt: 0, roll: 315, items: '3', ok: () => { const r = sh(); return r.fundus >= 10 && r.antPyl >= 10 && r.body < r.fundus && r.body < r.antPyl; } }
+  ];
+}
+function calibrateTwist(report) {
+  const T = TYPES[EVAL.type]; T.twist = [];
+  evalPrepare(0, 270); const rl = rollRightLateral();
+  // 回転は教科書に書いてある 2 つの動きだけにする（TEXTBOOK_CHECK.md「ねじれ」）：
+  //   α：噴門と幽門を結ぶ線のまわりの回転（「大弯を腹側に捻る」p.90）
+  //   β：前後の軸（体の z）のまわりの、正面での振れ（「Ba の重みで尾側方向に引き伸ばされ」p.94）
+  const B = twistBase, e = (NN - 1) * 3, pi = pylIdx * 3;
+  const ax = new THREE.Vector3(B.centers[pi] - B.centers[e], B.centers[pi + 1] - B.centers[e + 1], B.centers[pi + 2] - B.centers[e + 2]).normalize();
+  const toRot = (a, b) => {   // α のあとに β を回す回転を、回転ベクトル（度）にする
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), b * Math.PI / 180)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(ax, a * Math.PI / 180));
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(q.w))), s = Math.sqrt(Math.max(1e-12, 1 - q.w * q.w)) * Math.sign(q.w || 1);
+    return ang < 1e-6 ? [0, 0, 0] : [q.x / s, q.y / s, q.z / s].map(v => Math.round(v * ang * 180 / Math.PI * 10) / 10);
+  };
+  const cand = [];
+  for (let a = -60; a <= 60; a += 10) for (let b = -30; b <= 30; b += 10) cand.push({ a, b, rot: toRot(a, b) });
+  cand.sort((p, q) => Math.hypot(p.a, p.b) - Math.hypot(q.a, q.b));
+  const keys = twistKeys(rl).map(K => ({ K, key: { tilt: K.tilt, roll: K.roll, rot: [0, 0, 0], items: K.items }, hit: true, tried: 0 }));
+  const check = k => { twistCur = [NaN, 0, 0]; evalPrepare(k.K.tilt, k.K.roll); return k.K.ok(); };
+  // ほかの体位のねじれも入れた状態で満たすまで、外れた体位だけを探し直す（最大 4 回）
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    for (const k of keys) {
+      T.twist = keys.filter(x => x.key.rot.some(v => v !== 0) || x === k).map(x => x.key);
+      if (check(k)) continue;
+      changed = true; k.hit = false;
+      for (const c of cand) { k.key.rot = c.rot; k.key.ab = [c.a, c.b]; k.tried++; if (check(k)) { k.hit = true; break; } }
+      if (!k.hit) k.key.rot = [0, 0, 0];
+      if (report) report(k.K.items + ' ' + (k.hit ? JSON.stringify(k.key.rot) : '見つからない'));
+    }
+    T.twist = keys.filter(x => x.key.rot.some(v => v !== 0)).map(x => x.key);
+    if (!changed) break;
+  }
+  twistCur = [NaN, 0, 0];
+  return keys.map(k => ({ ...k.key, hit: k.hit, tried: k.tried, ok: check(k) }));
+}
+
 const TB_DRAIN = { hook: [30, 60, '半立位（30〜60°）'], horn: [60, 90, '立位（60〜90°）'], casc: [null, null, '90° でも流れ出さない'] };
 function textbookCheck() {
   const out = [], saveType = EVAL.type;
@@ -632,7 +689,7 @@ document.head.appendChild(evalStyle);
 const evalPanel = document.createElement('div'); evalPanel.id = 'evalPanel';
 evalPanel.innerHTML = `
 <h2>評価モード</h2>
-<p>条件：胃型 鉤状胃、バリウム ${EVAL.ml} mL、発泡剤 既定、圧迫なし、幽門閉。各体位で settle() のあと Δt = 1/60 秒で計算を進めてから測る。
+<p>条件：胃型 下で選んだ型（既定は解剖モデル）、バリウム 150 mL（実寸。模型の単位では ${EVAL.ml.toFixed(1)}）、発泡剤 既定、圧迫なし、幽門閉。各体位で settle() のあと Δt = 1/60 秒で計算を進めてから測る。
 定義は js/eval.js の先頭に書いてある。</p>
 <p>目的部位の書き方：部位（${REGION_WORDS.join('・')}・${SUB_WORDS.join('・')}・穹窿部・体部・十二指腸）＋必要なら壁（${WALLS.join('・')}）。例「胃体部後壁」「胃角部〜前庭部後壁」「穹窿部・噴門部」。括弧書きは無視する。食道は対象外。</p>
 <div class="row">
@@ -645,7 +702,7 @@ evalPanel.innerHTML = `
 <div class="row"><button type="button" id="evSeq1">基準撮影法Ⅰを読み込む</button><button type="button" id="evSeq2">基準撮影法Ⅱを読み込む</button>
 <span>（data.js の撮影手順の表から。順序は日本消化器がん検診学会のマニュアル 表1-Ⅱ-1、目的部位と角度は「胃X線検診 上部消化管検査必携テキスト」pp.76-84）</span></div>
 <div class="row"><button type="button" id="evAdd">行を足す</button><button type="button" id="evRun">評価する</button>
-<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evSweep">条件を振って評価</button><button type="button" id="evBook">教科書と比べる</button><button type="button" id="evBook2">解剖モデルで教科書と比べる</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
+<button type="button" id="evCsv" disabled>CSV を保存</button><button type="button" id="evKok">国試の体位問題を評価</button><button type="button" id="evSweep">条件を振って評価</button><button type="button" id="evBook">教科書と比べる</button><button type="button" id="evBook2">解剖モデルで教科書と比べる</button><button type="button" id="evTwist">ねじれを求め直す</button><button type="button" id="evClose">閉じる</button><span id="evalMsg"></span></div>
 <table id="evOut"></table>`;
 document.body.appendChild(evalPanel);
 
@@ -760,8 +817,9 @@ $e('evSweep').addEventListener('click', async () => {
 });
 $e('evBook').addEventListener('click', async () => {
   renderer.setAnimationLoop(null);
-  const saved = evalSave(), saveSec = EVAL.simSec;
+  const saved = evalSave(), saveSec = EVAL.simSec, saveMl = EVAL.ml;
   let rows = [];
+  EVAL.ml = 120;   // 手で作った 4 つの型の比較は、最初の計算（2026-10-27）と同じ模型の 120 mL で行う
   try {   // 決めた秒数（既定 10 秒）と 30 秒の 2 通りで計算し、秒数で判定が変わらないかを見る
     for (const sec of [saveSec, 30]) {
       EVAL.simSec = sec; $e('evalMsg').textContent = '教科書と比べています（' + sec + ' 秒）'; await nextFrame();
@@ -772,7 +830,7 @@ $e('evBook').addEventListener('click', async () => {
       $e('evalMsg').textContent = '教科書の経路で計算しています（5° あたり ' + dw + ' 秒）'; await nextFrame();
       rows = rows.concat(textbookPath(dw).map(r => ({ ...r, sec: saveSec, proto: '教科書の経路 5°あたり' + dw + '秒' })));
     }
-  } finally { EVAL.simSec = saveSec; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
+  } finally { EVAL.simSec = saveSec; EVAL.ml = saveMl; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
   window.TEXTBOOK_ROWS = rows;
   const main = rows.filter(r => r.sec === saveSec && r.proto === '各体位で入れ直し' && r.judge !== '記載なし');
   $e('evalMsg').textContent = '教科書との比較：' + main.filter(r => r.judge === '一致').length + ' / ' + main.length + ' で一致。CSV を保存しました';
@@ -782,23 +840,31 @@ $e('evBook').addEventListener('click', async () => {
 });
 $e('evBook2').addEventListener('click', async () => {
   renderer.setAnimationLoop(null);
-  const saved = evalSave(), saveTypes = TB_TYPES, saveMl = EVAL.ml;
+  const saved = evalSave(), saveTypes = TB_TYPES, saveMl = EVAL.ml, saveSec = EVAL.simSec, saveType = EVAL.type;
   let rows = [];
   try {
     EVAL.ml = 150 / Math.pow(BODY_SCALE, 3);   // バリウム 150 mL（実寸）
-    for (const ml of [400, 250, 550]) {
-      $e('evalMsg').textContent = '解剖モデル（内腔 ' + ml + ' mL）で教科書と比べています'; await nextFrame();
-      TB_TYPES = [makeLumenType(ml)];
-      rows = rows.concat(textbookCheck().map(r => ({ ...r, sec: EVAL.simSec, proto: '各体位で入れ直し' })));
-      rows = rows.concat(textbookPath(0.5).map(r => ({ ...r, sec: EVAL.simSec, proto: '教科書の経路 5°あたり0.5秒' })));
+    TB_TYPES = ['bp3d'];                        // 解剖モデル（内腔 400 mL、体位によるねじれあり）
+    for (const sec of [10, 30]) {
+      EVAL.simSec = sec; $e('evalMsg').textContent = '解剖モデルで教科書と比べています（' + sec + ' 秒）'; await nextFrame();
+      rows = rows.concat(textbookCheck().map(r => ({ ...r, sec, proto: '各体位で入れ直し' })));
+      for (const dw of [0.1, 0.5, 2]) rows = rows.concat(textbookPath(dw).map(r => ({ ...r, sec, proto: '教科書の経路 5°あたり' + dw + '秒' })));
     }
-  } finally { TB_TYPES = saveTypes; EVAL.ml = saveMl; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
+  } finally { TB_TYPES = saveTypes; EVAL.ml = saveMl; EVAL.simSec = saveSec; EVAL.type = saveType; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
   window.TEXTBOOK_BP3D_ROWS = rows;
-  const main = rows.filter(r => r.type === 'bp3d_400' && r.proto === '各体位で入れ直し' && r.judge !== '記載なし');
-  $e('evalMsg').textContent = '解剖モデル（内腔 400 mL）：' + main.filter(r => r.judge === '一致').length + ' / ' + main.length + ' で一致。CSV を保存しました';
+  const main = rows.filter(r => r.sec === 10 && r.proto === '各体位で入れ直し' && r.judge !== '記載なし');
+  $e('evalMsg').textContent = '解剖モデル：' + main.filter(r => r.judge === '一致').length + ' / ' + main.length + ' で一致（各体位で入れ直し、10 秒）。CSV を保存しました';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([textbookCsv(rows)], { type: 'text/csv' }));
   a.download = 'stomach_textbook_bp3d.csv'; document.body.appendChild(a); a.click(); a.remove();
+});
+$e('evTwist').addEventListener('click', async () => {   // 体位ごとのねじれを求め直す（data.js の twist と同じ値になるはず）
+  renderer.setAnimationLoop(null);
+  const saved = evalSave(), saveMl = EVAL.ml, saveType = EVAL.type, keep = TYPES.bp3d.twist;
+  let res = [];
+  try { EVAL.type = 'bp3d'; EVAL.ml = 150 / Math.pow(BODY_SCALE, 3); res = calibrateTwist(m => { $e('evalMsg').textContent = 'ねじれを探しています：' + m; }); }
+  finally { const found = TYPES.bp3d.twist; TYPES.bp3d.twist = keep; window.TWIST_FOUND = found; EVAL.ml = saveMl; EVAL.type = saveType; evalRestore(saved); last = performance.now(); renderer.setAnimationLoop(loop); }
+  $e('evalMsg').textContent = 'ねじれ：' + res.filter(r => r.ok).length + ' / ' + res.length + ' 体位で項目を満たす。' + JSON.stringify(window.TWIST_FOUND.map(k => [k.tilt, k.roll, k.rot]));
 });
 $e('evCsv').addEventListener('click', () => {
   const esc = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };

@@ -1,10 +1,10 @@
 "use strict";
 /* ================= 状態 ================= */
-let curType = 'hook', curMode = 0, curPose = 'stand';
+let curType = 'bp3d', curMode = 0, curPose = 'stand';   // 既定は解剖モデル（BodyParts3D の胃。教科書の記載に合わせてある）
 let pylorusOpen = false, labelMode = 1, showBone = true;
 let showOri = true;
 let autoSpin = false, viewMode = 1, skinOpacity = 0.30;
-let airLevel = 0.6, targetMl = 120, administered = 0;
+let airLevel = 0.6, targetMl = 150 / Math.pow(BODY_SCALE, 3), administered = 0;   // バリウム 150 mL（実寸。学会マニュアル）。targetMl は模型の単位
 let compRegion = '', compAmt = 0;
 let tiltCur = 90, rollCur = 0, tiltT = 90, rollT = 0;
 let seqIdx = -1, playing = false, playT = 0;
@@ -28,6 +28,48 @@ function applyPose() {
   bodyGroup.quaternion.copy(qBase).multiply(qB);
   qWorldBody.copy(qA).multiply(bodyGroup.quaternion);
   placeTable();
+  applyTwist();
+}
+/* ---- 体位による胃のねじれ（TYPES[型].twist）----
+   胃は噴門と十二指腸で緩く留まっているだけで、体位によって腹の中で回り、ねじれる（胃X線検診 上部消化管検査必携テキスト
+   pp.90-94）。教科書の各体位の記載（チェック項目）どおりのバリウムの位置になるよう、基準撮影法の体位ごとに胃の向き
+   （噴門を中心にした回転。体の座標の x 左・y 頭側・z 腹側のまわりの角度、度）を決めて twist に置く（TEXTBOOK_CHECK.md）。
+   ほかの体位では、重力の向きが近い体位の値をガウスの重み（σ = TWIST_SIG°）で混ぜ、どの体位からも遠いときは 0 に近づける。
+   食道は回さない（噴門の位置は変わらない）。 */
+const TWIST_SIG = 8, TWIST_W0 = 0.02;
+let twistBase = null, twistCur = [NaN, 0, 0];
+function upOf(tilt, roll) {   // 体の座標での上向き（upLocal と同じ。評価モードで確かめた式）
+  const t = tilt * Math.PI / 180, r = roll * Math.PI / 180;
+  return [-Math.sin(r) * Math.cos(t), Math.sin(t), Math.cos(r) * Math.cos(t)];
+}
+function twistFor(tilt, roll) {
+  const T = TYPES[curType].twist; if (!T || !T.length) return [0, 0, 0];
+  const u = upOf(tilt, roll); let ws = TWIST_W0; const r = [0, 0, 0];
+  for (const k of T) {
+    const v = upOf(k.tilt, k.roll), c = Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2]));
+    const a = Math.acos(c) * 180 / Math.PI, w = Math.exp(-0.5 * (a / TWIST_SIG) ** 2);
+    ws += w; r[0] += w * k.rot[0]; r[1] += w * k.rot[1]; r[2] += w * k.rot[2];
+  }
+  return r.map(x => x / ws);
+}
+function twistSave() { twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0, 0]; }
+const _twq = new THREE.Quaternion(), _twv = new THREE.Vector3(), _twa = new THREE.Vector3();
+function applyTwist() {
+  if (!twistBase) return;
+  const rv = twistFor(tiltCur, rollCur);
+  if (Math.abs(rv[0] - twistCur[0]) < 0.05 && Math.abs(rv[1] - twistCur[1]) < 0.05 && Math.abs(rv[2] - twistCur[2]) < 0.05) return;
+  twistCur = rv;
+  const ang = Math.hypot(rv[0], rv[1], rv[2]) * Math.PI / 180;
+  if (ang < 1e-6) _twq.identity(); else _twq.setFromAxisAngle(_twa.set(rv[0], rv[1], rv[2]).normalize(), ang);
+  const B = twistBase, e = (NN - 1) * 3, cx = B.centers[e], cy = B.centers[e + 1], cz = B.centers[e + 2];   // 噴門（食道の下端）
+  const rot = (src, dst, k, piv) => {
+    _twv.set(src[k] - (piv ? cx : 0), src[k + 1] - (piv ? cy : 0), src[k + 2] - (piv ? cz : 0)).applyQuaternion(_twq);
+    dst[k] = _twv.x + (piv ? cx : 0); dst[k + 1] = _twv.y + (piv ? cy : 0); dst[k + 2] = _twv.z + (piv ? cz : 0);
+  };
+  for (let i = 0; i < NMAIN * CM; i++) rot(B.pos, pos, i * 3, true);
+  for (let i = 0; i < NMAIN; i++) { rot(B.centers, centers, i * 3, true); rot(B.fu, frameU, i * 3, false); rot(B.fv, frameV, i * 3, false); }
+  geom.attributes.position.needsUpdate = true;
+  geom.computeVertexNormals();
 }
 function upLocal(out) {
   qA.copy(qWorldBody).invert();
@@ -175,4 +217,5 @@ function rebuildAll() {
   fitBodyToStomach();
   anatGroup.position.set(-anatOff[0], -anatOff[1], -anatOff[2]);
   geom.attributes.aRug.needsUpdate = true;
+  twistSave(); applyTwist();
 }
