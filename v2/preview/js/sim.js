@@ -5,7 +5,7 @@ let pylorusOpen = false, labelMode = 1, showBone = true;
 let showOri = true;
 let autoSpin = false, viewMode = 1, skinOpacity = 0.30;
 let airLevel = 0.6, targetMl = 150 / Math.pow(BODY_SCALE, 3), administered = 0;   // バリウム 150 mL（実寸。学会マニュアル）。targetMl は模型の単位
-let gasMl = 250;   // 発泡剤のガス（実寸 mL）。添付文書の 100〜400 mL の真ん中。胃の大きさはバリウム＋ガスに合わせる（model.js の rebuild）
+let gasMl = 400;   // 発泡剤のガス（実寸 mL）。試作：添付文書の 100〜400 mL の上限（v2 は真ん中の 250）。胃の大きさはバリウム＋ガスに合わせる（model.js の rebuild）
 let compRegion = '', compAmt = 0;
 let tiltCur = 90, rollCur = 0, tiltT = 90, rollT = 0;
 let seqIdx = -1, playing = false, playT = 0;
@@ -270,15 +270,23 @@ function dose(dt) {
     wVol[n] -= d; drained += d;
   }
 }
+/* 付着：液面の下に入った壁は付着 1。液面より上に出た壁では膜が少しずつ減る。
+   減る速さは壁の向きで変える。床側の壁（外向きの法線が下向き、膜が壁の上に載る）と横向きの壁は毎秒 WET_KEEP とゆっくり減り、
+   天井側の壁（膜が壁からぶら下がる）は上を向く度合い（法線・上向き、0〜1）に比例して毎秒 WET_DRIP まで速く垂れ落ちる。
+   以前は向きによらず毎秒 0.05 で、床側の膜も 20 秒ほどで消えて二重造影が見えなくなっていた。値は実測と照合していない仮の値 */
+const WET_KEEP = 0.01, WET_DRIP = 1.0;
 function updateWet(dt) {
-  const dry = 0.05 * dt;
+  const nrm = geom.attributes.normal.array, u = uUp.value;
   for (let n = 0; n < NN; n++) {
     const L = lvl[n], b = n * CM;
     for (let j = 0; j < CM; j++) {
       const idx = b + j;
       aLevel[idx] = L;
       if (hArr[idx] <= L) aWet[idx] = 1;
-      else { const v = aWet[idx] - dry; aWet[idx] = v > 0 ? v : 0; }
+      else {
+        const up = Math.max(0, nrm[idx * 3] * u.x + nrm[idx * 3 + 1] * u.y + nrm[idx * 3 + 2] * u.z);
+        const v = aWet[idx] - (WET_KEEP + (WET_DRIP - WET_KEEP) * up) * dt; aWet[idx] = v > 0 ? v : 0;
+      }
     }
   }
   geom.attributes.aLevel.needsUpdate = true;

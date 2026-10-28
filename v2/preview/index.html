@@ -1,4 +1,4 @@
-<title>胃バリウム透視シミュレーター v3（試作：ガスの溜まったところが膨らむ）</title>
+<title>【試作版】胃バリウム透視シミュレーター v2 preview</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,7 +10,7 @@
 
 <div class="wrap">
 <header>
-  <h1>胃バリウム透視シミュレーター <small style="font-size:.55em;opacity:.6">v3 試作</small></h1>
+  <h1>胃バリウム透視シミュレーター <small style="font-size:.55em;opacity:.6">v2 試作版（ガス 400 mL・ガスの溜まった所が膨らむ）</small></h1>
   <button class="hbtn" id="bGuide" type="button">使い方</button>
 </header>
 
@@ -61,6 +61,7 @@
         <button type="button" data-m="1">手順</button>
         <button type="button" data-m="2">フリー</button>
         <button type="button" data-m="3">問題</button>
+        <button type="button" data-m="4">ミッション</button>
       </div>
 
       <div class="pane" id="pane0">
@@ -127,6 +128,27 @@
         </div>
       </div>
 
+      <div class="pane" id="pane4" hidden>
+        <div id="msList"></div>
+        <div id="msRun" hidden>
+          <p class="grp-h" id="msTitle" style="margin-top:0"></p>
+          <p class="tiny" id="msRule"></p>
+          <div class="readout"><span class="big" id="msTime">0 秒</span><span class="sm" id="msMoves">体位変換 0 / 0</span></div>
+          <div class="ms-meter" id="msMeter"><i id="msFill"></i><b id="msThr"></b><span id="msRate">0%</span></div>
+          <label class="tg" style="margin:4px 0 8px"><input type="checkbox" id="msHint" checked>目的部位の描出率を表示する（ヒント）</label>
+          <p class="tiny">いまの体位：<span id="msPose"></span></p>
+          <p class="grp-h">起倒角</p>
+          <div class="pos-grid four" id="msTilt"></div>
+          <p class="grp-h" style="margin:11px 0 9px">体軸の回転</p>
+          <div class="pos-grid four" id="msRoll"></div>
+          <div class="ms-result" id="msResult" hidden><p class="ms-head" id="msResultHead"></p><p id="msResultMsg"></p></div>
+          <div class="acts" style="margin-top:8px">
+            <button class="act" id="msRetry" type="button">最初から</button>
+            <button class="act" id="msBack" type="button">ミッション一覧</button>
+          </div>
+        </div>
+      </div>
+
       <div class="pane" id="pane3" hidden>
         <div id="qEmpty">
           <p class="qnote">問題がありません。「読み込み直す」から貼り付けてください。</p>
@@ -187,7 +209,7 @@
       <details class="fold"><summary>表示と操作</summary>
       <p class="grp-h" style="margin-top:10px">胃の中身</p>
       <label class="rng">バリウム <input type="range" id="rBa" min="120" max="150" step="5" value="150"><output id="oBa">150 mL</output></label>
-      <label class="rng">発泡剤のガス <input type="range" id="rGas" min="100" max="400" step="25" value="250"><output id="oGas">250 mL</output></label>
+      <label class="rng">発泡剤のガス <input type="range" id="rGas" min="100" max="400" step="25" value="400"><output id="oGas">400 mL</output></label>
       <p class="glinfo">バリウムは学会マニュアルの 120〜150 mL、ガスは発泡剤の添付文書の 100〜400 mL。胃の大きさはこの合計に合わせる。</p>
       <p class="grp-h" style="margin-top:10px">ラベル</p>
       <div class="seg wide" id="labSeg">
@@ -235,7 +257,7 @@
 // ES モジュールはファイルを直接開く（file://）と読み込めない。そのときは理由を出す
 addEventListener('load', function () {
   if (!window.THREE) showFail(location.protocol === 'file:'
-    ? 'v3 はファイルを直接開いても動きません。公開 URL から開いてください。'
+    ? 'v2 はファイルを直接開いても動きません。公開 URL から開いてください。'
     : 'three.js を読み込めませんでした。lib/three.module.min.js があるか確かめてください。');
 });
 </script>

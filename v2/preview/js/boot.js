@@ -17,7 +17,7 @@ if (Q.get('xr') === 'emulate') {
   window.XR_EMULATED = Q.get('device') === 'quest2' ? 'Quest 2' : 'Quest 3';
 }
 
-const FILES = ['data', 'questions', 'anatomy-data', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'perf', 'xr', 'main'];
+const FILES = ['data', 'questions', 'anatomy-data', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'measure', 'mission', 'perf', 'xr', 'main'];
 if (Q.get('eval') === '1') FILES.push('eval');   // 評価モード（学会発表用の定量評価）は ?eval=1 のときだけ
 for (const f of FILES) {
   await new Promise((done, fail) => {

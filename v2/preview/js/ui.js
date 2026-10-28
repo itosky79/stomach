@@ -44,7 +44,7 @@ const tabs = document.getElementById('modeTabs');
 function setMode(m) {
   curMode = m; playing = false;
   [...tabs.children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.m === m));
-  for (let i = 0; i < 4; i++) document.getElementById('pane' + i).hidden = (i !== m);
+  for (let i = 0; i < 5; i++) document.getElementById('pane' + i).hidden = (i !== m);
   document.body.classList.toggle('quiz', m === 3);          // スマホでは問題タブだけ3Dを固定しない
   if (m === 1 && seqIdx < 0) gotoStep(0);
   if (m === 2) syncFree();
@@ -211,7 +211,7 @@ function setComp(region, amt) {
 }
 
 /* --- 問題（過去問を貼り付けて使う）--- */
-const QKEY = 'stomach.v3.exam';   // v1 と保存内容を分ける
+const QKEY = 'stomach.v2p.exam';   // v1 と保存内容を分ける
 let EXAM = [], qIdx = 0, curQ = null, qLocked = false;
 const qText = document.getElementById('qText'), qChoices = document.getElementById('qChoices');
 const qExp = document.getElementById('qExp'), qSrc = document.getElementById('qSrc');
@@ -395,7 +395,7 @@ const labSeg = document.getElementById('labSeg');
 /* --- コンソールの幅とドッキング --- */
 const rail = document.getElementById('rail'), split = document.getElementById('split');
 const railbar = document.getElementById('railbar'), bDetach = document.getElementById('bDetach');
-const RKEY = 'stomach.v3.rail';
+const RKEY = 'stomach.v2p.rail';
 let rst = { w: 322, det: false, x: 0, y: 0, pw: 330, ph: 480 };
 try { Object.assign(rst, JSON.parse(localStorage.getItem(RKEY) || '{}')); } catch (e) { }
 function saveRail() { try { localStorage.setItem(RKEY, JSON.stringify(rst)); } catch (e) { } }
