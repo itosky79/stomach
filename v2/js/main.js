@@ -47,12 +47,17 @@ function loop(now) {
   tiltGroup.updateMatrixWorld(true);
   upLocal(uUp.value);
 
-  computeHeights();
-  dose(dt);
-  flowStep(dt);
-  for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
-  updateWet(dt);
-  shapeStep(dt);
+  // 流れの計算は 1/60 秒以下の刻みに分けて進める。描画が遅く 1 コマが長くなる（毎秒 20 コマ以下で dt = 0.05 秒）と、
+  // 1 回で進める時間が長すぎてバリウムが流れなくなるため（評価モードはいつも 1/60 秒で計算している）
+  const nSub = Math.max(1, Math.ceil(dt * 60 - 1e-6)), h = dt / nSub;
+  for (let s = 0; s < nSub; s++) {
+    computeHeights();
+    dose(h);
+    flowStep(h);
+    for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
+    updateWet(h);
+    shapeStep(h);
+  }
   buildSurface();
   updateLabels();
   if (viewMode !== 0) fluoroTime += dt;

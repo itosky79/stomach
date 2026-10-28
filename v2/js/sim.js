@@ -230,15 +230,23 @@ function dose(dt) {
     wVol[n] -= d; drained += d;
   }
 }
+/* 付着：液面の下に入った壁は付着 1。液面より上に出た壁では膜が少しずつ減る。
+   減る速さは壁の向きで変える。床側の壁（外向きの法線が下向き、膜が壁の上に載る）と横向きの壁は毎秒 WET_KEEP とゆっくり減り、
+   天井側の壁（膜が壁からぶら下がる）は上を向く度合い（法線・上向き、0〜1）に比例して毎秒 WET_DRIP まで速く垂れ落ちる。
+   以前は向きによらず毎秒 0.05 で、床側の膜も 20 秒ほどで消えて二重造影が見えなくなっていた。値は実測と照合していない仮の値 */
+const WET_KEEP = 0.01, WET_DRIP = 1.0;
 function updateWet(dt) {
-  const dry = 0.05 * dt;
+  const nrm = geom.attributes.normal.array, u = uUp.value;
   for (let n = 0; n < NN; n++) {
     const L = lvl[n], b = n * CM;
     for (let j = 0; j < CM; j++) {
       const idx = b + j;
       aLevel[idx] = L;
       if (hArr[idx] <= L) aWet[idx] = 1;
-      else { const v = aWet[idx] - dry; aWet[idx] = v > 0 ? v : 0; }
+      else {
+        const up = Math.max(0, nrm[idx * 3] * u.x + nrm[idx * 3 + 1] * u.y + nrm[idx * 3 + 2] * u.z);
+        const v = aWet[idx] - (WET_KEEP + (WET_DRIP - WET_KEEP) * up) * dt; aWet[idx] = v > 0 ? v : 0;
+      }
     }
   }
   geom.attributes.aLevel.needsUpdate = true;
