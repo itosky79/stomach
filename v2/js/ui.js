@@ -44,7 +44,7 @@ const tabs = document.getElementById('modeTabs');
 function setMode(m) {
   curMode = m; playing = false;
   [...tabs.children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.m === m));
-  for (let i = 0; i < 4; i++) document.getElementById('pane' + i).hidden = (i !== m);
+  for (let i = 0; i < 5; i++) document.getElementById('pane' + i).hidden = (i !== m);
   document.body.classList.toggle('quiz', m === 3);          // スマホでは問題タブだけ3Dを固定しない
   if (m === 1 && seqIdx < 0) gotoStep(0);
   if (m === 2) syncFree();
