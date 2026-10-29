@@ -31,7 +31,7 @@ stomach/
 ├── three.min.js            3D 描画ライブラリ（three.js r128、同梱）
 ├── data/
 │   ├── questions.json      収録問題（問題文・選択肢・正答・解説・体位・名札）
-│   └── figures/            設問の図 3 枚
+│   └── figures/            設問の図 5 枚
 ├── docs/
 │   ├── features.md         機能と操作
 │   ├── positions.md        体位の定義（第1・第2斜位）と撮影手順（基準撮影法）
@@ -71,4 +71,4 @@ python3 tools/verify_answers.py
 ## 注意
 
 - 数値も像もシミュレーションで、実写ではない。診断や臨床判断には使えない
-- 同梱している上部消化管造影写真 3 枚は国家試験の「別冊」から取り込んだもの。学会発表のスライドや論文に載せる場合、一般に配布する場合は扱いを確認すること（[docs/sources.md](docs/sources.md)）
+- 同梱している上部消化管造影写真 5 枚は国家試験の「別冊」から取り込んだもの。学会発表のスライドや論文に載せる場合、一般に配布する場合は扱いを確認すること（[docs/sources.md](docs/sources.md)）
