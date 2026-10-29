@@ -286,6 +286,11 @@ function loadExam() {
 function qView(which) {
   qEmpty.hidden = which !== 'empty'; qBox.hidden = which !== 'quiz'; qImport.hidden = which !== 'import';
 }
+/* 出典：「第76回 午後 第85問」→「第76回 診療放射線技師国家試験 午後 第85問（厚生労働省 公表の問題・正答）」 */
+function srcFull(src) {
+  const m = /^第(\d+)回\s*(午前|午後)\s*第(\d+)問$/.exec(src);
+  return m ? '第' + m[1] + '回 診療放射線技師国家試験 ' + m[2] + ' 第' + m[3] + '問（厚生労働省 公表の問題・正答）' : src;
+}
 function showQ(i) {
   if (!EXAM.length) { qView('empty'); return; }
   qIdx = (i + EXAM.length) % EXAM.length;
@@ -300,7 +305,7 @@ let picked = [];
 function renderQ() {
   qLocked = false; picked = []; qView('quiz');
   qText.textContent = curQ.q;
-  qSrc.innerHTML = curQ.src ? '<b>出典</b> ' + curQ.src : '';
+  qSrc.innerHTML = curQ.src ? '<b>出典</b> ' + srcFull(curQ.src) : '';
   qFigWrap.hidden = !curQ.img;
   if (curQ.img) qFig.src = curQ.img; else qFig.removeAttribute('src');
   qAnns.innerHTML = annHTML(curQ.ann);
