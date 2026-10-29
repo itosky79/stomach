@@ -372,10 +372,13 @@ const bind = (id, fn) => document.getElementById(id).addEventListener('change', 
 bind('tBone', v => { showBone = v; });
 bind('tOri', v => { showOri = v; });
 bind('tPyl', v => { pylorusOpen = v; rebuildAll(); });
-{ // 胃の中身：バリウム（120〜150 mL）と発泡剤のガス（100〜400 mL）。胃の大きさは合計に合わせる（model.js の rebuild）
+{ // 胃の中身：バリウム（120〜150 mL）と発泡剤のガス（100〜700 mL。試作では添付文書の上限 400 mL を超えて、げっぷを我慢したときや空気を飲み込んだぶんも試せる）。胃の大きさは合計に合わせる（model.js の rebuild）
   const S3 = Math.pow(BODY_SCALE, 3), rBa = document.getElementById('rBa'), rGas = document.getElementById('rGas');
   rBa.addEventListener('input', () => { targetMl = +rBa.value / S3; document.getElementById('oBa').textContent = rBa.value + ' mL'; rebuildAll(); buildLabels(); });
   rGas.addEventListener('input', () => { gasMl = +rGas.value; document.getElementById('oGas').textContent = rGas.value + ' mL'; rebuildAll(); buildLabels(); });
+  // 胃の柔らかさ：バリウムの重さで足の方向へ垂れる度合い（sim.js の SHAPE）。0 は垂れない。ばね K が小さいほど大きく垂れる
+  const rSoft = document.getElementById('rSoft'), SOFT = [[0, '硬い（垂れない）'], [2, 'やや硬い'], [1, 'ふつう'], [0.5, '柔らかい']];
+  rSoft.addEventListener('input', () => { const [k, nm] = SOFT[+rSoft.value]; SHAPE.on = k > 0; if (k > 0) SHAPE.K = k; else { sagS.fill(0); shapeApply(); } document.getElementById('oSoft').textContent = nm; });
 }
 document.getElementById('bDrink').addEventListener('click', () => {
   for (let n = 0; n < NN; n++) wVol[n] = 0;

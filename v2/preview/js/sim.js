@@ -106,7 +106,7 @@ function applyTwist() {
    とつり合う重力の向きのずれ s_i を求める：T (2 s_i − s_{i−1} − s_{i+1}) + K s_i = L_i。
    留めるのは噴門の断面と、幽門より先（十二指腸）。胃底部の側の端は自由。
    形は時定数 SHAPE.tau 秒で、つり合いの形に近づく（バリウムが流れると重さの分布が変わり、形も変わる）。 */
-const SHAPE = { on: false, T: 40, K: 2, tau: 0.5, rhoBa: 2.56, rhoT: 1.0 };
+const SHAPE = { on: true, T: 10, K: 1, tau: 0.5, rhoBa: 2.56, rhoT: 1.0, gas: 0, caudal: true };   // gas：ガスの浮く力の倍率（胃底部は横隔膜の下に留められていて浮き上がりにくいので 0）。caudal：足の方向にだけ垂れる（背側は膵臓や脊椎に支えられる）   // gas：ガスの浮く力の倍率（胃底部は横隔膜の下に留められていて浮き上がりにくい）
 let posTw = null, centersTw = null;
 const sagS = new Float64Array(NMAIN), sagTgt = new Float64Array(NMAIN);
 const _sa = new Float64Array(NMAIN), _sb = new Float64Array(NMAIN), _sc = new Float64Array(NMAIN), _sd = new Float64Array(NMAIN);
@@ -115,10 +115,12 @@ function shapeTarget() {
   for (let i = 0; i < NMAIN; i++) {
     const fixed = i === cardiaIdx || i >= pylIdx;
     if (fixed) { _sa[i] = 0; _sb[i] = 1; _sc[i] = 0; _sd[i] = 0; continue; }
-    const L = (SHAPE.rhoBa - SHAPE.rhoT) * wVol[i] - SHAPE.rhoT * Math.max(0, cap[i] - wVol[i]);
+    const L = (SHAPE.rhoBa - SHAPE.rhoT) * wVol[i] - SHAPE.gas * SHAPE.rhoT * Math.max(0, cap[i] - wVol[i]);
     _sa[i] = i > 0 ? -T : 0; _sc[i] = i < NMAIN - 1 ? -T : 0;
     _sb[i] = (i > 0 ? T : 0) + (i < NMAIN - 1 ? T : 0) + K; _sd[i] = L;
   }
+  const cf = SHAPE.caudal ? Math.max(0, uUp.value.y) : 1;   // 重力の足の方向の成分（立位で 1、水平位で 0、頭低位で 0）
+  for (let i = 0; i < NMAIN; i++) _sd[i] *= cf;
   for (let i = 1; i < NMAIN; i++) { const m = _sa[i] / _sb[i - 1]; _sb[i] -= m * _sc[i - 1]; _sd[i] -= m * _sd[i - 1]; }   // 三重対角（Thomas 法）
   sagTgt[NMAIN - 1] = _sd[NMAIN - 1] / _sb[NMAIN - 1];
   for (let i = NMAIN - 2; i >= 0; i--) sagTgt[i] = (_sd[i] - _sc[i] * sagTgt[i + 1]) / _sb[i];
@@ -135,7 +137,7 @@ function shapeStep(dt) {
 }
 function shapeApply() {   // 位置 = ねじったあとの位置 − s_i × 上向き（s が正なら下へ）。そのあと断面ごとに膨らませる（infS）
   if (!posTw) return;
-  const u = uUp.value, ux = u.x, uy = u.y, uz = u.z;
+  const u = SHAPE.caudal ? { x: 0, y: 1, z: 0 } : uUp.value, ux = u.x, uy = u.y, uz = u.z;   // caudal：体の長軸に沿って足の方向へずらす
   for (let i = 0; i < NMAIN; i++) {
     const s = sagS[i], dx = -s * ux, dy = -s * uy, dz = -s * uz, c = i * 3, f = infS[i];
     centers[c] = centersTw[c] + dx; centers[c + 1] = centersTw[c + 1] + dy; centers[c + 2] = centersTw[c + 2] + dz;
