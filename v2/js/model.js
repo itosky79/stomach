@@ -39,7 +39,17 @@ const area = new Float32Array(NN), dl = new Float32Array(NN), cap = new Float32A
 const wVol = new Float32Array(NN), hmin = new Float32Array(NN), hmax = new Float32Array(NN), lvl = new Float32Array(NN);
 const regionOf = new Int8Array(NN);
 let edges = [], regionList = [], cardiaIdx = 0, pylIdx = 0, bsRadius = 12, boxHalf = [8, 10, 6];
-let anatOff = [0, 0, 0], lumenK = 1;
+let anatOff = [0, 0, 0], lumenK = 1, distK = [1, 1];
+/* 胃の拡張の実測値（2026-11-01）
+   ・健康な成人の MRI：胃の容積（内容物＋空気）は空腹時 151.9 mL、液体 400 mL を飲んだ 15 分後 521.6 mL。胃角から引いた線で分けた
+     近位と遠位の容積の比は、空腹時 2.33、15 分後 3.59（偽薬群。Min YW ほか, PLoS ONE 2015;10(9):e0138927）。
+     この 2 点を直線で結び、胃の容積から近位：遠位の比を決める（範囲の外は端の値）
+   ・発泡剤で拡張した胃の CT gastrography：胃の容積 438.5 ± 163.4 mL（BMI 25 未満。Kim SH ほか, Obesity Surgery 2020, doi:10.1007/s11695-019-04189-5）。
+     バリウム 150 mL ＋ ガス 100〜400 mL（250〜550 mL）は、この範囲に入る */
+const DISTEND = {
+  v0: 151.9, r0: 2.33, v1: 521.6, r1: 3.59,
+  ratio(v) { const t = Math.max(0, Math.min(1, (v - this.v0) / (this.v1 - this.v0))); return this.r0 + (this.r1 - this.r0) * t; }
+};
 let totalCap = 0, drained = 0;
 
 /* ---- 管の生成 ---- */
@@ -130,14 +140,21 @@ function rebuild() {
   const nCtl = S.pts.length - 1;
   regionList = S.regions;
   const pylStart = S.regions.find(r => r[0] === 'pylorus')[2];
-  // 胃の大きさ：胃の中身（バリウム＋発泡剤のガス、実寸 mL）に容量が合うよう、太さ（rad0、なければ rad）に同じ倍率 k を掛ける。
-  // 断面積は太さの 2 乗に比例し、長さは変わらないので、k = √(目標 ÷ 倍率 1 のときの容量)。十二指腸球部は数えない
-  const R0 = S.rad0 || S.rad, S3 = Math.pow(BODY_SCALE, 3), want = targetMl * S3 + gasMl;
+  // 胃の拡張：胃の容量を胃の中身（バリウム＋発泡剤のガス、実寸 mL）に合わせ、胃角を境に近位（胃底部・胃体部）と遠位（胃角部より先）の
+  // 容積の比を、胃の容積に応じて変える。拡張するほど近位がよく膨らむ（DISTEND の実測値による）。十二指腸球部と食道は膨らませない。
+  // 太さ（rad0、なければ rad）に、近位で kP、遠位で kD を掛ける（胃角部の中で滑らかにつなぐ）。断面積は太さの 2 乗に比例する
+  const R0 = S.rad0 || S.rad, S3 = Math.pow(BODY_SCALE, 3), want = targetMl * S3 + gasMl, nC = S.pts.length - 1;
+  const reg = k => S.regions.find(r => r[0] === k), ang = reg('angle'), pc = reg('duode')[2];
+  const wDist = c => c <= ang[2] ? 0 : c >= ang[3] ? 1 : (c - ang[2]) / (ang[3] - ang[2]);   // 0 = 近位、1 = 遠位
   buildRings(S.pts, R0, NMAIN, 0, 0.06, null);
-  const cap1 = (() => { let c = 0; const pc = S.regions.find(r => r[0] === 'duode')[2], nC = S.pts.length - 1;
-    for (let i = 0; i < NMAIN; i++) if (i / (NMAIN - 1) * nC < pc) c += cap[i]; return c * S3; })();
-  lumenK = Math.sqrt(want / cap1);
-  buildRings(S.pts, R0.map(r => r * lumenK), NMAIN, 0, 0.06, null);
+  let P1 = 0, D1 = 0;   // 倍率 1 のときの近位・遠位の容量（実寸 mL。胃角部は半分ずつ）
+  for (let i = 0; i < NMAIN; i++) { const c = i / (NMAIN - 1) * nC; if (c >= pc) continue; const w = wDist(c); P1 += cap[i] * (1 - w) * S3; D1 += cap[i] * w * S3; }
+  const ratio = DISTEND.ratio(want);
+  // 近位 = want × ratio / (1 + ratio)、遠位 = want / (1 + ratio) になる倍率（近位・遠位それぞれ 2 乗で効く）
+  distK = [Math.sqrt(want * ratio / (1 + ratio) / P1), Math.sqrt(want / (1 + ratio) / D1)];
+  lumenK = Math.sqrt(want / (P1 + D1));
+  const mulD = x => { const c = x, w = wDist(c); return distK[0] * (1 - w) + distK[1] * w; };
+  buildRings(S.pts, R0, NMAIN, 0, 0.06, x => x >= pc ? lumenK : mulD(x));
 
   cardiaIdx = Math.round(S.cardia / nCtl * (NMAIN - 1));
   pylIdx = Math.round((pylStart + 0.5) / nCtl * (NMAIN - 1));
