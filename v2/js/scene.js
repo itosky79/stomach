@@ -279,6 +279,18 @@ function solidProp(color) {
 const matFrame = solidProp(0x4A5C6B);
 const matPad = solidProp(0x263440);
 const matGear = solidProp(0x6E7F8C);
+/* 圧迫筒：カメラに近づいて画面を覆うと胃が見えなくなるので、ふだんから少し透かし（CONE_ALPHA.base）、
+   画面の 1/10 以上を覆ったら大きく透かす（CONE_ALPHA.cover。xray.js の render で毎回決める） */
+const CONE_ALPHA = { base: 0.8, cover: 0.25, from: 0.07, to: 0.10 };   // from〜to：画面に占める割合で滑らかに切り替える
+const matCone = (() => {
+  const m = solidProp(0x6E7F8C);
+  m.uniforms.uA = { value: CONE_ALPHA.base };
+  m.fragmentShader = m.fragmentShader.replace('uniform vec3 uC;', 'uniform vec3 uC; uniform float uA;')
+    .replace('*fr*0.35, 1.0);', '*fr*0.35, uA);');
+  m.transparent = true;
+  return m;
+})();
+let compCone = null;
 function prop(parent, geo, mat, x, y, z, rx) {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
   if (rx) m.rotation.x = rx;
@@ -410,7 +422,8 @@ function buildTable() {
   const tube = prop(tableProps, new THREE.CylinderGeometry(9, 9, 34, 20), matGear, 0, fy + 10, 0, Math.PI / 2);   // 管球
   tube.rotation.set(Math.PI / 2, 0, 0);
   box(tableProps, 22, 12, 22, matFrame, 0, fy - 6, 0);             // 絞り
-  prop(tableProps, new THREE.CylinderGeometry(5, 5, 10, 20), matGear, 0, fy - 17, 0);   // 圧迫筒（たたんだ状態。第 3 段階で動かす）
+  compCone = prop(tableProps, new THREE.CylinderGeometry(5, 5, 10, 20), matCone, 0, fy - 17, 0);   // 圧迫筒（たたんだ状態。第 3 段階で動かす）
+  compCone.renderOrder = 8;   // 透けるので、不透明なものの後に描く
   const armZ = -(TB.w / 2 + 16);                                  // 支柱は窓と反対側（−z）に置く
   box(tableProps, 10, 10, armZ, matFrame, 0, fy + 10, armZ / 2);   // 横の腕
   box(tableProps, 12, fy + 15 - TB_BOTTOM, 12, matFrame, 0, (fy + 15 + TB_BOTTOM) / 2, armZ);   // 支柱
