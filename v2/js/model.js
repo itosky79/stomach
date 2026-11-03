@@ -212,7 +212,8 @@ function rebuild() {
     edges.push({ i: i, j: i + 1, k: k, k2: k2 });
   }
   for (let i = NMAIN; i < NN - 1; i++) edges.push({ i: i, j: i + 1, k: 1, k2: 0 });   // 食道の中も口の側へは戻さない（蠕動で胃へ送る。sim.js の dose）
-  edges.push({ i: NN - 1, j: cardiaIdx, k: 0.9, k2: 0 });   // 下部食道括約筋：胃から食道へは戻さない（以前は 0.17 で、水平にすると逆流していた）
+  // 食道の下端から胃へは、流路でつながず、噴門から落ちたバリウムが当たる断面へ入れる（sim.js の pourTarget と dose）。
+  // 下部食道括約筋があるので、胃から食道へは戻らない（以前は 0.17 で戻していて、水平にすると逆流していた）
 
   totalCap = 0;
   for (let i = 0; i < NMAIN; i++) { if (regionList[regionOf[i]][0] !== 'duode') totalCap += cap[i]; wVol[i] = Math.min(wVol[i], cap[i]); }

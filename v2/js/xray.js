@@ -44,6 +44,7 @@ function setXray(on) {
   meshBack.visible = !on;
   meshFront.material = on ? matXray : matFront;
   meshSurf.material = on ? matSurfX : matSurf;
+  pourMesh.material = on ? matPourX : matPour;
   meshSkin.material = on ? matSkinX : matSkin;
   meshSkin.visible = on || skinOpacity > 0.005;
   figureGroup.visible = !on && skinOpacity > 0.005;

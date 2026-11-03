@@ -59,6 +59,7 @@ function loop(now) {
     shapeStep(h);
   }
   buildSurface();
+  updatePour();
   updateLabels();
   if (viewMode !== 0) fluoroTime += dt;
 
