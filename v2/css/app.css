@@ -457,3 +457,43 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
   #fpsPad{bottom:74px; left:8px}
   #fpsPad .fpsTip{font-size:10px}
 }
+
+/* ---------- 色の切り替え（ライト）。ダークは :root の値。透視像（X 線像）は本物と同じく暗いまま ---------- */
+.themeSeg{margin-left:auto; background:var(--panel2)}
+:root[data-theme="light"]{
+  color-scheme: light;
+  --ink:#EEF2F5; --ink2:#F7F9FB; --panel:#FFFFFF; --panel2:#E6ECF1;
+  --line:#CCD6DE; --line2:#AFBECA;
+  --text:#18232D; --muted:#4A5D6E; --dim:#6B7E8F;
+  --teal:#1E7F96; --amber:#B9741A; --alert:#C2413A;
+}
+:root[data-theme="light"] .stage{background:radial-gradient(120% 100% at 50% 0%,#F4F7FA 0%,#D9E1E8 70%)}
+:root[data-theme="light"] .seg{background:rgba(255,255,255,.88)}
+:root[data-theme="light"] .seg button[aria-pressed="true"],
+:root[data-theme="light"] .tabs button[aria-pressed="true"],
+:root[data-theme="light"] button.opt[aria-pressed="true"],
+:root[data-theme="light"] ol.seq button[aria-current="step"],
+:root[data-theme="light"] .choices button.sel{background:#D3E7EE; color:#0E3A47}
+:root[data-theme="light"] ol.seq button[aria-current="step"] .tg2{color:#1E7F96}
+:root[data-theme="light"] .vrbtn{background:rgba(255,255,255,.9)}
+:root[data-theme="light"] .vrbtn:hover{background:#E3F0F4}
+:root[data-theme="light"] .vrbtn[aria-pressed="true"]{background:#D3E7EE; color:#0E3A47}
+:root[data-theme="light"] .expose{background:#FFF1DC; border-color:#C99A5B; color:#8A4E0A}
+:root[data-theme="light"] .expose:hover{background:#FFE3BC; color:#6E3D06}
+:root[data-theme="light"] .readout{background:#F2F5F8}
+:root[data-theme="light"] .readout .big,
+:root[data-theme="light"] .films h2,
+:root[data-theme="light"] .qtext,
+:root[data-theme="light"] .ghead b,
+:root[data-theme="light"] .ep-h b{color:var(--text)}
+:root[data-theme="light"] button.act.wide{color:var(--text); border-color:#8FA6B6}
+:root[data-theme="light"] #gClose{background:#D3E7EE; color:#0E3A47}
+:root[data-theme="light"] #gClose:hover{background:#BFDCE6}
+:root[data-theme="light"] #guide{background:rgba(30,40,50,.45)}
+:root[data-theme="light"] .choices button.ok{background:#E2F4EA; border-color:#5BAF82; color:#1D6A41}
+:root[data-theme="light"] .choices button.ok .n{color:#2E8A58}
+:root[data-theme="light"] .choices button.ng{background:#F9E5E5; border-color:#D08A8A; color:#9A2E2E}
+:root[data-theme="light"] .choices button.ng .n{color:#B84848}
+:root[data-theme="light"] .glerr{background:rgba(240,244,247,.96)}
+:root[data-theme="light"] #fpsPad .fpsTip{background:rgba(255,255,255,.85); color:var(--muted)}
+:root[data-theme="light"] .fluoro{background:rgba(255,255,255,.85)}

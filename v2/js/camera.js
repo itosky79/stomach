@@ -46,10 +46,10 @@ function setView(p) {
   if (seg) [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.p === p));
   applyCam();
 }
-/* 視点のボタン：一人称（術者の目。操作室の席に座ったところから始まる）。以前あった「術者」（席から見るだけの固定の視点）は、一人称と同じなので消した */
-const bFps = document.getElementById('bFps'), fpsPad = document.getElementById('fpsPad');
+/* 視点の切り替え（外から／一人称）。一人称は術者の目で、操作室の席に座って見回す。以前あった「術者」（席から見るだけの固定の視点）は、一人称と同じなので消した */
+const camSeg = document.getElementById('camSeg'), fpsPad = document.getElementById('fpsPad');
 function syncViewBtns() {
-  bFps.setAttribute('aria-pressed', viewPreset === 'fps');
+  [...camSeg.children].forEach(b => b.setAttribute('aria-pressed', (b.dataset.c === 'fps') === (viewPreset === 'fps')));
   const was = !fpsPad.hidden;
   fpsPad.hidden = viewPreset !== 'fps';
   if (viewPreset === 'fps' && !was) {   // 入ったときだけ操作の説明を出し、8 秒で消す
@@ -60,7 +60,11 @@ function syncViewBtns() {
   }
 }
 const syncOpBtn = syncViewBtns;
-bFps.addEventListener('click', () => { if (viewPreset === 'fps') setView('room'); else { fpsSeat(); setView('fps'); } });
+camSeg.addEventListener('click', e => {
+  const b = e.target.closest('button[data-c]'); if (!b) return;
+  if (b.dataset.c === 'fps') { if (viewPreset !== 'fps') { fpsSeat(); setView('fps'); } }
+  else if (viewPreset === 'fps') setView('room');
+});
 function fitCam() {
   ctrl.base = bsRadius * BODY_SCALE / Math.sin(camera.fov * Math.PI / 360) * 1.10;
   setView(VIEWS[viewPreset] || viewPreset === 'fps' ? viewPreset : 'room');

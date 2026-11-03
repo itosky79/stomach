@@ -354,6 +354,7 @@ const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・
 const cradle = new THREE.Group(); scene.add(cradle);                // 回転軸のまわりの受け枠（傾くが、滑らない）
 const partition = new THREE.Group(); roomProps.add(partition);      // 仕切り壁・窓・操作室の机（画面でカメラが操作室側に出たら隠す）
 const ROOM_Z0 = 250;                                                 // 仕切り壁の位置（z）
+let roomGrid = null;                                                 // 床の格子（色の切り替えで色を変える）
 const DOOR = [150, 240], DOOR_H = 210;                               // 仕切り壁の扉の開口（x の範囲、高さ）
 
 /* 透視台（tiltGroup の座標。原点 = 胃、x = 足側、y = X 線管の側（天板の法線）、z = 左右）。
@@ -459,7 +460,7 @@ function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxG
   plane(D, H, matWall, X, H / 2, ZM, -Math.PI / 2);
   plane(2 * X, H, matWall, 0, H / 2, Z1, 0);                                // 奥の壁
   plane(2 * X, H, matWall, 0, H / 2, ZC, Math.PI);                          // 操作室の奥の壁
-  const g = new THREE.GridHelper(500, 20, 0x2A3B4A, 0x1D2935);
+  const g = roomGrid = new THREE.GridHelper(500, 20, 0x2A3B4A, 0x1D2935);
   g.material.transparent = true; g.material.opacity = 0.35; g.position.set(0, 0.2, -50); roomProps.add(g);
   // 仕切り壁と鉛ガラスの窓（幅 1.2 m × 高さ 0.9 m、床から 0.9 m）
   const WX = 60, WY0 = 90, WY1 = 180, T = 15;
@@ -539,6 +540,22 @@ function buildTable() {
   buildSlideTab();
 }
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す
+/* ---- 画面の色（ダーク／ライト）に合わせた 3D の色。透視像（X 線像）は本物と同じく暗いまま ---- */
+const THEME3D = {
+  dark:  { bg: 0x0A0F14, bgFull: 0x070B0F, wall: 0x202C37, floor: 0x18222B, ceil: 0x141C24, frame: 0x4A5C6B, pad: 0x263440, grid: [0x2A3B4A, 0x1D2935] },
+  light: { bg: 0xDCE3E9, bgFull: 0xD3DBE2, wall: 0xC4CFD8, floor: 0xA9B6C1, ceil: 0xE2E8ED, frame: 0x6F8292, pad: 0x4E6274, grid: [0x8496A5, 0x9AAAB7] }
+};
+let theme3d = THEME3D.dark;
+function setTheme3D(name) {
+  theme3d = THEME3D[name] || THEME3D.dark;
+  matWall.uniforms.uC.value.setHex(theme3d.wall); matFloor.uniforms.uC.value.setHex(theme3d.floor); matCeil.uniforms.uC.value.setHex(theme3d.ceil);
+  matFrame.uniforms.uC.value.setHex(theme3d.frame); matPad.uniforms.uC.value.setHex(theme3d.pad);
+  if (roomGrid) { const c = roomGrid.geometry.attributes.color; const a = new THREE.Color(theme3d.grid[0]), b = new THREE.Color(theme3d.grid[1]);
+    // 真ん中の線だけ濃く（GridHelper と同じ並び：1 本の線ごとに 4 点、真ん中は 10 本目）
+    for (let i = 0; i < c.count; i++) { const k = Math.floor(i / 4) === 10 ? a : b; c.setXYZ(i, k.r, k.g, k.b); }
+    c.needsUpdate = true; }
+}
+setTheme3D(document.documentElement.dataset.theme);
 const OPERATOR_EYE = new THREE.Vector3(0, 128, 345);   // 操作室で座った術者の目の位置（窓から 95 cm、床から 128 cm。2026-11-03 に 118 cm から上げた）
 
 /* ---- ガイド ---- */

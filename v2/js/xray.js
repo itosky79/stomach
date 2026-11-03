@@ -84,7 +84,7 @@ function render() {
   const r = viewRects();
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, r.w, r.h); renderer.setScissor(0, 0, r.w, r.h);
-  renderer.setClearColor(r.full ? 0x070B0F : 0x0A0F14, 1); renderer.clear();
+  renderer.setClearColor(r.full ? theme3d.bgFull : theme3d.bg, 1); renderer.clear();
   if (!r.full) { setXray(false); fadeAlpha(r.w, r.h); renderer.render(scene, camera); }
   if (r.film) {
     setXcam(r.film.w / r.film.h);

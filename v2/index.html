@@ -7,11 +7,19 @@
       href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <script>addEventListener('load', function () { var w = document.getElementById('webfont'); if (w) w.media = 'all'; });</script>
 <link rel="stylesheet" href="css/app.css">
+<script>/* 色（ダーク／ライト）：保存した選択、なければ端末の設定。描き始める前に決めて、ちらつかないようにする */
+(function () { var t = null; try { t = localStorage.getItem('stomach.theme'); } catch (e) {}
+  if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t; })();</script>
 
 <div class="wrap">
 <header>
   <h1>胃バリウム透視シミュレーター <small style="font-size:.55em;opacity:.6">v2 開発版</small></h1>
   <button class="hbtn" id="bGuide" type="button">使い方</button>
+  <div class="seg themeSeg" id="themeSeg" role="group" aria-label="画面の色">
+    <button type="button" data-t="dark">ダーク</button>
+    <button type="button" data-t="light">ライト</button>
+  </div>
 </header>
 
 <div class="work">
@@ -33,9 +41,12 @@
           <button type="button" data-v="1" aria-pressed="true">3D + 透視</button>
           <button type="button" data-v="2">X線像</button>
         </div>
+        <div class="seg" id="camSeg" role="group" aria-label="視点">
+          <button type="button" data-c="room" aria-pressed="true" title="部屋の外から自由に回して見る">外から</button>
+          <button type="button" data-c="fps" aria-pressed="false" title="術者の目で見る。操作室の席に座って見回す">一人称</button>
+        </div>
       </div>
       <div class="barR">
-        <button class="vrbtn" id="bFps" type="button" aria-pressed="false" title="術者の目で見る。操作室の席に座って見回す">一人称</button>
         <button class="vrbtn" id="bVR" type="button" hidden>VR</button>
         <button class="expose" id="bShot" type="button">撮影</button>
       </div>

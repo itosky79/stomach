@@ -497,3 +497,16 @@ addEventListener('keydown', e => {
   if (lb.classList.contains('on')) { lb.classList.remove('on'); return; }
   if (rst.det) { rst.det = false; applyRail(); saveRail(); }
 });
+
+/* 画面の色（ダーク／ライト）の切り替え。選んだものは次に開いたときも使う（保存できないブラウザでは、そのときだけ） */
+{
+  const seg = document.getElementById('themeSeg');
+  const sync = () => [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === document.documentElement.dataset.theme));
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button[data-t]'); if (!b) return;
+    document.documentElement.dataset.theme = b.dataset.t;
+    try { localStorage.setItem('stomach.theme', b.dataset.t); } catch (err) {}
+    setTheme3D(b.dataset.t); sync();
+  });
+  sync();
+}
