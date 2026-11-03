@@ -17,12 +17,14 @@ if (Q.get('xr') === 'emulate') {
   window.XR_EMULATED = Q.get('device') === 'quest2' ? 'Quest 2' : 'Quest 3';
 }
 
+// ページ（index.html）の更新日時を付けて読む。更新のあと、古い js がキャッシュから読まれて新しい HTML と食い違うのを防ぐ
+const VER = Date.parse(document.lastModified) || Date.now();
 const FILES = ['data', 'questions', 'anatomy-data', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'measure', 'mission', 'perf', 'xr', 'main'];
 if (Q.get('eval') === '1') FILES.push('eval');   // 評価モード（学会発表用の定量評価）は ?eval=1 のときだけ
 for (const f of FILES) {
   await new Promise((done, fail) => {
     const s = document.createElement('script');
-    s.src = 'js/' + f + '.js';
+    s.src = 'js/' + f + '.js?v=' + VER;
     s.onload = done;
     s.onerror = () => fail(new Error(s.src + ' を読み込めませんでした'));
     document.body.appendChild(s);

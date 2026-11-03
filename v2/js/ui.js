@@ -373,7 +373,7 @@ document.getElementById('bReadQ').addEventListener('click', () => {
 });
 
 /* --- 共通 --- */
-const bind = (id, fn) => document.getElementById(id).addEventListener('change', e => fn(e.target.checked));
+const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('change', e => fn(e.target.checked)); };   // 古いキャッシュとの食い違いで要素がなくても止めない
 bind('tBone', v => { showBone = v; });
 bind('tPyl', v => { pylorusOpen = v; rebuildAll(); });
 { // 胃の中身：バリウム（120〜150 mL）と発泡剤のガス（100〜400 mL）。胃の大きさは合計に合わせる（model.js の rebuild）
