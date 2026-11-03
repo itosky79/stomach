@@ -464,7 +464,7 @@ function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxG
   // 仕切り壁と鉛ガラスの窓（幅 1.2 m × 高さ 0.9 m、床から 0.9 m）
   const WX = 60, WY0 = 90, WY1 = 180, T = 15;
   box(partition, X - WX, H, T, matWall, -(X + WX) / 2, H / 2, Z0);
-  // 右の壁には操作室から透視室へ入る扉の開口（幅 90 cm × 高さ 210 cm、x = DOOR[0]〜DOOR[1]）を空ける（一人称視点で歩いて通る）
+  // 右の壁には操作室から透視室へ入る扉の開口（幅 90 cm × 高さ 210 cm、x = DOOR[0]〜DOOR[1]）を空ける
   box(partition, DOOR[0] - WX, H, T, matWall, (DOOR[0] + WX) / 2, H / 2, Z0);
   box(partition, X - DOOR[1], H, T, matWall, (X + DOOR[1]) / 2, H / 2, Z0);
   box(partition, DOOR[1] - DOOR[0], H - DOOR_H, T, matWall, (DOOR[0] + DOOR[1]) / 2, (H + DOOR_H) / 2, Z0);
@@ -539,7 +539,7 @@ function buildTable() {
   buildSlideTab();
 }
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す
-const OPERATOR_EYE = new THREE.Vector3(0, 118, 345);   // 操作室で座った術者の目の位置（窓から 95 cm）
+const OPERATOR_EYE = new THREE.Vector3(0, 128, 345);   // 操作室で座った術者の目の位置（窓から 95 cm、床から 128 cm。2026-11-03 に 118 cm から上げた）
 
 /* ---- ガイド ---- */
 const guides = new THREE.Group(); scene.add(guides);

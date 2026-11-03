@@ -27,7 +27,7 @@ function setXcam(aspect) {
 }
 function layoutFilm() {
   const r = viewRects();
-  fpsPad.style.visibility = r.full ? 'hidden' : '';   // X 線像だけを出しているときは歩くボタンを隠す
+  fpsPad.style.visibility = r.full ? 'hidden' : '';   // X 線像だけを出しているときは操作の説明を隠す
   if (!r.film) { filmEl.style.display = 'none'; return; }
   filmEl.style.display = 'block';
   filmEl.style.left = r.film.left + 'px'; filmEl.style.top = r.film.top + 'px';

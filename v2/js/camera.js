@@ -5,7 +5,7 @@ const AX = new THREE.Vector3(0, 0, -1), AY = new THREE.Vector3(-1, 0, 0), AZ = n
 const ctrl = { theta: 0.62, phi: 1.16, dist: 46, base: 46, target: new THREE.Vector3(0, 0, 0) };
 const VIEWS = { room: [0.62, 1.02, 2.90, -2], oblique: [1.05, 1.26, 1.45, -1] };
 let viewPreset = 'room';
-const FPS = { x: 0, z: 0, eye: 118, eyeT: 118, yaw: 0, pitch: 0, keys: new Set(), pad: new Set() };
+const FPS = { x: 0, z: 0, eye: 128, yaw: 0, pitch: 0 };
 const _dir = new THREE.Vector3(), _qt = new THREE.Quaternion(), _look = new THREE.Vector3();
 function applyCam() {
   if (viewPreset === 'fps') { applyFpsCam(); return; }
@@ -52,12 +52,9 @@ function syncViewBtns() {
   bFps.setAttribute('aria-pressed', viewPreset === 'fps');
   const was = !fpsPad.hidden;
   fpsPad.hidden = viewPreset !== 'fps';
-  if (viewPreset !== 'fps') { FPS.keys.clear(); FPS.pad.clear(); }
-  else if (!was) {   // 入ったときだけ操作の説明を出し、8 秒で消す
+  if (viewPreset === 'fps' && !was) {   // 入ったときだけ操作の説明を出し、8 秒で消す
     const tip = document.getElementById('fpsTip');
-    tip.textContent = matchMedia('(pointer: coarse)').matches
-      ? 'ドラッグで見回す ／ ボタンで歩く'
-      : 'ドラッグで見回す ／ W A S D・矢印キーで歩く（Shift で速く）／ ホイールで前後 ／ ダブルクリックで席に戻る';
+    tip.textContent = 'ドラッグで見回す ／ ダブルクリックで胃のほうを向く';
     tip.classList.remove('off'); clearTimeout(syncViewBtns.t);
     syncViewBtns.t = setTimeout(() => tip.classList.add('off'), 8000);
   }
@@ -69,48 +66,17 @@ function fitCam() {
   setView(VIEWS[viewPreset] || viewPreset === 'fps' ? viewPreset : 'room');
 }
 
-/* ---- 一人称視点：術者の目で見回し、部屋の中を歩く ----
-   座標は部屋（scene）の cm。y = 床からの高さ。視線は yaw（鉛直軸まわり。0 で −z、つまり操作室から透視室の向き）と pitch（上下）。
-   操作室の席に座った目の位置（OPERATOR_EYE）から始める。歩き出すと立ち上がる（目の高さ 160 cm）。
-   壁・仕切り壁（扉の開口だけ通れる）・寝台・机・近接操作卓は通り抜けない。体の半径 FPS_R */
-const FPS_R = 22, FPS_STAND = 160, FPS_SPEED = 120;
+/* ---- 一人称視点：術者の目で見回す ----
+   いつも操作室の席に座った目の位置（OPERATOR_EYE）にいて、見回すだけ（歩いたり立ったりはしない）。
+   座標は部屋（scene）の cm。y = 床からの高さ。視線は yaw（鉛直軸まわり。0 で −z、つまり操作室から透視室の向き）と pitch（上下） */
 const _fd = new THREE.Vector3();
 function fpsLookAt(v) {   // 目から点 v を向く
   _fd.set(v.x - FPS.x, v.y - FPS.eye, v.z - FPS.z).normalize();
   FPS.yaw = Math.atan2(-_fd.x, -_fd.z); FPS.pitch = Math.asin(Math.max(-1, Math.min(1, _fd.y)));
 }
-function fpsSeat() {
-  FPS.x = OPERATOR_EYE.x; FPS.z = OPERATOR_EYE.z; FPS.eye = FPS.eyeT = OPERATOR_EYE.y;
-  fpsLookAt(tiltGroup.position.clone());   // 胃（tiltGroup の原点）を見る
-}
-function fpsBlocked(x, z) {
-  const R = FPS_R;
-  if (x < -250 + R || x > 250 - R || z < -350 + R || z > 550 - R) return true;                        // 部屋の壁
-  if (Math.abs(z - ROOM_Z0) < R + 8 && !(x > DOOR[0] + R && x < DOOR[1] - R)) return true;            // 仕切り壁（扉の開口だけ通れる）
-  if (Math.abs(x) < TB.len / 2 + 20 + R && Math.abs(z) < TB.w / 2 + 25 + R) return true;               // 寝台と X 線管の支柱
-  if (Math.abs(x) < 90 + 8 && z > ROOM_Z0 + 15 && z < ROOM_Z0 + 85 + 8) return true;                     // 操作室の机
-  if (Math.hypot(x + 150, z - 70) < 25 + R) return true;                                                 // 近接操作卓
-  return false;
-}
-function fpsMove(dx, dz) {   // x と z を別々に動かし、壁に沿って滑れるようにする
-  if (!fpsBlocked(FPS.x + dx, FPS.z)) FPS.x += dx;
-  if (!fpsBlocked(FPS.x, FPS.z + dz)) FPS.z += dz;
-}
-function fpsStep(dt) {
-  if (viewPreset !== 'fps') return;
-  let f = 0, s = 0;
-  const K = FPS.keys, P = FPS.pad;
-  if (K.has('KeyW') || K.has('ArrowUp') || P.has('f')) f += 1;
-  if (K.has('KeyS') || K.has('ArrowDown') || P.has('b')) f -= 1;
-  if (K.has('KeyD') || K.has('ArrowRight') || P.has('r')) s += 1;
-  if (K.has('KeyA') || K.has('ArrowLeft') || P.has('l')) s -= 1;
-  if (f || s) {
-    FPS.eyeT = FPS_STAND;
-    const v = FPS_SPEED * (K.has('ShiftLeft') || K.has('ShiftRight') ? 2 : 1) * dt / Math.hypot(f, s);
-    const fx = -Math.sin(FPS.yaw), fz = -Math.cos(FPS.yaw);   // 前（水平）
-    fpsMove((fx * f - fz * s) * v, (fz * f + fx * s) * v);
-  }
-  FPS.eye += (FPS.eyeT - FPS.eye) * (1 - Math.exp(-dt * 4));
+function fpsSeat() {   // 席に座り、胃（tiltGroup の原点）のほうを向く
+  FPS.x = OPERATOR_EYE.x; FPS.z = OPERATOR_EYE.z; FPS.eye = OPERATOR_EYE.y;
+  fpsLookAt(tiltGroup.position.clone());
 }
 function applyFpsCam() {
   if (camera.fov !== 60) { camera.fov = 60; camera.updateProjectionMatrix(); }
@@ -122,26 +88,6 @@ function applyFpsCam() {
   camera.updateMatrixWorld();
   arrow.visible = false;
 }
-const FPS_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
-function fpsKeyTarget(e) {   // 入力欄やスライダーなど、矢印キーを自分で使う部品にいるときは歩かない
-  const t = e.target;
-  return !(t && t.closest && t.closest('input, select, textarea, [role="slider"], [tabindex]:not(canvas), #stick, #split'));
-}
-addEventListener('keydown', e => {
-  if (viewPreset !== 'fps' || !FPS_KEYS.has(e.code) || !fpsKeyTarget(e) || e.ctrlKey || e.metaKey || e.altKey) return;
-  FPS.keys.add(e.code); e.preventDefault();
-});
-addEventListener('keyup', e => { FPS.keys.delete(e.code); });
-addEventListener('blur', () => { FPS.keys.clear(); FPS.pad.clear(); });
-document.addEventListener('visibilitychange', () => { FPS.keys.clear(); FPS.pad.clear(); });
-fpsPad.querySelectorAll('[data-mv]').forEach(b => {
-  const mv = b.dataset.mv;
-  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); FPS.pad.add(mv); });
-  const up = () => FPS.pad.delete(mv);
-  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
-  b.addEventListener('contextmenu', e => e.preventDefault());
-});
-document.getElementById('bSeat').addEventListener('click', () => { fpsSeat(); applyCam(); });
 let drag = null, pinch = 0;
 canvas.addEventListener('pointerdown', e => {
   canvas.setPointerCapture(e.pointerId);
@@ -172,7 +118,7 @@ const endDrag = () => { drag = null; };
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('dblclick', () => { if (viewPreset === 'fps') { fpsSeat(); applyCam(); } else fitCam(); });   // 視点を戻す（一人称では席に戻る）
+canvas.addEventListener('dblclick', () => { if (viewPreset === 'fps') { fpsSeat(); applyCam(); } else fitCam(); });   // 視点を戻す（一人称では胃のほうを向く）
 function zoomTo(d) {   // 寄るほど注視点を胃（原点）へ近づける。引けば元に戻る
   const r = bsRadius * BODY_SCALE, nd = Math.max(r * 0.5, Math.min(r * 24, d));
   ctrl.target.multiplyScalar(nd / ctrl.dist);
@@ -181,11 +127,7 @@ function zoomTo(d) {   // 寄るほど注視点を胃（原点）へ近づける
 }
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  if (viewPreset === 'fps') {   // 一人称：前後に歩く
-    FPS.eyeT = FPS_STAND;
-    const v = -Math.sign(e.deltaY) * 25;
-    fpsMove(-Math.sin(FPS.yaw) * v, -Math.cos(FPS.yaw) * v); applyCam(); return;
-  }
+  if (viewPreset === 'fps') return;   // 一人称：席に座ったまま（前後に動かない）
   zoomTo(ctrl.dist * (1 + Math.sign(e.deltaY) * 0.10));
 }, { passive: false });
 canvas.addEventListener('touchmove', e => {
