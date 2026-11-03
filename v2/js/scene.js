@@ -238,7 +238,47 @@ const matSkin = litMat(0xB8CBD8, 0.30, 0.07, 1.9), matSkinX = xrayMat(0.042, fal
 matSkin.side = THREE.FrontSide;
 /* 体（体表・骨・鼻）は bodyFit に入れ、胃の型ごとに噴門が重なるよう動かす（sim.js の fitBodyToStomach） */
 const bodyFit = new THREE.Group(); bodyGroup.add(bodyFit);
-const meshSkin = new THREE.Mesh(bp3dGeom(BP3D.skin), matSkin); meshSkin.renderOrder = 6;
+/* 体表の性器は教材に要らないので、周りの肌になじませて消す。
+   股の前の範囲（R）で、周りの前面の肌に合わせた二次式の面より手前にある点を、隣の点の平均へ何度も寄せる（ラプラシアン平滑化）。
+   R の外の点は動かさないので、性器は付け根の周りの肌をつなぐ滑らかな面になる。範囲は今の anatomy-data.js の体に合わせてある。 */
+function smoothGroin(g) {
+  const a = g.attributes.position.array, n = a.length / 3;
+  const inR = (x, y) => x > -8 && x < 2 && y > -36.5 && y < -23.5;
+  const M = Array.from({ length: 6 }, () => new Array(7).fill(0));
+  for (let i = 0; i < n; i++) {
+    const x = a[3 * i], y = a[3 * i + 1], z = a[3 * i + 2];
+    if (x > -13 && x < 7 && y > -41 && y < -19 && z > -1 && !inR(x, y)) {
+      const r = [1, x, y, x * x, x * y, y * y];
+      for (let p = 0; p < 6; p++) { for (let q = 0; q < 6; q++) M[p][q] += r[p] * r[q]; M[p][6] += r[p] * z; }
+    }
+  }
+  for (let p = 0; p < 6; p++) {
+    let m = p; for (let r = p + 1; r < 6; r++) if (Math.abs(M[r][p]) > Math.abs(M[m][p])) m = r;
+    [M[p], M[m]] = [M[m], M[p]];
+    for (let r = 0; r < 6; r++) if (r !== p) { const f = M[r][p] / M[p][p]; for (let c = p; c < 7; c++) M[r][c] -= f * M[p][c]; }
+  }
+  const c = M.map((r, p) => r[6] / r[p]);
+  const zf = (x, y) => c[0] + c[1] * x + c[2] * y + c[3] * x * x + c[4] * x * y + c[5] * y * y;
+  const free = [];
+  for (let i = 0; i < n; i++) if (inR(a[3 * i], a[3 * i + 1]) && a[3 * i + 2] > zf(a[3 * i], a[3 * i + 1]) - 4) free.push(i);
+  const ix = g.index.array, nb = new Map(free.map(i => [i, new Set()]));
+  for (let t = 0; t < ix.length; t += 3) for (let k = 0; k < 3; k++) {
+    const u = ix[t + k], v = ix[t + (k + 1) % 3];
+    if (nb.has(u)) nb.get(u).add(v); if (nb.has(v)) nb.get(v).add(u);
+  }
+  const N = free.map(i => [...nb.get(i)]), tmp = new Float32Array(a.length);
+  for (let it = 0; it < 400; it++) {
+    tmp.set(a);
+    free.forEach((i, k) => {
+      let sx = 0, sy = 0, sz = 0;
+      for (const j of N[k]) { sx += tmp[3 * j]; sy += tmp[3 * j + 1]; sz += tmp[3 * j + 2]; }
+      const m = N[k].length; a[3 * i] = sx / m; a[3 * i + 1] = sy / m; a[3 * i + 2] = sz / m;
+    });
+  }
+  g.computeVertexNormals();
+  return g;
+}
+const meshSkin = new THREE.Mesh(smoothGroin(bp3dGeom(BP3D.skin)), matSkin); meshSkin.renderOrder = 6;
 bodyFit.add(meshSkin);
 
 /* ---- 骨格（胸郭・胸骨と脊椎だけ。目印として要るものに絞る）---- */
