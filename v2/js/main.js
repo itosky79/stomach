@@ -42,6 +42,7 @@ function loop(now) {
   tiltCur += (tiltT - tiltCur) * k;
   rollCur += (rollT - rollCur) * k;
   if (autoSpin) ctrl.az += dt * 0.28;
+  fpsStep(dt);
   applyPose(); applyCam();
 
   tiltGroup.updateMatrixWorld(true);

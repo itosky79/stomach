@@ -447,3 +447,21 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 .ms-result.ok{border-color:var(--teal)}
 .ms-result.ng{border-color:#a55}
 .ms-head{font-weight:700; margin:0 0 4px}
+
+/* 一人称視点の操作（画面の左下） */
+#fpsPad{position:absolute; left:12px; bottom:96px; z-index:5; display:flex; flex-direction:column; gap:6px; align-items:flex-start; pointer-events:none}
+#fpsPad[hidden]{display:none}
+#fpsPad .fpsTip{transition:opacity .6s; margin:0; padding:4px 8px; font-size:11px; color:var(--dim); background:rgba(5,10,14,.72); border-radius:4px; max-width:440px}
+#fpsPad .fpsKeys{display:grid; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(2,40px); gap:4px; pointer-events:auto}
+#fpsPad .fpsKeys button[data-mv="f"]{grid-column:2; grid-row:1}
+#fpsPad .fpsKeys button[data-mv="l"]{grid-column:1; grid-row:2}
+#fpsPad .fpsKeys button[data-mv="b"]{grid-column:2; grid-row:2}
+#fpsPad .fpsKeys button[data-mv="r"]{grid-column:3; grid-row:2}
+#fpsPad button{background:rgba(19,36,47,.85); color:#EAF6FA; border:1px solid #2A4656; border-radius:6px; font-size:14px; touch-action:none; pointer-events:auto; user-select:none; -webkit-user-select:none}
+#fpsPad #bSeat{padding:6px 10px; font-size:12px}
+#fpsPad .fpsTip.off{opacity:0}
+@media (max-width:900px){
+  #fpsPad{bottom:74px; left:8px}
+  #fpsPad .fpsKeys{grid-template-columns:repeat(3,34px); grid-template-rows:repeat(2,34px)}
+  #fpsPad .fpsTip{font-size:10px}
+}

@@ -354,6 +354,7 @@ const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・
 const cradle = new THREE.Group(); scene.add(cradle);                // 回転軸のまわりの受け枠（傾くが、滑らない）
 const partition = new THREE.Group(); roomProps.add(partition);      // 仕切り壁・窓・操作室の机（画面でカメラが操作室側に出たら隠す）
 const ROOM_Z0 = 250;                                                 // 仕切り壁の位置（z）
+const DOOR = [150, 240], DOOR_H = 210;                               // 仕切り壁の扉の開口（x の範囲、高さ）
 
 /* 透視台（tiltGroup の座標。原点 = 胃、x = 足側、y = X 線管の側（天板の法線）、z = 左右）。
    台は回転軸を中心に起倒する。立位や逆傾斜で天板の端が床に当たらないよう、
@@ -430,7 +431,10 @@ function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxG
   // 仕切り壁と鉛ガラスの窓（幅 1.2 m × 高さ 0.9 m、床から 0.9 m）
   const WX = 60, WY0 = 90, WY1 = 180, T = 15;
   box(partition, X - WX, H, T, matWall, -(X + WX) / 2, H / 2, Z0);
-  box(partition, X - WX, H, T, matWall, (X + WX) / 2, H / 2, Z0);
+  // 右の壁には操作室から透視室へ入る扉の開口（幅 90 cm × 高さ 210 cm、x = DOOR[0]〜DOOR[1]）を空ける（一人称視点で歩いて通る）
+  box(partition, DOOR[0] - WX, H, T, matWall, (DOOR[0] + WX) / 2, H / 2, Z0);
+  box(partition, X - DOOR[1], H, T, matWall, (X + DOOR[1]) / 2, H / 2, Z0);
+  box(partition, DOOR[1] - DOOR[0], H - DOOR_H, T, matWall, (DOOR[0] + DOOR[1]) / 2, (H + DOOR_H) / 2, Z0);
   box(partition, 2 * WX, WY0, T, matWall, 0, WY0 / 2, Z0);
   box(partition, 2 * WX, H - WY1, T, matWall, 0, (H + WY1) / 2, Z0);
   const glass = new THREE.Mesh(new THREE.PlaneGeometry(2 * WX, WY1 - WY0), matGlass);
