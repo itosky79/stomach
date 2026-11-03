@@ -208,28 +208,42 @@ function flowStep(dt) {
     }
   }
 }
-/* 噴門から胃へ入るバリウム（飲んでいる間だけ）：噴門から胃の壁に沿って低いほうへ流れ、液面に着いたところで溜まる。
-   管の断面を噴門から両方向へ、断面の底（hmin）が下がり続けるかぎりたどる。途中で液面（すでに溜まったバリウム）に着いたらそこで止める。
-   両方向のうち、低いところまで行けたほうに入れる。たどった断面は、底の側の壁にバリウムが付く（流れた跡）。
+/* 噴門から胃へ入るバリウム（飲んでいる間だけ）：食道の出口から、胃の壁（管の網目の点）をいちばん急な下り坂に沿ってたどり、
+   液面（すでに溜まったバリウム）か、それ以上下れない点に着いたら止まる。着いた断面にバリウムを入れる（pourInto）。
+   たどった道は、流れている間は壁に沿った白い帯として描き（updatePour）、そのあとは付着した跡として残る（drawPourTrail）。
+   胃を輪切りの管で表しているので、噴門の輪は胃の幅いっぱいに広がり、輪の底がすでに液だまりの中にあることが多い。
+   断面の単位でたどると噴門＝液だまりになり、道すじが見えず、液だまりが何もないところから湧いて見えていた。
    食道が空になれば（飲み終われば）何もしない。そのあとは噴門は閉じていて（逆流しない）、いつもの流れ（flowStep）だけになる */
-const pour = { n: 0, path: [] };
+const pour = { n: 0, trail: [] };
 let pourFlow = 0;   // 噴門から入っている量（模型の mL/秒）
+const isStomach = n => n >= 0 && n < NMAIN && regionList[regionOf[n]][0] !== 'duode';
 function pourTarget() {
-  let best = cardiaIdx, bestH = hmin[cardiaIdx], bestPath = [cardiaIdx];
-  if (lvl[cardiaIdx] < hmin[cardiaIdx]) {   // 噴門がすでに液面の下なら、そこに入れる
-    for (const dir of [-1, 1]) {
-      let n = cardiaIdx; const path = [n];
-      for (;;) {
-        const m = n + dir;
-        if (m < 0 || m >= NMAIN || regionList[regionOf[m]][0] === 'duode') break;
-        if (hmin[m] > hmin[n] + 1e-4) break;   // 上りになったら止まる
-        n = m; path.push(n);
-        if (lvl[n] >= hmin[n]) break;   // 液面に着いた
-      }
-      if (hmin[n] < bestH) { best = n; bestH = hmin[n]; bestPath = path; }
+  // 出発点：食道の下端の中心にいちばん近い、胃の壁の点
+  let x = 0, y = 0, z = 0; const eb = (NN - 1) * CM;
+  for (let j = 0; j < CM; j++) { const k = (eb + j) * 3; x += pos[k]; y += pos[k + 1]; z += pos[k + 2]; }
+  x /= CM; y /= CM; z /= CM;
+  let v = -1, bd = 1e9;
+  for (let n = 0; n < NMAIN; n++) {
+    if (!isStomach(n)) continue;
+    for (let j = 0; j < CM; j++) {
+      const k = (n * CM + j) * 3, d = (pos[k] - x) ** 2 + (pos[k + 1] - y) ** 2 + (pos[k + 2] - z) ** 2;
+      if (d < bd) { bd = d; v = n * CM + j; }
     }
   }
-  pour.n = best; pour.path = bestPath;
+  const trail = [v];
+  for (let s = 0; s < 600; s++) {
+    const n = Math.floor(v / CM), j = v % CM;
+    if (hArr[v] <= lvl[n]) break;   // 液面に着いた
+    let best = -1, bh = hArr[v];
+    for (const [m, jj] of [[n, (j + 1) % CM], [n, (j + CM - 1) % CM], [n - 1, j], [n + 1, j], [n - 1, (j + 1) % CM], [n - 1, (j + CM - 1) % CM], [n + 1, (j + 1) % CM], [n + 1, (j + CM - 1) % CM]]) {
+      if (!isStomach(m)) continue;
+      const w = m * CM + jj;
+      if (hArr[w] < bh) { bh = hArr[w]; best = w; }
+    }
+    if (best < 0) break;   // これ以上下れない（ここから溜まり始める）
+    v = best; trail.push(v);
+  }
+  pour.trail = trail; pour.n = Math.floor(v / CM);
 }
 /* 着いた先が液だまりなら、つながっている液だまり（液面のある断面の続き）全体に、液面が同じだけ上がるよう分けて入れる。
    1 つの断面だけに入れると、そこだけ液面が盛り上がり、湧き上がるように見えるため。
@@ -249,12 +263,41 @@ function pourInto(amt, dt) {
   set.forEach((n, k) => { const d = Math.min(amt * w[k] / wsum, cap[n] - wVol[n]); if (d > 0) { wVol[n] += d; done += d; } });
   wVol[NN - 1] -= done; pourFlow = done / dt;
 }
-function wetPourPath() {   // 流れた跡：たどった断面の、底から 1/4 の高さまでの壁にバリウムを付ける
+/* 流れた跡にはバリウムが付く（付着）。流れている間の見た目は updatePour の帯で描く */
+function drawPourTrail() {
   if (!(pourFlow > 0.05)) return;
-  for (const n of pour.path) {
-    const b = n * CM, lim = hmin[n] + 0.25 * (hmax[n] - hmin[n]);
-    for (let j = 0; j < CM; j++) if (hArr[b + j] <= lim) aWet[b + j] = 1;
+  for (const v of pour.trail) aWet[v] = 1;
+}
+/* 流れている間：たどった道をならし（前後 4 点の平均）、胃の壁の少し内側に、壁に沿った細い帯として描く。
+   網目の点を塗ると、網目が粗いので階段やギザギザに見えたため */
+const _pp = [], _pa = new THREE.Vector3(), _pb = new THREE.Vector3(), _pt = new THREE.Vector3(), _pn = new THREE.Vector3(), _px = new THREE.Vector3();
+function updatePour() {
+  const tr = pour.trail, on = pourFlow > 0.05 && tr.length >= 3;
+  pourMesh.visible = on;
+  if (!on) return;
+  const N = Math.min(tr.length, POUR_MAX), P = pourGeom.attributes.position.array;
+  while (_pp.length < N) _pp.push(new THREE.Vector3());
+  for (let i = 0; i < N; i++) {   // ならした道。壁から胃の中心のほうへ少し離す
+    _pa.set(0, 0, 0); let c = 0;
+    for (let k = Math.max(0, i - 4); k <= Math.min(N - 1, i + 4); k++) { const q = tr[k] * 3; _pa.x += pos[q]; _pa.y += pos[q + 1]; _pa.z += pos[q + 2]; c++; }
+    _pa.multiplyScalar(1 / c);
+    const n = Math.floor(tr[i] / CM) * 3;
+    _pn.set(centers[n] - _pa.x, centers[n + 1] - _pa.y, centers[n + 2] - _pa.z).normalize();
+    _pp[i].copy(_pa).addScaledVector(_pn, 0.06);
   }
+  const w = Math.min(0.45, 0.15 + 0.04 * pourFlow) / 2;
+  for (let i = 0; i < N; i++) {
+    _pa.copy(_pp[Math.max(0, i - 1)]); _pb.copy(_pp[Math.min(N - 1, i + 1)]);
+    _pt.subVectors(_pb, _pa).normalize();
+    const n = Math.floor(tr[i] / CM) * 3;
+    _pn.set(centers[n] - _pp[i].x, centers[n + 1] - _pp[i].y, centers[n + 2] - _pp[i].z).normalize();   // 壁から内向き
+    _px.crossVectors(_pt, _pn).normalize().multiplyScalar(w * (i === N - 1 ? 1.6 : 1));
+    P[i * 6] = _pp[i].x + _px.x; P[i * 6 + 1] = _pp[i].y + _px.y; P[i * 6 + 2] = _pp[i].z + _px.z;
+    P[i * 6 + 3] = _pp[i].x - _px.x; P[i * 6 + 4] = _pp[i].y - _px.y; P[i * 6 + 5] = _pp[i].z - _px.z;
+  }
+  pourGeom.setDrawRange(0, (N - 1) * 6);
+  pourGeom.attributes.position.needsUpdate = true;
+  pourGeom.computeBoundingSphere();
 }
 const ESO_PUSH = 12;     // 食道の各断面の中身を毎秒この割合で胃側へ送る。26 断面を約 2 秒で通る。仮の値（実測と照合していない）
 const DRINK = 12 / Math.pow(BODY_SCALE, 3);   // 飲む速さ（実寸 12 mL/秒、150 mL を約 12 秒で飲む）。仮の値（実測と照合していない）

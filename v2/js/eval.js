@@ -75,8 +75,8 @@ function evalStep(dt) {   // main.js の loop と同じ順（カメラ・ラベ�
   dose(dt);
   flowStep(dt);
   for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
-  wetPourPath();
   updateWet(dt);
+  drawPourTrail();
   shapeStep(dt);
 }
 function evalPrepare(tilt, roll) {

@@ -220,6 +220,24 @@ const matSurfX = new THREE.ShaderMaterial({
 const meshSurf = new THREE.Mesh(surfGeom, matSurf); meshSurf.renderOrder = 2;
 bodyGroup.add(meshSurf);
 
+/* ---- 飲んでいる間、噴門から胃の壁を伝って流れるバリウム（壁に沿った細い帯。sim.js の updatePour が形を決める）---- */
+const POUR_MAX = 600;
+const pourGeom = new THREE.BufferGeometry();
+pourGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(POUR_MAX * 6), 3));
+{ const ix = new Uint16Array((POUR_MAX - 1) * 6);
+  for (let i = 0; i < POUR_MAX - 1; i++) { const a = i * 2; ix.set([a, a + 1, a + 2, a + 1, a + 3, a + 2], i * 6); }
+  pourGeom.setIndex(new THREE.BufferAttribute(ix, 1)); }
+pourGeom.setDrawRange(0, 0);
+const matPour = new THREE.MeshBasicMaterial({ color: 0xF4F7FB, transparent: true, opacity: 0.97, depthWrite: false, side: THREE.DoubleSide });
+const matPourX = new THREE.ShaderMaterial({
+  uniforms: {}, vertexShader: `void main(){ gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.0);}`,
+  fragmentShader: `void main(){ gl_FragColor = vec4(vec3(0.93,0.955,1.0)*0.30, 1.0); }`,
+  transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+});
+const pourMesh = new THREE.Mesh(pourGeom, matPour);
+pourMesh.renderOrder = 2; pourMesh.visible = false; pourMesh.frustumCulled = false;
+bodyGroup.add(pourMesh);
+
 
 /* ---- 患者の体表と骨（BodyParts3D。js/anatomy-data.js、tools/build_anatomy.py で作る）----
    BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International
