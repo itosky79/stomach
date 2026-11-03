@@ -55,11 +55,11 @@ function loop(now) {
     dose(h);
     flowStep(h);
     for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
+    wetPourPath();
     updateWet(h);
     shapeStep(h);
   }
   buildSurface();
-  updatePour();
   updateLabels();
   if (viewMode !== 0) fluoroTime += dt;
 

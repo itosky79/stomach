@@ -220,16 +220,6 @@ const matSurfX = new THREE.ShaderMaterial({
 const meshSurf = new THREE.Mesh(surfGeom, matSurf); meshSurf.renderOrder = 2;
 bodyGroup.add(meshSurf);
 
-/* ---- 噴門から注ぐバリウムの流れ（sim.js の updatePour が位置と太さを決める）---- */
-const matPour = new THREE.MeshBasicMaterial({ color: 0xEEF2F8, transparent: true, opacity: 0.95, depthWrite: false });
-const matPourX = new THREE.ShaderMaterial({
-  uniforms: {}, vertexShader: `void main(){ gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(position,1.0);}`,
-  fragmentShader: `void main(){ gl_FragColor = vec4(vec3(0.93,0.955,1.0)*0.30, 1.0); }`,
-  transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.FrontSide
-});
-const pourMesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 10, 1, true), matPour);
-pourMesh.renderOrder = 2; pourMesh.visible = false;
-bodyGroup.add(pourMesh);
 
 /* ---- 患者の体表と骨（BodyParts3D。js/anatomy-data.js、tools/build_anatomy.py で作る）----
    BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International

@@ -212,7 +212,7 @@ function rebuild() {
     edges.push({ i: i, j: i + 1, k: k, k2: k2 });
   }
   for (let i = NMAIN; i < NN - 1; i++) edges.push({ i: i, j: i + 1, k: 1, k2: 0 });   // 食道の中も口の側へは戻さない（蠕動で胃へ送る。sim.js の dose）
-  // 食道の下端から胃へは、流路でつながず、噴門から落ちたバリウムが当たる断面へ入れる（sim.js の pourTarget と dose）。
+  // 食道の下端から胃へは、流路でつながず、噴門から胃の壁に沿って低いほうへ流れた先の断面へ入れる（sim.js の pourTarget と dose）。
   // 下部食道括約筋があるので、胃から食道へは戻らない（以前は 0.17 で戻していて、水平にすると逆流していた）
 
   totalCap = 0;

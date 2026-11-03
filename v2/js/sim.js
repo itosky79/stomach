@@ -208,58 +208,53 @@ function flowStep(dt) {
     }
   }
 }
-/* 噴門から胃へ注ぐ：食道の下端の中心から重力の向き（下）にまっすぐ落とし、最初に当たった液面か胃の壁の断面を返す。
-   落ちた先の断面にバリウムを入れる（噴門の断面に入れると、そこから液面が湧き上がるように見えていた）。
-   断面の中にいるかは、断面の中心からの距離が平均の半径の 0.9 倍より小さいかで見る（近似） */
-const pour = { n: 0, p0: new THREE.Vector3(), p1: new THREE.Vector3() };
-let pourFlow = 0;   // 噴門から注いでいる量（模型の mL/秒）。0 なら流れを描かない
-const _pc = new Float32Array(NMAIN * 3), _pr = new Float32Array(NMAIN);
+/* 噴門から胃へ入るバリウム（飲んでいる間だけ）：噴門から胃の壁に沿って低いほうへ流れ、液面に着いたところで溜まる。
+   管の断面を噴門から両方向へ、断面の底（hmin）が下がり続けるかぎりたどる。途中で液面（すでに溜まったバリウム）に着いたらそこで止める。
+   両方向のうち、低いところまで行けたほうに入れる。たどった断面は、底の側の壁にバリウムが付く（流れた跡）。
+   食道が空になれば（飲み終われば）何もしない。そのあとは噴門は閉じていて（逆流しない）、いつもの流れ（flowStep）だけになる */
+const pour = { n: 0, path: [] };
+let pourFlow = 0;   // 噴門から入っている量（模型の mL/秒）
 function pourTarget() {
-  for (let n = 0; n < NMAIN; n++) {
-    let x = 0, y = 0, z = 0; const b = n * CM;
-    for (let j = 0; j < CM; j++) { const k = (b + j) * 3; x += pos[k]; y += pos[k + 1]; z += pos[k + 2]; }
-    x /= CM; y /= CM; z /= CM; _pc[n * 3] = x; _pc[n * 3 + 1] = y; _pc[n * 3 + 2] = z;
-    let r = 0; for (let j = 0; j < CM; j++) { const k = (b + j) * 3; r += Math.hypot(pos[k] - x, pos[k + 1] - y, pos[k + 2] - z); }
-    _pr[n] = r / CM;
-  }
-  let x = 0, y = 0, z = 0; const b = (NN - 1) * CM;
-  for (let j = 0; j < CM; j++) { const k = (b + j) * 3; x += pos[k]; y += pos[k + 1]; z += pos[k + 2]; }
-  pour.p0.set(x / CM, y / CM, z / CM);   // 流れの描き始め：食道の下端
-  // 落ち始め：噴門の断面の中心（食道の下端は胃の管の横にあり、そこからまっすぐ下ろすと胃の外へ出る体位があるため）
-  x = _pc[cardiaIdx * 3]; y = _pc[cardiaIdx * 3 + 1]; z = _pc[cardiaIdx * 3 + 2];
-  const u = uUp.value, step = 0.1;
-  pour.n = cardiaIdx; pour.p1.set(x, y, z);
-  let inside = false;
-  for (let t = 0; t < 60; t += step) {
-    const px = x - u.x * t, py = y - u.y * t, pz = z - u.z * t;
-    let best = -1, bd = 1e9;
-    for (let n = 0; n < NMAIN; n++) {
-      const dx = px - _pc[n * 3], dy = py - _pc[n * 3 + 1], dz = pz - _pc[n * 3 + 2], d = dx * dx + dy * dy + dz * dz;
-      if (d < bd) { bd = d; best = n; }
+  let best = cardiaIdx, bestH = hmin[cardiaIdx], bestPath = [cardiaIdx];
+  if (lvl[cardiaIdx] < hmin[cardiaIdx]) {   // 噴門がすでに液面の下なら、そこに入れる
+    for (const dir of [-1, 1]) {
+      let n = cardiaIdx; const path = [n];
+      for (;;) {
+        const m = n + dir;
+        if (m < 0 || m >= NMAIN || regionList[regionOf[m]][0] === 'duode') break;
+        if (hmin[m] > hmin[n] + 1e-4) break;   // 上りになったら止まる
+        n = m; path.push(n);
+        if (lvl[n] >= hmin[n]) break;   // 液面に着いた
+      }
+      if (hmin[n] < bestH) { best = n; bestH = hmin[n]; bestPath = path; }
     }
-    const h = px * u.x + py * u.y + pz * u.z;
-    const inNow = Math.sqrt(bd) < _pr[best] * 0.9;
-    if (!inside) {   // 噴門は胃の管の横につくので、落ち始めは管の外のことがある。管に入るまで進む
-      if (inNow) inside = true;
-      else if (t > 3) { pour.n = cardiaIdx; pour.p1.set(x, y, z); return; }   // 念のため：胃に入らないときは噴門の断面に入れる
-      continue;
-    }
-    if (!inNow) return;   // 胃の壁に当たった（直前の点と断面のまま）
-    pour.n = best; pour.p1.set(px, py, pz);
-    if (h <= lvl[best]) return;   // 液面に当たった
   }
+  pour.n = best; pour.path = bestPath;
 }
-/* 注いでいる流れを描く（細い円柱。透視像でもバリウムとして写る） */
-const _pd = new THREE.Vector3(), _py = new THREE.Vector3(0, 1, 0);
-function updatePour() {
-  const on = pourFlow > 0.05 && pour.p0.distanceTo(pour.p1) > 0.2;
-  pourMesh.visible = on;
-  if (!on) return;
-  _pd.subVectors(pour.p1, pour.p0);
-  const L = _pd.length(), r = Math.min(0.35, 0.12 + 0.05 * pourFlow);
-  pourMesh.position.copy(pour.p0).addScaledVector(_pd, 0.5);
-  pourMesh.quaternion.setFromUnitVectors(_py, _pd.normalize());
-  pourMesh.scale.set(r, L, r);
+/* 着いた先が液だまりなら、つながっている液だまり（液面のある断面の続き）全体に、液面が同じだけ上がるよう分けて入れる。
+   1 つの断面だけに入れると、そこだけ液面が盛り上がり、湧き上がるように見えるため。
+   分け方は、断面の液面 1 単位あたりの容積（容量 ÷ 高さの幅）に比例させる（近似） */
+function pourInto(amt, dt) {
+  if (!(amt > 0)) return;
+  const t = pour.n, set = [];
+  if (lvl[t] >= hmin[t]) {
+    for (const dir of [-1, 1]) for (let n = dir < 0 ? t : t + 1; n >= 0 && n < NMAIN; n += dir) {
+      if (regionList[regionOf[n]][0] === 'duode' || lvl[n] < hmin[n]) break;
+      set.push(n);
+    }
+  } else set.push(t);
+  let wsum = 0; const w = set.map(n => { const v = wVol[n] < cap[n] ? cap[n] / Math.max(1e-3, hmax[n] - hmin[n]) : 0; wsum += v; return v; });
+  if (!(wsum > 0)) return;
+  let done = 0;
+  set.forEach((n, k) => { const d = Math.min(amt * w[k] / wsum, cap[n] - wVol[n]); if (d > 0) { wVol[n] += d; done += d; } });
+  wVol[NN - 1] -= done; pourFlow = done / dt;
+}
+function wetPourPath() {   // 流れた跡：たどった断面の、底から 1/4 の高さまでの壁にバリウムを付ける
+  if (!(pourFlow > 0.05)) return;
+  for (const n of pour.path) {
+    const b = n * CM, lim = hmin[n] + 0.25 * (hmax[n] - hmin[n]);
+    for (let j = 0; j < CM; j++) if (hArr[b + j] <= lim) aWet[b + j] = 1;
+  }
 }
 const ESO_PUSH = 12;     // 食道の各断面の中身を毎秒この割合で胃側へ送る。26 断面を約 2 秒で通る。仮の値（実測と照合していない）
 const DRINK = 12 / Math.pow(BODY_SCALE, 3);   // 飲む速さ（実寸 12 mL/秒、150 mL を約 12 秒で飲む）。仮の値（実測と照合していない）
@@ -282,12 +277,10 @@ function dose(dt) {
   // 食道の蠕動：食道に残ったバリウムは、体の向きによらず胃へ送る（毎秒およそ ESO_PUSH の割合）。
   // 下部食道括約筋（model.js の流路）で胃から食道へは戻らないので、水平や頭低位でも食道にバリウムは残らない
   pourFlow = 0;
-  for (let n = NN - 1; n >= NMAIN; n--) {
-    const last = n === NN - 1;
-    if (last && wVol[n] > 1e-6) pourTarget();
-    const to = last ? pour.n : n + 1;
-    const d = Math.min(wVol[n] * ESO_PUSH * dt, Math.max(0, cap[to] - wVol[to]));
-    if (d > 0) { wVol[n] -= d; wVol[to] += d; if (last) pourFlow = d / dt; }
+  if (wVol[NN - 1] > 1e-6) { pourTarget(); pourInto(Math.min(wVol[NN - 1] * ESO_PUSH * dt, wVol[NN - 1]), dt); }
+  for (let n = NN - 2; n >= NMAIN; n--) {
+    const d = Math.min(wVol[n] * ESO_PUSH * dt, Math.max(0, cap[n + 1] - wVol[n + 1]));
+    if (d > 0) { wVol[n] -= d; wVol[n + 1] += d; }
   }
   if (pylorusOpen) {
     const n = NMAIN - 1, d = Math.min(wVol[n], wVol[n] * 1.3 * dt);
