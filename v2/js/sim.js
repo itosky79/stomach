@@ -208,14 +208,15 @@ function flowStep(dt) {
     }
   }
 }
-const ESO_PUSH = 1.5;   // 仮の値（実測と照合していない）。数秒で食道が空になる
+const ESO_PUSH = 12;     // 食道の各断面の中身を毎秒この割合で胃側へ送る。26 断面を約 2 秒で通る。仮の値（実測と照合していない）
+const DRINK = 12 / Math.pow(BODY_SCALE, 3);   // 飲む速さ（実寸 12 mL/秒、150 mL を約 12 秒で飲む）。仮の値（実測と照合していない）
 function dose(dt) {
   const diff = targetMl - administered;
   if (diff > 0.2) {
     let free = 0;
     for (let n = NMAIN; n < NMAIN + 6; n++) free += Math.max(0, cap[n] - wVol[n]);
     if (free > 1e-4) {
-      const amt = Math.min(diff, 280 * dt, free);
+      const amt = Math.min(diff, DRINK * dt, free);
       for (let n = NMAIN; n < NMAIN + 6; n++) wVol[n] += amt * Math.max(0, cap[n] - wVol[n]) / free;
       administered += amt;
     }

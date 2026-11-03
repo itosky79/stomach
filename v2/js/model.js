@@ -211,7 +211,7 @@ function rebuild() {
     if (regionList[regionOf[i]][0] === 'pylorus' || regionList[regionOf[i + 1]][0] === 'pylorus') { k = k2 = pylorusOpen ? 0.85 : 0.10; }
     edges.push({ i: i, j: i + 1, k: k, k2: k2 });
   }
-  for (let i = NMAIN; i < NN - 1; i++) edges.push({ i: i, j: i + 1, k: 1, k2: 1 });
+  for (let i = NMAIN; i < NN - 1; i++) edges.push({ i: i, j: i + 1, k: 1, k2: 0 });   // 食道の中も口の側へは戻さない（蠕動で胃へ送る。sim.js の dose）
   edges.push({ i: NN - 1, j: cardiaIdx, k: 0.9, k2: 0 });   // 下部食道括約筋：胃から食道へは戻さない（以前は 0.17 で、水平にすると逆流していた）
 
   totalCap = 0;
