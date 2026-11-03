@@ -208,6 +208,7 @@ function flowStep(dt) {
     }
   }
 }
+const ESO_PUSH = 1.5;   // 仮の値（実測と照合していない）。数秒で食道が空になる
 function dose(dt) {
   const diff = targetMl - administered;
   if (diff > 0.2) {
@@ -223,6 +224,13 @@ function dose(dt) {
     const rem = Math.min(-diff, 460 * dt, tot);
     if (tot > 1e-6) { const s = (tot - rem) / tot; for (let n = 0; n < NN; n++) wVol[n] *= s; }
     administered -= rem;
+  }
+  // 食道の蠕動：食道に残ったバリウムは、体の向きによらず胃へ送る（毎秒およそ ESO_PUSH の割合）。
+  // 下部食道括約筋（model.js の流路）で胃から食道へは戻らないので、水平や頭低位でも食道にバリウムは残らない
+  for (let n = NN - 1; n >= NMAIN; n--) {
+    const to = n === NN - 1 ? cardiaIdx : n + 1;
+    const d = Math.min(wVol[n] * ESO_PUSH * dt, Math.max(0, cap[to] - wVol[to]));
+    if (d > 0) { wVol[n] -= d; wVol[to] += d; }
   }
   if (pylorusOpen) {
     const n = NMAIN - 1, d = Math.min(wVol[n], wVol[n] * 1.3 * dt);
