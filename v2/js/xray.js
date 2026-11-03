@@ -50,9 +50,9 @@ function setXray(on) {
   meshSkin.visible = on || skinOpacity > 0.005;
   figureGroup.visible = !on && skinOpacity > 0.005;
   // 引いているときだけ装置を出す。寄ったときは解剖の邪魔をしない
-  const showRoom = !on && viewMode !== 2 && viewPreset !== 'tube' && (viewPreset === 'operator' || viewPreset === 'fps' || ctrl.dist >= ctrl.base * 1.9);
+  const showRoom = !on && viewMode !== 2 && viewPreset !== 'tube' && (viewPreset === 'fps' || ctrl.dist >= ctrl.base * 1.9);
   roomProps.visible = showRoom; tableProps.visible = showRoom; cradle.visible = showRoom;
-  partition.visible = viewPreset === 'operator' || viewPreset === 'fps' || camera.position.z < ROOM_Z0 - 10;
+  partition.visible = viewPreset === 'fps' || camera.position.z < ROOM_Z0 - 10;
   boneGroup.visible = on || showBone;
   boneGroup.traverse(o => { if (o.isMesh) o.material = on ? matBoneX : matBone; });
   guides.visible = !on && viewMode !== 2;

@@ -21,15 +21,14 @@ function applyCam() {
   // 台は回転軸を中心に起倒し、胃は部屋の中を動く。画面では注視点を胃に合わせて追いかけ、
   // 「体位を変えても胃は画面の同じところにある」を保つ
   _look.copy(ctrl.target).add(tiltGroup.position);
-  const fov = viewPreset === 'operator' ? 50 : 32;          // 術者視点は窓越しに広く見る
+  const fov = 32;
   if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
-  if (viewPreset === 'operator') { camera.position.copy(OPERATOR_EYE); camera.up.set(0, 1, 0); }
-  else camera.position.copy(_look).addScaledVector(_dir, ctrl.dist);
+  camera.position.copy(_look).addScaledVector(_dir, ctrl.dist);
   camera.lookAt(_look);
   camera.updateMatrixWorld();
   const rt = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
   const uv = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-  const ad = viewPreset === 'operator' ? camera.position.distanceTo(_look) : ctrl.dist;
+  const ad = ctrl.dist;
   arrow.position.copy(_look).addScaledVector(rt, -ad * 0.40).addScaledVector(uv, ad * 0.10);
   arrow.setDirection(gWorld);
   arrow.visible = Math.abs(gWorld.dot(_dir)) < 0.93;
@@ -47,10 +46,9 @@ function setView(p) {
   if (seg) [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.p === p));
   applyCam();
 }
-/* 術者視点：操作室の机の前に座り、鉛ガラスの窓越しに胃のほうを見る。ドラッグすると普段の視点に戻る */
-const bOp = document.getElementById('bOp'), bFps = document.getElementById('bFps'), fpsPad = document.getElementById('fpsPad');
+/* 視点のボタン：一人称（術者の目。操作室の席に座ったところから始まる）。以前あった「術者」（席から見るだけの固定の視点）は、一人称と同じなので消した */
+const bFps = document.getElementById('bFps'), fpsPad = document.getElementById('fpsPad');
 function syncViewBtns() {
-  bOp.setAttribute('aria-pressed', viewPreset === 'operator');
   bFps.setAttribute('aria-pressed', viewPreset === 'fps');
   const was = !fpsPad.hidden;
   fpsPad.hidden = viewPreset !== 'fps';
@@ -65,11 +63,10 @@ function syncViewBtns() {
   }
 }
 const syncOpBtn = syncViewBtns;
-bOp.addEventListener('click', () => setView(viewPreset === 'operator' ? 'room' : 'operator'));
 bFps.addEventListener('click', () => { if (viewPreset === 'fps') setView('room'); else { fpsSeat(); setView('fps'); } });
 function fitCam() {
   ctrl.base = bsRadius * BODY_SCALE / Math.sin(camera.fov * Math.PI / 360) * 1.10;
-  setView(VIEWS[viewPreset] || viewPreset === 'operator' || viewPreset === 'fps' ? viewPreset : 'room');
+  setView(VIEWS[viewPreset] || viewPreset === 'fps' ? viewPreset : 'room');
 }
 
 /* ---- 一人称視点：術者の目で見回し、部屋の中を歩く ----
@@ -163,7 +160,7 @@ canvas.addEventListener('pointermove', e => {
     const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
     ctrl.target.addScaledVector(right, -dx * s).addScaledVector(up, dy * s);
   } else {
-    if (viewPreset === 'tube' || viewPreset === 'operator') { viewPreset = 'free'; syncOpBtn(); }
+    if (viewPreset === 'tube') { viewPreset = 'free'; syncOpBtn(); }
     ctrl.theta -= dx * 0.008;
     ctrl.phi = Math.max(0.14, Math.min(Math.PI - 0.14, ctrl.phi - dy * 0.008));
     const seg = document.getElementById('viewpt');
