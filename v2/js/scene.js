@@ -90,15 +90,16 @@ canvas.addEventListener('webglcontextlost', e => {
 });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // r128 と同じく、描いた色をそのまま出す
-{ // 端末の素性を控えておく（うまく描けないときの切り分け用）
+{ // 端末の素性を控えておく（うまく描けないときの切り分け用）。以前は画面の「表示と操作」の末尾に出していたが、
+  // 利用者には要らないので、ブラウザの開発者ツールのコンソールにだけ出す
   const gl = renderer.getContext();
   const dbg = gl.getExtension('WEBGL_debug_renderer_info');
   const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
-  document.getElementById('glInfo').textContent =
+  console.info('GPU:',
     (dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) +
     ' / ' + gl.getParameter(gl.VERSION) +
     ' / frag highp ' + (hp && hp.precision > 0 ? 'あり' : 'なし') +
-    ' / ' + renderer.capabilities.precision + ' / AA ' + (small ? 'off' : 'on');
+    ' / ' + renderer.capabilities.precision + ' / AA ' + (small ? 'off' : 'on'));
 }
 renderer.autoClear = false;
 const scene = new THREE.Scene();
