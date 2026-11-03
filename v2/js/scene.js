@@ -236,7 +236,7 @@ function bp3dGeom(d) {
 }
 const matSkin = litMat(0xB8CBD8, 0.30, 0.07, 1.9), matSkinX = xrayMat(0.042, false, 3.2, BP3D.meta.dia);
 matSkin.side = THREE.FrontSide;
-/* 体（体表・骨・鼻）は bodyFit に入れ、胃の型ごとに噴門が重なるよう動かす（sim.js の fitBodyToStomach） */
+/* 体（体表・骨）は bodyFit に入れ、胃の型ごとに噴門が重なるよう動かす（sim.js の fitBodyToStomach） */
 const bodyFit = new THREE.Group(); bodyGroup.add(bodyFit);
 /* 体表の性器は教材に要らないので、周りの肌になじませて消す。
    股の前の範囲（R）で、周りの前面の肌に合わせた二次式の面より手前にある点を、隣の点の平均へ何度も寄せる（ラプラシアン平滑化）。
@@ -288,16 +288,6 @@ const matBone = litMat(0xD6DEE6, 0.26, 0.07, 0.95), matBoneX = xrayMat(0.030, tr
 
 /* 体表が全身を覆うので、手足や頭を別に作る必要はなくなった（表示の切り替えのために箱だけ残す） */
 const figureGroup = new THREE.Group(); bodyFit.add(figureGroup);
-
-/* ---- 鼻（顔が向いているほうが腹側）---- */
-const matAnt = litMat(0xFFA94D, 0.95, 0.70, 0.55);
-matAnt.side = THREE.FrontSide; matAnt.depthWrite = true;
-const orientGroup = new THREE.Group(); bodyFit.add(orientGroup);
-{
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(1.8, 3.6, 14), matAnt);
-  nose.position.set(0, BP3D.meta.nose[1], BP3D.meta.nose[2]); nose.rotation.x = Math.PI / 2;
-  nose.renderOrder = 7; orientGroup.add(nose);
-}
 
 /* ---- 透視台と台座（模型）---- */
 function solidProp(color) {

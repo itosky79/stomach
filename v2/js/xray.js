@@ -47,7 +47,6 @@ function setXray(on) {
   meshSkin.material = on ? matSkinX : matSkin;
   meshSkin.visible = on || skinOpacity > 0.005;
   figureGroup.visible = !on && skinOpacity > 0.005;
-  orientGroup.visible = !on && showOri;
   // 引いているときだけ装置を出す。寄ったときは解剖の邪魔をしない
   const showRoom = !on && viewMode !== 2 && viewPreset !== 'tube' && (viewPreset === 'operator' || ctrl.dist >= ctrl.base * 1.9);
   roomProps.visible = showRoom; tableProps.visible = showRoom; cradle.visible = showRoom;

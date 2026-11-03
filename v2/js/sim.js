@@ -2,7 +2,6 @@
 /* ================= 状態 ================= */
 let curType = 'bp3d', curMode = 0, curPose = 'stand';   // 既定は解剖モデル（BodyParts3D の胃。教科書の記載に合わせてある）
 let pylorusOpen = false, labelMode = 1, showBone = true;
-let showOri = true;
 let autoSpin = false, viewMode = 1, skinOpacity = 0.30;
 let airLevel = 0.6, targetMl = 150 / Math.pow(BODY_SCALE, 3), administered = 0;   // バリウム 150 mL（実寸。学会マニュアル）。targetMl は模型の単位
 let gasMl = 250;   // 発泡剤のガス（実寸 mL）。添付文書の 100〜400 mL の真ん中。胃の大きさはバリウム＋ガスに合わせる（model.js の rebuild）

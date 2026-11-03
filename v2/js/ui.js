@@ -375,7 +375,6 @@ document.getElementById('bReadQ').addEventListener('click', () => {
 /* --- 共通 --- */
 const bind = (id, fn) => document.getElementById(id).addEventListener('change', e => fn(e.target.checked));
 bind('tBone', v => { showBone = v; });
-bind('tOri', v => { showOri = v; });
 bind('tPyl', v => { pylorusOpen = v; rebuildAll(); });
 { // 胃の中身：バリウム（120〜150 mL）と発泡剤のガス（100〜400 mL）。胃の大きさは合計に合わせる（model.js の rebuild）
   const S3 = Math.pow(BODY_SCALE, 3), rBa = document.getElementById('rBa'), rGas = document.getElementById('rGas');
