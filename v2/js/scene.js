@@ -358,7 +358,9 @@ const DOOR = [150, 240], DOOR_H = 210;                               // 仕切�
 
 /* 透視台（tiltGroup の座標。原点 = 胃、x = 足側、y = X 線管の側（天板の法線）、z = 左右）。
    台は回転軸を中心に起倒する。立位や逆傾斜で天板の端が床に当たらないよう、
-   実機と同じく天板が長手方向に滑る（回転軸に対する天板の位置 tablePx が変わる）。 */
+   台の中央を中心に回す（DIMENSIONS.md「起倒の回転中心：台の中央」）。中央から端まで 105 cm あり、回転軸が床から 67 cm のままでは
+   端が床に当たるので、回す角度ごとに、台と X 線管の全部の角が床から TB.clear 以上離れる高さまで、回転軸を持ち上げる（pivotNow）。
+   以前は回転軸の高さを変えずに天板を長さ方向に滑らせていて、立位と水平の間で天板が 40 cm ほど行き来して見えた。 */
 const TB = {
   top: 0,                 // 天板の上面（胃の中心から背中まで。体の位置から setTableToBody で決める）
   thick: 5, house: 17,    // 天板の厚さ、天板の下の受像器の箱の厚さ
@@ -371,7 +373,7 @@ const TB = {
   sid: 120,               // X 線管の焦点と受像器の距離
   clear: 3                // 起倒したとき、台の一番低い点を床から離しておく距離
 };
-let TB_BOTTOM = 0, TB_CORNERS = [], PX0 = 0;
+let TB_BOTTOM = 0, TB_CORNERS = [], PX0 = 0, SWEEP = [], pivotNow = 67;
 /* 体（bodyFit）の位置 off（bodyGroup の座標）から、天板の高さと足台の位置を決める。
    tiltGroup の座標では、体の腹側（bodyGroup の z）が +y、頭側（bodyGroup の y）が −x、単位は実寸 cm（× BODY_SCALE）。 */
 function setTableToBody(off) {
@@ -386,21 +388,22 @@ function setTableToBody(off) {
 }
 let tablePx = 0;
 const _tv = new THREE.Vector3();
-function placeTable() {
-  const t = tiltCur * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
-  let px = PX0;
-  for (let k = 0; k < 3 && Math.abs(sn) > 1e-3; k++) {
-    let low = Infinity;
-    for (const [x, y] of TB_CORNERS) low = Math.min(low, TB.pivotH - (x - px) * sn + (y - TB.pivotY) * cs);
-    if (low >= TB.clear - 1e-6) break;
-    px += (TB.clear - low) / sn;
-  }
-  tablePx = px;
-  // 胃（tiltGroup の原点）の床上の位置 = 回転軸 − 回転した（回転軸の天板上の位置）
-  tiltGroup.position.set(0, TB.pivotH, 0).sub(_tv.set(px, TB.pivotY, 0).applyQuaternion(tiltGroup.quaternion));
-  cradle.position.set(0, TB.pivotH, 0);
-  cradle.quaternion.copy(tiltGroup.quaternion);
+function pivotFor(tiltDeg) {   // その角度で、台と X 線管の全部の角（SWEEP）が床から TB.clear 以上離れる回転軸の高さ（最低 TB.pivotH）
+  const t = tiltDeg * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
+  let h = TB.pivotH;
+  for (const [x, y] of SWEEP) h = Math.max(h, TB.clear + (x - PX0) * sn - (y - TB.pivotY) * cs);
+  return h;
 }
+function placeTable() {
+  tablePx = PX0;
+  pivotNow = pivotFor(tiltCur);
+  // 胃（tiltGroup の原点）の床上の位置 = 回転軸 − 回転した（回転軸の天板上の位置）
+  tiltGroup.position.set(0, pivotNow, 0).sub(_tv.set(PX0, TB.pivotY, 0).applyQuaternion(tiltGroup.quaternion));
+  cradle.position.set(0, pivotNow, 0);
+  cradle.quaternion.copy(tiltGroup.quaternion);
+  for (const m of pedestalPosts) { m.scale.y = pivotNow / TB.pivotH; m.position.y = pivotNow / 2; }   // 柱は回転軸の高さまで伸びる
+}
+const pedestalPosts = [];
 const matWall = solidProp(0x202C37), matFloor = solidProp(0x18222B), matCeil = solidProp(0x141C24);
 const matDark = solidProp(0x0D1318), matScreen = solidProp(0x0A2230);
 const matGlass = new THREE.MeshBasicMaterial({ color: 0x6FA4B8, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide });
@@ -413,7 +416,7 @@ function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxG
 {
   /* ---- 床に立つ 2 本の柱（回転軸を支える）---- */
   for (const sz of [1, -1]) {
-    box(roomProps, 10, TB.pivotH, 10, matFrame, 0, TB.pivotH / 2, sz * (TB.w / 2 + 14));
+    pedestalPosts.push(box(roomProps, 10, TB.pivotH, 10, matFrame, 0, TB.pivotH / 2, sz * (TB.w / 2 + 14)));
     box(roomProps, 36, 3, 18, matFrame, 0, 1.5, sz * (TB.w / 2 + 14));
   }
 
@@ -491,6 +494,18 @@ function buildTable() {
     box(cradle, 70, TB.house + TB.thick, 3, matFrame, 0, (TB.top - TB.pivotY) - (TB.house + TB.thick) / 2, zr);
     prop(cradle, new THREE.CylinderGeometry(6, 6, 6, 20), matGear, 0, 0, sz * (TB.w / 2 + 10), Math.PI / 2);
   }
+
+  /* 回したときに床に近づく点：台と X 線管の部品の外接直方体の角（tiltGroup の座標の x, y） */
+  SWEEP = [];
+  const bb = new THREE.Box3(), v = new THREE.Vector3();
+  tableProps.children.forEach(m => {
+    if (!m.isMesh) return;
+    m.updateMatrix(); m.geometry.computeBoundingBox(); bb.copy(m.geometry.boundingBox);
+    for (let k = 0; k < 8; k++) {
+      v.set(k & 1 ? bb.max.x : bb.min.x, k & 2 ? bb.max.y : bb.min.y, k & 4 ? bb.max.z : bb.min.z).applyMatrix4(m.matrix);
+      SWEEP.push([v.x, v.y]);
+    }
+  });
 
 }
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す

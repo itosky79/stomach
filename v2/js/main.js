@@ -35,11 +35,20 @@ function loop(now) {
 
   if (playing) {
     playT += dt;
-    if (playT > 3.4) { playT = 0; if (seqIdx >= SEQ.length - 1) { playing = false; document.getElementById('bPlay').textContent = '順に再生'; } else gotoStep(seqIdx + 1); }
+    if (playT > 3.4 && tiltCur === tiltT) { playT = 0; if (seqIdx >= SEQ.length - 1) { playing = false; document.getElementById('bPlay').textContent = '順に再生'; } else gotoStep(seqIdx + 1); }
   }
   if (renderer.xr.isPresenting) xrInput(dt);   // VR のスティックとレバー
   const k = 1 - Math.exp(-dt * 3.6);
-  tiltCur += (tiltT - tiltCur) * k;
+  // 起倒は、最高 TILT_MAX °/秒、加速度 TILT_ACC °/秒² で動かす（実機のように、なめらかに動き出して止まる）。
+  // 以前は目標との差に比例して動かしていて、動き出しが 1 秒に 300° 以上の速さになっていた
+  {
+    const err = tiltT - tiltCur;
+    const want = Math.sign(err) * Math.min(TILT_MAX, Math.sqrt(2 * TILT_ACC * Math.abs(err)));
+    tiltV += Math.max(-TILT_ACC * dt, Math.min(TILT_ACC * dt, want - tiltV));
+    const next = tiltCur + tiltV * dt;
+    if ((tiltT - next) * err <= 0 || (Math.abs(err) < 0.05 && Math.abs(tiltV) < 1)) { tiltCur = tiltT; tiltV = 0; }   // 行き過ぎない
+    else tiltCur = next;
+  }
   rollCur += (rollT - rollCur) * k;
   if (autoSpin) ctrl.az += dt * 0.28;
   fpsStep(dt);
