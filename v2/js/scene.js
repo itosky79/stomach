@@ -357,10 +357,8 @@ const ROOM_Z0 = 250;                                                 // 仕切�
 const DOOR = [150, 240], DOOR_H = 210;                               // 仕切り壁の扉の開口（x の範囲、高さ）
 
 /* 透視台（tiltGroup の座標。原点 = 胃、x = 足側、y = X 線管の側（天板の法線）、z = 左右）。
-   台は回転軸を中心に起倒する。立位や逆傾斜で天板の端が床に当たらないよう、
-   台の中央を中心に回す（DIMENSIONS.md「起倒の回転中心：台の中央」）。中央から端まで 105 cm あり、回転軸が床から 67 cm のままでは
-   端が床に当たるので、回す角度ごとに、台と X 線管の全部の角が床から TB.clear 以上離れる高さまで、回転軸を持ち上げる（pivotNow）。
-   以前は回転軸の高さを変えずに天板を長さ方向に滑らせていて、立位と水平の間で天板が 40 cm ほど行き来して見えた。 */
+   台は中央の回転軸（支点）を中心に起倒する（DIMENSIONS.md「起倒の回転中心：台の中央」）。中央から端まで 105 cm あるので、
+   支点の高さを台の半分の長さより高い位置に固定し（PIVOT_FIX）、どの角度でも床に当たらずに回るだけにする。 */
 const TB = {
   top: 0,                 // 天板の上面（胃の中心から背中まで。体の位置から setTableToBody で決める）
   thick: 5, house: 17,    // 天板の厚さ、天板の下の受像器の箱の厚さ
@@ -369,7 +367,7 @@ const TB = {
   len: 210,               // 天板の長さ
   foot: 25,               // 足台の高さ
   pivotY: 0,              // 回転軸の高さ（天板の上面から 13 cm 下。下で決める）
-  pivotH: 67,             // 回転軸の床からの高さ（水平のとき天板の上面が床から 80 cm）
+  pivotH: 67,             // 柱の模型を作るときの基準の高さ。実際の支点の高さは PIVOT_FIX（buildTable で決める）
   sid: 120,               // X 線管の焦点と受像器の距離
   clear: 3                // 起倒したとき、台の一番低い点を床から離しておく距離
 };
@@ -390,18 +388,15 @@ let tablePx = 0;
 const _tv = new THREE.Vector3();
 function pivotNeed(tiltDeg) {   // その角度で、台と X 線管の全部の角（SWEEP）が床から TB.clear 以上離れる最低の回転軸の高さ
   const t = tiltDeg * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
-  let h = TB.pivotH;
+  let h = 0;
   for (const [x, y] of SWEEP) h = Math.max(h, TB.clear + (x - PX0) * sn - (y - TB.pivotY) * cs);
   return h;
 }
-/* 回転軸の高さ = TB.pivotH + LIFT × sin²（角度）。LIFT は、どの角度でも pivotNeed 以上になる最小の値（立てる側と逆傾斜の側で別）。
-   最低限の高さ（pivotNeed）そのままだと、立位から 40° まで台の下端が床から 3 cm のまま床の上を 66 cm すべって見えたため、
-   なめらかな形にして、寝かせるほど下端が床から離れていくようにする */
-let LIFT = [0, 0];
-function pivotFor(tiltDeg) {
-  const s = Math.sin(tiltDeg * Math.PI / 180);
-  return TB.pivotH + LIFT[s >= 0 ? 0 : 1] * s * s;
-}
+/* 回転軸（支点）の高さは固定する。台は支点のまわりを回るだけで、持ち上げも滑りもしない。
+   支点の高さは、−90°〜+90° のどの角度でも台と X 線管が床に当たらない最低の高さ（台の半分の長さ ＋ α）。
+   以前は支点を低く（67 cm）して、回しながら天板を滑らせたり、台全体を持ち上げたりしていたので、どうしても滑って見えた */
+let PIVOT_FIX = 67;
+function pivotFor() { return PIVOT_FIX; }
 function placeTable() {
   tablePx = PX0;
   pivotNow = pivotFor(tiltCur);
@@ -409,7 +404,7 @@ function placeTable() {
   tiltGroup.position.set(0, pivotNow, 0).sub(_tv.set(PX0, TB.pivotY, 0).applyQuaternion(tiltGroup.quaternion));
   cradle.position.set(0, pivotNow, 0);
   cradle.quaternion.copy(tiltGroup.quaternion);
-  for (const m of pedestalPosts) { m.scale.y = pivotNow / TB.pivotH; m.position.y = pivotNow / 2; }   // 柱は回転軸の高さまで伸びる
+  for (const m of pedestalPosts) { m.scale.y = pivotNow / TB.pivotH; m.position.y = pivotNow / 2; }   // 柱は支点の高さまで
 }
 const pedestalPosts = [];
 const matWall = solidProp(0x202C37), matFloor = solidProp(0x18222B), matCeil = solidProp(0x141C24);
@@ -514,15 +509,9 @@ function buildTable() {
       SWEEP.push([v.x, v.y]);
     }
   });
-  LIFT = [0, 0];
-  for (let a = 1; a <= 90; a += 0.5) for (const [k, sg] of [[0, 1], [1, -1]]) {
-    const s = Math.sin(a * Math.PI / 180);
-    const need = pivotNeed(sg * a);
-    if (need <= TB.pivotH) continue;   // この角度では持ち上げなくても床に当たらない
-    const margin = 15 * Math.cos(a * Math.PI / 180);   // 寝かせるほど床から離す余裕（±90° で 0）。下端が床をなめるように動かないため
-    LIFT[k] = Math.max(LIFT[k], (need + margin - TB.pivotH) / (s * s));
-  }
-
+  PIVOT_FIX = 0;
+  for (let a = -90; a <= 90; a += 0.5) PIVOT_FIX = Math.max(PIVOT_FIX, pivotNeed(a));
+  PIVOT_FIX = Math.ceil(PIVOT_FIX);
 }
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す
 const OPERATOR_EYE = new THREE.Vector3(0, 118, 345);   // 操作室で座った術者の目の位置（窓から 95 cm）
