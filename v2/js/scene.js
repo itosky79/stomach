@@ -357,8 +357,8 @@ const ROOM_Z0 = 250;                                                 // 仕切�
 const DOOR = [150, 240], DOOR_H = 210;                               // 仕切り壁の扉の開口（x の範囲、高さ）
 
 /* 透視台（tiltGroup の座標。原点 = 胃、x = 足側、y = X 線管の側（天板の法線）、z = 左右）。
-   台は中央の回転軸（支点）を中心に起倒する（DIMENSIONS.md「起倒の回転中心：台の中央」）。中央から端まで 105 cm あるので、
-   支点の高さを台の半分の長さより高い位置に固定し（PIVOT_FIX）、どの角度でも床に当たらずに回るだけにする。 */
+   台は回転軸（支点、床から TB.pivotH）を中心に起倒する。水平のときは天板の真ん中に支点がある。
+   中央から端まで 105 cm あり支点より長いので、立てるにつれて天板を長さ方向に滑らせ、床に当たらないようにする（slideFor）。 */
 const TB = {
   top: 0,                 // 天板の上面（胃の中心から背中まで。体の位置から setTableToBody で決める）
   thick: 5, house: 17,    // 天板の厚さ、天板の下の受像器の箱の厚さ
@@ -367,11 +367,13 @@ const TB = {
   len: 210,               // 天板の長さ
   foot: 25,               // 足台の高さ
   pivotY: 0,              // 回転軸の高さ（天板の上面から 13 cm 下。下で決める）
-  pivotH: 67,             // 柱の模型を作るときの基準の高さ。実際の支点の高さは PIVOT_FIX（buildTable で決める）
+  pivotH: 67,             // 回転軸の床からの高さ（水平のとき天板の上面が床から 80 cm）
   sid: 120,               // X 線管の焦点と受像器の距離
   clear: 3                // 起倒したとき、台の一番低い点を床から離しておく距離
 };
 let TB_BOTTOM = 0, TB_CORNERS = [], PX0 = 0, SWEEP = [], pivotNow = 67;
+let tablePx = 0;
+const _tv = new THREE.Vector3();
 /* 体（bodyFit）の位置 off（bodyGroup の座標）から、天板の高さと足台の位置を決める。
    tiltGroup の座標では、体の腹側（bodyGroup の z）が +y、頭側（bodyGroup の y）が −x、単位は実寸 cm（× BODY_SCALE）。 */
 function setTableToBody(off) {
@@ -384,29 +386,54 @@ function setTableToBody(off) {
   PX0 = (TB.x0 + TB.x1) / 2;   // 水平のときは天板の真ん中に回転軸がある
   buildTable();
 }
-let tablePx = 0;
-const _tv = new THREE.Vector3();
-function pivotNeed(tiltDeg) {   // その角度で、台と X 線管の全部の角（SWEEP）が床から TB.clear 以上離れる最低の回転軸の高さ
+/* その角度で、台と X 線管の全部の角（SWEEP）が床から TB.clear 以上離れるのに要る、天板の滑り（PX0 からのずれ）。
+   立てる側（+）は頭側へ（px を大きく）、逆傾斜の側（−）は足側へ（px を小さく）滑らせる。滑らせなくてよいときは 0 */
+function slideNeed(tiltDeg, clear) {
   const t = tiltDeg * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
-  let h = 0;
-  for (const [x, y] of SWEEP) h = Math.max(h, TB.clear + (x - PX0) * sn - (y - TB.pivotY) * cs);
-  return h;
+  if (Math.abs(sn) < 1e-6) return 0;
+  let d = 0;
+  for (const [x, y] of SWEEP) {
+    const px = x - (TB.pivotH - clear + (y - TB.pivotY) * cs) / sn;   // この角がちょうど床から clear になる px
+    d = sn > 0 ? Math.max(d, px - PX0) : Math.min(d, px - PX0);
+  }
+  return d;
 }
-/* 回転軸（支点）の高さは固定する。台は支点のまわりを回るだけで、持ち上げも滑りもしない。
-   支点の高さは、−90°〜+90° のどの角度でも台と X 線管が床に当たらない最低の高さ（台の半分の長さ ＋ α）。
-   以前は支点を低く（67 cm）して、回しながら天板を滑らせたり、台全体を持ち上げたりしていたので、どうしても滑って見えた */
-let PIVOT_FIX = 67;
-function pivotFor() { return PIVOT_FIX; }
+/* 天板の滑り：台と X 線管の一番低い点が、床から CLEAR_AT（角度）の高さになるだけ滑らせる。
+   CLEAR_AT は ±90° で TB.clear（3 cm。立位で足台が床のすぐ上）、寝かせるほど大きくする（3 + 30 ×（1 − |sin|）cm）。
+   床に当たる最低限（いつも 3 cm）だけ滑らせると、台の端が床をなめるように動いて見えたため。
+   実機でも、起倒しながら台を長さ方向に動かす作りがある（米国特許 US4013019 の要約。原文は未確認） */
+const CLEAR_AT = a => TB.clear + 30 * (1 - Math.abs(Math.sin(a * Math.PI / 180)));
+/* 滑りの表（−90°〜+90°、0.5° ごと）。要る滑りに、角度 1° あたり SLIDE_RATE cm より急に変わらない上側の包絡をかぶせて、
+   滑り始めや滑り終わりで急に動かないようにする（包絡は要る滑り以上なので、床からの高さは CLEAR_AT 以上のまま） */
+const SLIDE_RATE = 1.0;
+let SLIDE_TAB = null;
+function buildSlideTab() {
+  const n = 361, need = new Float64Array(n);
+  for (let i = 0; i < n; i++) need[i] = slideNeed(-90 + i * 0.5, CLEAR_AT(-90 + i * 0.5));
+  SLIDE_TAB = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    let up = 0, dn = 0;   // 頭側（+）と足側（−）を別々に包む
+    for (let j = 0; j < n; j++) {
+      const r = SLIDE_RATE * Math.abs(i - j) * 0.5;
+      if (need[j] > 0) up = Math.max(up, need[j] - r); else dn = Math.min(dn, need[j] + r);
+    }
+    SLIDE_TAB[i] = (-90 + i * 0.5) >= 0 ? up : dn;
+  }
+}
+function slideFor(tiltDeg) {
+  if (!SLIDE_TAB) return 0;
+  const f = (Math.max(-90, Math.min(90, tiltDeg)) + 90) * 2, i = Math.min(359, Math.floor(f)), t = f - i;
+  return SLIDE_TAB[i] * (1 - t) + SLIDE_TAB[i + 1] * t;
+}
 function placeTable() {
-  tablePx = PX0;
-  pivotNow = pivotFor(tiltCur);
+  tablePx = PX0 + slideFor(tiltCur);
+  pivotNow = TB.pivotH;
   // 胃（tiltGroup の原点）の床上の位置 = 回転軸 − 回転した（回転軸の天板上の位置）
-  tiltGroup.position.set(0, pivotNow, 0).sub(_tv.set(PX0, TB.pivotY, 0).applyQuaternion(tiltGroup.quaternion));
+  tiltGroup.position.set(0, pivotNow, 0).sub(_tv.set(tablePx, TB.pivotY, 0).applyQuaternion(tiltGroup.quaternion));
   cradle.position.set(0, pivotNow, 0);
   cradle.quaternion.copy(tiltGroup.quaternion);
-  for (const m of pedestalPosts) { m.scale.y = pivotNow / TB.pivotH; m.position.y = pivotNow / 2; }   // 柱は支点の高さまで
 }
-const pedestalPosts = [];
+const pedestalPosts = [];   // 床の柱（高さは変わらない）
 const matWall = solidProp(0x202C37), matFloor = solidProp(0x18222B), matCeil = solidProp(0x141C24);
 const matDark = solidProp(0x0D1318), matScreen = solidProp(0x0A2230);
 const matGlass = new THREE.MeshBasicMaterial({ color: 0x6FA4B8, transparent: true, opacity: 0.10, depthWrite: false, side: THREE.DoubleSide });
@@ -509,9 +536,7 @@ function buildTable() {
       SWEEP.push([v.x, v.y]);
     }
   });
-  PIVOT_FIX = 0;
-  for (let a = -90; a <= 90; a += 0.5) PIVOT_FIX = Math.max(PIVOT_FIX, pivotNeed(a));
-  PIVOT_FIX = Math.ceil(PIVOT_FIX);
+  buildSlideTab();
 }
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す
 const OPERATOR_EYE = new THREE.Vector3(0, 118, 345);   // 操作室で座った術者の目の位置（窓から 95 cm）
