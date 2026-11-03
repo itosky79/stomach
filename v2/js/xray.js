@@ -84,7 +84,7 @@ function render() {
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, r.w, r.h); renderer.setScissor(0, 0, r.w, r.h);
   renderer.setClearColor(r.full ? 0x070B0F : 0x0A0F14, 1); renderer.clear();
-  if (!r.full) { setXray(false); coneAlpha(r.w, r.h); renderer.render(scene, camera); }
+  if (!r.full) { setXray(false); fadeAlpha(r.w, r.h); renderer.render(scene, camera); }
   if (r.film) {
     setXcam(r.film.w / r.film.h);
     setXray(true);
@@ -98,25 +98,28 @@ function render() {
   }
 }
 
-/* 圧迫筒が画面に占める割合（外接球を画面に写した円の面積 ÷ 画面の面積）から透明度を決める */
-const _cs = new THREE.Sphere(), _cv = new THREE.Vector3();
-function coneAlpha(w, h) {
-  if (!compCone) return;
-  let a = CONE_ALPHA.base;
-  if (compCone.visible && compCone.parent && compCone.parent.visible) {
-    compCone.geometry.computeBoundingSphere();
-    _cs.copy(compCone.geometry.boundingSphere).applyMatrix4(compCone.matrixWorld);
-    _cv.copy(_cs.center).applyMatrix4(camera.matrixWorldInverse);
-    const d = -_cv.z;
-    if (d > 0) {
-      const rpx = _cs.radius / (d * Math.tan(camera.fov * Math.PI / 360)) * (h / 2);
-      const frac = Math.min(1, Math.PI * rpx * rpx / (w * h));
-      const t = Math.max(0, Math.min(1, (frac - CONE_ALPHA.from) / (CONE_ALPHA.to - CONE_ALPHA.from)));
-      a = CONE_ALPHA.base + (CONE_ALPHA.cover - CONE_ALPHA.base) * t;
+/* 手前の装置の部品ごとに、画面に占める割合（外接直方体の 8 隅を画面に写した長方形の面積 ÷ 画面の面積。
+   画面の外の部分は数えない）から透明度を決める。カメラの後ろに回る隅がある部品は、画面を大きく覆うとみなす */
+const _fb = new THREE.Box3(), _fv = new THREE.Vector3();
+function fadeAlpha(w, h) {
+  for (const m of fadeParts) {
+    let a = FADE_ALPHA.base;
+    if (m.parent && m.parent.visible) {
+      m.geometry.computeBoundingBox(); _fb.copy(m.geometry.boundingBox);
+      let x0 = 1, x1 = -1, y0 = 1, y1 = -1, behind = false;
+      for (let k = 0; k < 8; k++) {
+        _fv.set(k & 1 ? _fb.max.x : _fb.min.x, k & 2 ? _fb.max.y : _fb.min.y, k & 4 ? _fb.max.z : _fb.min.z).applyMatrix4(m.matrixWorld);
+        _fv.applyMatrix4(camera.matrixWorldInverse);
+        if (_fv.z > -camera.near) { behind = true; continue; }
+        _fv.applyMatrix4(camera.projectionMatrix);
+        x0 = Math.min(x0, _fv.x); x1 = Math.max(x1, _fv.x); y0 = Math.min(y0, _fv.y); y1 = Math.max(y1, _fv.y);
+      }
+      let frac = behind ? 1 : Math.max(0, Math.min(1, x1) - Math.max(-1, x0)) * Math.max(0, Math.min(1, y1) - Math.max(-1, y0)) / 4;
+      const t = Math.max(0, Math.min(1, (frac - FADE_ALPHA.from) / (FADE_ALPHA.to - FADE_ALPHA.from)));
+      a = FADE_ALPHA.base + (FADE_ALPHA.cover - FADE_ALPHA.base) * t;
     }
+    m.material.uniforms.uA.value = a;
   }
-  matCone.uniforms.uA.value = a;
-  matCone.depthWrite = a > 0.99;
 }
 
 /* ---- フィルム撮影 ---- */
