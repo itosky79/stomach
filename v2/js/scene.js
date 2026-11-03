@@ -281,8 +281,9 @@ const matPad = solidProp(0x263440);
 const matGear = solidProp(0x6E7F8C);
 /* 手前の装置（X 線管・絞り・圧迫筒と、それを支える腕・支柱）：カメラに近づいて画面を覆うと胃が見えなくなるので、
    ふだんから少し透かし（FADE_ALPHA.base）、画面の 1/10 以上を覆ったら大きく透かす（FADE_ALPHA.cover）。
+   画面の上で胃と重なり、胃より手前にある部品は、大きさによらずほとんど消す（FADE_ALPHA.front）。
    部品ごとに材質を分け、xray.js の render で毎回、部品ごとに決める */
-const FADE_ALPHA = { base: 0.8, cover: 0.25, from: 0.07, to: 0.10 };   // from〜to：画面に占める割合で滑らかに切り替える
+const FADE_ALPHA = { base: 0.8, cover: 0.25, front: 0.08, from: 0.07, to: 0.10 };   // from〜to：画面に占める割合で滑らかに切り替える。front：胃の手前に重なるとき
 function fadeMat(color) {
   const m = solidProp(color);
   m.uniforms.uA = { value: FADE_ALPHA.base };

@@ -99,24 +99,35 @@ function render() {
 }
 
 /* 手前の装置の部品ごとに、画面に占める割合（外接直方体の 8 隅を画面に写した長方形の面積 ÷ 画面の面積。
-   画面の外の部分は数えない）から透明度を決める。カメラの後ろに回る隅がある部品は、画面を大きく覆うとみなす */
+   画面の外の部分は数えない）から透明度を決める。カメラの後ろに回る隅がある部品は、画面を大きく覆うとみなす。
+   部品の長方形が胃の長方形と重なり、部品のいちばん近い隅が胃の中心より手前にあれば、胃を隠しているとみなす */
 const _fb = new THREE.Box3(), _fv = new THREE.Vector3();
+function screenRect(geo, mw) {   // 外接直方体を画面に写した長方形 [x0, x1, y0, y1]（−1〜1）、いちばん近い隅の距離、カメラの後ろの隅があるか
+  geo.computeBoundingBox(); _fb.copy(geo.boundingBox);
+  let x0 = 1, x1 = -1, y0 = 1, y1 = -1, near = Infinity, behind = false;
+  for (let k = 0; k < 8; k++) {
+    _fv.set(k & 1 ? _fb.max.x : _fb.min.x, k & 2 ? _fb.max.y : _fb.min.y, k & 4 ? _fb.max.z : _fb.min.z).applyMatrix4(mw);
+    _fv.applyMatrix4(camera.matrixWorldInverse);
+    if (_fv.z > -camera.near) { behind = true; continue; }
+    near = Math.min(near, -_fv.z);
+    _fv.applyMatrix4(camera.projectionMatrix);
+    x0 = Math.min(x0, _fv.x); x1 = Math.max(x1, _fv.x); y0 = Math.min(y0, _fv.y); y1 = Math.max(y1, _fv.y);
+  }
+  return { x0, x1, y0, y1, near, behind };
+}
 function fadeAlpha(w, h) {
+  const st = screenRect(meshFront.geometry, meshFront.matrixWorld);   // 胃
+  _fv.copy(meshFront.geometry.boundingBox.getCenter(new THREE.Vector3())).applyMatrix4(meshFront.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+  const stDepth = -_fv.z;
   for (const m of fadeParts) {
     let a = FADE_ALPHA.base;
     if (m.parent && m.parent.visible) {
-      m.geometry.computeBoundingBox(); _fb.copy(m.geometry.boundingBox);
-      let x0 = 1, x1 = -1, y0 = 1, y1 = -1, behind = false;
-      for (let k = 0; k < 8; k++) {
-        _fv.set(k & 1 ? _fb.max.x : _fb.min.x, k & 2 ? _fb.max.y : _fb.min.y, k & 4 ? _fb.max.z : _fb.min.z).applyMatrix4(m.matrixWorld);
-        _fv.applyMatrix4(camera.matrixWorldInverse);
-        if (_fv.z > -camera.near) { behind = true; continue; }
-        _fv.applyMatrix4(camera.projectionMatrix);
-        x0 = Math.min(x0, _fv.x); x1 = Math.max(x1, _fv.x); y0 = Math.min(y0, _fv.y); y1 = Math.max(y1, _fv.y);
-      }
-      let frac = behind ? 1 : Math.max(0, Math.min(1, x1) - Math.max(-1, x0)) * Math.max(0, Math.min(1, y1) - Math.max(-1, y0)) / 4;
+      const r = screenRect(m.geometry, m.matrixWorld);
+      const frac = r.behind ? 1 : Math.max(0, Math.min(1, r.x1) - Math.max(-1, r.x0)) * Math.max(0, Math.min(1, r.y1) - Math.max(-1, r.y0)) / 4;
       const t = Math.max(0, Math.min(1, (frac - FADE_ALPHA.from) / (FADE_ALPHA.to - FADE_ALPHA.from)));
       a = FADE_ALPHA.base + (FADE_ALPHA.cover - FADE_ALPHA.base) * t;
+      const overlap = r.behind || (r.x0 < st.x1 && r.x1 > st.x0 && r.y0 < st.y1 && r.y1 > st.y0);
+      if (overlap && r.near < stDepth) a = FADE_ALPHA.front;   // 胃の手前に重なる
     }
     m.material.uniforms.uA.value = a;
   }
