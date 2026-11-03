@@ -388,11 +388,19 @@ function setTableToBody(off) {
 }
 let tablePx = 0;
 const _tv = new THREE.Vector3();
-function pivotFor(tiltDeg) {   // その角度で、台と X 線管の全部の角（SWEEP）が床から TB.clear 以上離れる回転軸の高さ（最低 TB.pivotH）
+function pivotNeed(tiltDeg) {   // その角度で、台と X 線管の全部の角（SWEEP）が床から TB.clear 以上離れる最低の回転軸の高さ
   const t = tiltDeg * Math.PI / 180, sn = Math.sin(t), cs = Math.cos(t);
   let h = TB.pivotH;
   for (const [x, y] of SWEEP) h = Math.max(h, TB.clear + (x - PX0) * sn - (y - TB.pivotY) * cs);
   return h;
+}
+/* 回転軸の高さ = TB.pivotH + LIFT × sin²（角度）。LIFT は、どの角度でも pivotNeed 以上になる最小の値（立てる側と逆傾斜の側で別）。
+   最低限の高さ（pivotNeed）そのままだと、立位から 40° まで台の下端が床から 3 cm のまま床の上を 66 cm すべって見えたため、
+   なめらかな形にして、寝かせるほど下端が床から離れていくようにする */
+let LIFT = [0, 0];
+function pivotFor(tiltDeg) {
+  const s = Math.sin(tiltDeg * Math.PI / 180);
+  return TB.pivotH + LIFT[s >= 0 ? 0 : 1] * s * s;
 }
 function placeTable() {
   tablePx = PX0;
@@ -506,6 +514,14 @@ function buildTable() {
       SWEEP.push([v.x, v.y]);
     }
   });
+  LIFT = [0, 0];
+  for (let a = 1; a <= 90; a += 0.5) for (const [k, sg] of [[0, 1], [1, -1]]) {
+    const s = Math.sin(a * Math.PI / 180);
+    const need = pivotNeed(sg * a);
+    if (need <= TB.pivotH) continue;   // この角度では持ち上げなくても床に当たらない
+    const margin = 15 * Math.cos(a * Math.PI / 180);   // 寝かせるほど床から離す余裕（±90° で 0）。下端が床をなめるように動かないため
+    LIFT[k] = Math.max(LIFT[k], (need + margin - TB.pivotH) / (s * s));
+  }
 
 }
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す
