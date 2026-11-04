@@ -69,6 +69,7 @@ function loop(now) {
     drawPourTrail();
     shapeStep(h);
   }
+  updateThickness();
   buildSurface();
   updatePour();
   updateLabels();

@@ -405,19 +405,26 @@ function rebuildAll() {
 }
 
 /* ---- 圧迫 ----
-   胃の形は model.js の applyCompression でつぶす（断面を前後につぶし左右に広げる）。ここでは、
-   ① 透視像：圧迫した断面の中心（胃の座標）と強さをシェーダに渡し、圧迫筒の円の中のバリウムを薄く描く（scene.js の FRAG_XRAY）
-   ② 3D：圧迫筒を、圧迫する場所の真上（X 線管の軸に沿って）へ動かし、お腹の表面まで下ろして押し込む（押し込みは強さ × 4 cm） */
-const _cw = new THREE.Vector3(), _co = new THREE.Vector3(), _cd = new THREE.Vector3(), _ray = new THREE.Raycaster();
+   胃の形は model.js の applyCompression でつぶす（圧迫筒の円の中の前の壁を、X 線管の向きに後ろの壁へ押し込む）。
+   入りきらなくなったバリウムは隣の断面へあふれ、そこから重力で流れる（model.js の spillExcess と flowStep）。
+   透視像の白さは X 線が通るバリウムの厚みで決まるので（updateThickness）、つぶれて薄くなった所は自然に薄く写る。
+   ここでは X 線管の向きを胃の座標で求め（setCompAxis）、3D の圧迫筒を押す場所の真上へ動かしてお腹に押し当てる（updateCompress） */
+const _cw = new THREE.Vector3(), _co = new THREE.Vector3(), _cd = new THREE.Vector3(), _ray = new THREE.Raycaster(), _qi = new THREE.Quaternion();
+let compAxisRoll = 0;
+function setCompAxis() {   // X 線管の側（台の +y）を、胃の座標（bodyGroup の中）で表す
+  _qi.copy(bodyGroup.quaternion).invert();
+  _cd.set(0, 1, 0).applyQuaternion(_qi);
+  compAxis = [_cd.x, _cd.y, _cd.z]; compAxisRoll = rollCur;
+}
 function updateCompress() {
   const on = compAmt > 0.01 && compMid >= 0 && compRegion;
   if (!on) {
-    uComp.value.w = 0;
     if (compCone) { compCone.position.set(0, COMP_HOME, 0); compRod.visible = false; }
     return;
   }
+  // 圧迫したまま体を回したら、押す向きが変わるので作り直す
+  if (Math.abs(rollCur - compAxisRoll) > 3 && Math.abs(rollCur - rollT) < 0.5) { setCompAxis(); rebuildAll(); }
   const c = compMid * 3;
-  uComp.value.set(centers[c], centers[c + 1], centers[c + 2], compAmt);
   if (!compCone) return;
   // 圧迫の中心を台（tiltGroup）の座標へ
   bodyGroup.updateMatrixWorld(true);
@@ -435,4 +442,53 @@ function updateCompress() {
   compCone.position.set(_cw.x, bottom + 5, _cw.z);
   const top = COMP_TOP, len = Math.max(0.5, top - (bottom + 10));
   compRod.visible = true; compRod.position.set(_cw.x, bottom + 10 + len / 2, _cw.z); compRod.scale.set(1, len, 1);
+}
+/* ---- X 線が通るバリウムの厚み ----
+   頂点ごとに、その頂点を通る X 線（X 線管の向き）が、その断面の中でバリウムを通る長さを求める（aThick）。
+   断面の輪（多角形）と、X 線を断面の平面に写した直線との交わりから、管の中を通る区間を出し、そのうち液面より下の部分の長さをとる。
+   X 線が断面に斜めに入るときは、その分だけ長くする（3 倍まで）。透視像の白さはこの長さで決まる（scene.js の FRAG_XRAY） */
+const _bd = new THREE.Vector3();
+function updateThickness() {
+  _qi.copy(bodyGroup.quaternion).invert();
+  _bd.set(0, 1, 0).applyQuaternion(_qi);   // X 線の向き（胃の座標）
+  const bx = _bd.x, by = _bd.y, bz = _bd.z, u = uUp.value;
+  const pu = new Float64Array(CM), pv = new Float64Array(CM);
+  for (let i = 0; i < NN; i++) {
+    const c = i * 3, Ux = frameU[c], Uy = frameU[c + 1], Uz = frameU[c + 2], Vx = frameV[c], Vy = frameV[c + 1], Vz = frameV[c + 2];
+    const eu0 = bx * Ux + by * Uy + bz * Uz, ev0 = bx * Vx + by * Vy + bz * Vz, n = Math.hypot(eu0, ev0);
+    const b = i * CM;
+    if (n < 0.2) { for (let j = 0; j < CM; j++) aThick[b + j] = 10; continue; }   // X 線が管の向きとほぼ同じ：厚いとみなす
+    const eu = eu0 / n, ev = ev0 / n, stretch = Math.min(3, 1 / n);
+    // 断面の高さ（上向き）を U・V で表した傾き。液面の高さ lvl[i] との比較に使う
+    const hu = u.x * Ux + u.y * Uy + u.z * Uz, hv = u.x * Vx + u.y * Vy + u.z * Vz;
+    const hc = centers[c] * u.x + centers[c + 1] * u.y + centers[c + 2] * u.z, L = lvl[i] - hc;
+    for (let j = 0; j < CM; j++) {
+      const k = (b + j) * 3, dx = pos[k] - centers[c], dy = pos[k + 1] - centers[c + 1], dz = pos[k + 2] - centers[c + 2];
+      pu[j] = dx * Ux + dy * Uy + dz * Uz; pv[j] = dx * Vx + dy * Vy + dz * Vz;
+    }
+    for (let j = 0; j < CM; j++) {
+      // 頂点 j を通り向き (eu, ev) の直線と、輪の辺との交わり（直線上の位置 t）の最小と最大
+      const qu = pu[j], qv = pv[j];
+      let t0 = 0, t1 = 0;
+      for (let e = 0; e < CM; e++) {
+        const e2 = (e + 1) % CM, au = pu[e] - qu, av = pv[e] - qv, du = pu[e2] - pu[e], dv = pv[e2] - pv[e];
+        const den = eu * dv - ev * du;
+        if (Math.abs(den) < 1e-9) continue;
+        const s = (au * ev - av * eu) / den;   // 辺の上の位置（0〜1）
+        if (s < 0 || s > 1) continue;
+        const t = (au * dv - av * du) / den;    // 直線の上の位置
+        if (t < t0) t0 = t; if (t > t1) t1 = t;
+      }
+      // 区間 [t0, t1] のうち、液面（高さ L、断面の中心から）より下の長さ
+      const h0 = (qu + eu * t0) * hu + (qv + ev * t0) * hv, h1 = (qu + eu * t1) * hu + (qv + ev * t1) * hv;
+      let len = t1 - t0;
+      if (Math.abs(h1 - h0) > 1e-6) {
+        const ta = (L - h0) / (h1 - h0);   // 液面と交わる位置（0〜1）
+        const fb = h0 < h1 ? Math.max(0, Math.min(1, ta)) : 1 - Math.max(0, Math.min(1, ta));
+        len *= fb;
+      } else if (h0 > L) len = 0;
+      aThick[b + j] = len * stretch;
+    }
+  }
+  geom.attributes.aThick.needsUpdate = true;
 }

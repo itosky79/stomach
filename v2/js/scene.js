@@ -119,15 +119,16 @@ geom.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
 geom.setAttribute('aLevel', new THREE.BufferAttribute(aLevel, 1));
 geom.setAttribute('aWet', new THREE.BufferAttribute(aWet, 1));
 geom.setAttribute('aRug', new THREE.BufferAttribute(aRug, 3));
+geom.setAttribute('aThick', new THREE.BufferAttribute(aThick, 1));
 geom.setIndex(new THREE.BufferAttribute(indices, 1));
 
 const VERT = `
-attribute float aLevel; attribute float aWet; attribute vec3 aRug;
+attribute float aLevel; attribute float aWet; attribute vec3 aRug; attribute float aThick;
 uniform vec3 uUp;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
-varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying vec3 vP;
+varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick;
 void main(){
-  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug; vP = position;
+  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug; vThick = aThick;
   vec4 wp = modelMatrix * vec4(position,1.0);
   vNW = normalize(mat3(modelMatrix) * normal);
   vVd = normalize(cameraPosition - wp.xyz);
@@ -168,21 +169,19 @@ void main(){
 }`;
 
 const FRAG_XRAY = `
-uniform vec3 uUp; uniform float uRug; uniform vec4 uComp; uniform float uCompR;
+uniform vec3 uUp; uniform float uRug;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
-varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying vec3 vP;
+varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick;
 ${RUGAE}
 void main(){
   vec3 n = normalize(vNW);
   float below = step(vH, vLevel);
   float coat = smoothstep(0.10, 0.50, vWet);
   float edge = clamp(1.0 / max(abs(dot(n, normalize(vVd))), 0.20), 1.0, 4.6);
-  // 圧迫：圧迫筒の円（体の正面から見た円。半径 uCompR）の中では、溜まったバリウムが押しのけられて薄くなり、粘膜のひだが透けて見える
-  // 押しのけられたバリウムは円のふちへ寄るので、ふちのまわりは濃くする（白い輪）
-  float rr = length(vP.xy - uComp.xy) / uCompR;
-  float cw = uComp.w * (1.0 - smoothstep(0.55, 1.0, rr));
-  float rim = uComp.w * exp(-pow((rr - 1.05) / 0.20, 2.0));
-  float pool = 0.235 * mix(1.0, 0.22 * rugae(vR, 1.0), cw) * (1.0 + 1.5 * rim);
+  // 溜まったバリウムの白さは、X 線が通るバリウムの厚み（vThick。sim.js の updateThickness が胃の形から求める）で決める。
+  // 厚み 2.5（実寸およそ 3 cm）以上で今までと同じ白さ。圧迫などで薄くなると白さが落ち、薄い層ほど粘膜のひだが透けて見える
+  float th = clamp(vThick / 2.5, 0.0, 1.0);
+  float pool = 0.235 * th * mix(rugae(vR, 1.0), 1.0, th);
   float d = below * pool + (1.0 - below) * coat * 0.058 * rugae(vR, uRug);
   d *= edge;
   gl_FragColor = vec4(vec3(0.93,0.955,1.0) * d, 1.0);
@@ -199,9 +198,8 @@ function solidMat(side, flip) {
   });
 }
 const matBack = solidMat(THREE.BackSide, -1), matFront = solidMat(THREE.FrontSide, 1);
-const uComp = { value: new THREE.Vector4(0, 0, 0, 0) }, uCompR = { value: 6 / BODY_SCALE };   // 圧迫の中心（胃の座標）と強さ、円の半径（実寸 6 cm）。sim.js の updateCompress が決める
 const matXray = new THREE.ShaderMaterial({
-  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug, uComp: uComp, uCompR: uCompR },
+  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug },
   transparent: true, depthWrite: false, depthTest: false,
   blending: THREE.AdditiveBlending, side: THREE.DoubleSide
 });

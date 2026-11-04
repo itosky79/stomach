@@ -184,47 +184,18 @@ function renderFluoro() {
   const shrunk = xrWorld.parent === scene;
   if (shrunk) { xrWorld.scale.setScalar(1); xrWorld.position.set(0, 0, 0); }
   renderer.xr.enabled = false;
-  renderXray(fluoroRT, FLUORO_W, FLUORO_H);
+  renderXray(fluoroRT);
   renderer.xr.enabled = xrOn;
   renderer.setRenderTarget(rt);
   if (shrunk) { xrWorld.scale.setScalar(XR_SCALE); xrWorld.position.set(0, 0, -XR_STAND * XR_SCALE); }
   setXray(false);
 }
-/* ---- 透視像の仕上げ：少しぼかし、細かいざらつき（ノイズ）を足す ----
-   本物の透視像は輪郭が少しぼやけ、ざらつきがある。いったん xrRT に描き、ぼかしとノイズをかけてから出す。
-   ぼかしの幅は像の高さの 0.4 %、ノイズの強さは ±2.5 %（どちらも見た目のための値で、実機とは照らし合わせていない） */
-const xrRT = new THREE.WebGLRenderTarget(4, 4, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
-const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), postScene = new THREE.Scene();
-const postMat = new THREE.ShaderMaterial({
-  uniforms: { tex: { value: xrRT.texture }, texel: { value: new THREE.Vector2(0.01, 0.01) }, seed: { value: 0 }, noise: { value: 0.025 } },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-  fragmentShader: `uniform sampler2D tex; uniform vec2 texel; uniform float seed; uniform float noise; varying vec2 vUv;
-    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + seed) * 43758.5453); }
-    void main(){
-      vec3 c = texture2D(tex, vUv).rgb * 0.20;
-      c += (texture2D(tex, vUv + vec2(texel.x, 0.0)).rgb + texture2D(tex, vUv - vec2(texel.x, 0.0)).rgb
-          + texture2D(tex, vUv + vec2(0.0, texel.y)).rgb + texture2D(tex, vUv - vec2(0.0, texel.y)).rgb) * 0.12;
-      c += (texture2D(tex, vUv + texel).rgb + texture2D(tex, vUv - texel).rgb
-          + texture2D(tex, vUv + vec2(texel.x, -texel.y)).rgb + texture2D(tex, vUv + vec2(-texel.x, texel.y)).rgb) * 0.08;
-      c += (h(gl_FragCoord.xy) - 0.5) * 2.0 * noise;
-      gl_FragColor = vec4(max(c, 0.0), 1.0);
-    }`,
-  depthTest: false, depthWrite: false
-});
-postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
-/* 透視像を描く。pw, ph は描き先の大きさ（画素）。target が null なら画面（いま設定してある viewport・scissor）に出す */
-function renderXray(target, pw, ph) {
-  pw = Math.max(2, Math.round(pw)); ph = Math.max(2, Math.round(ph));
-  if (xrRT.width !== pw || xrRT.height !== ph) xrRT.setSize(pw, ph);
-  const prev = renderer.getRenderTarget();
-  renderer.setRenderTarget(xrRT);
+/* 透視像を描く（target が null なら画面の、いま設定してある viewport・scissor に描く）。
+   2026-11-04 に、ぼかしとざらつきを足す仕上げを入れたが、求められていたものと違ったので外した */
+function renderXray(target) {
+  if (target !== undefined) renderer.setRenderTarget(target);
   renderer.setClearColor(0x05080B, 1); renderer.clear();
   renderer.render(scene, xcam);
-  renderer.setRenderTarget(target === undefined ? prev : target);
-  const blur = Math.max(1, ph * 0.004);
-  postMat.uniforms.texel.value.set(blur / pw, blur / ph);
-  postMat.uniforms.seed.value = (performance.now() % 1000) * 0.137;
-  renderer.render(postScene, postCam);
 }
 function render() {
   if (renderer.xr.isPresenting) { renderXR(); return; }
@@ -241,7 +212,7 @@ function render() {
     renderer.setScissorTest(true);
     renderer.setViewport(r.film.left, r.film.yb, r.film.w, r.film.h);
     renderer.setScissor(r.film.left, r.film.yb, r.film.w, r.film.h);
-    renderXray(null, r.film.w * renderer.getPixelRatio(), r.film.h * renderer.getPixelRatio());
+    renderXray();
     renderer.setScissorTest(false);
     setXray(false);
   }
@@ -294,7 +265,7 @@ function capture() {
   setXcam(capW / capH);
   setXray(true);
   renderer.setScissorTest(false);
-  renderXray(capRT, capW, capH);
+  renderXray(capRT);
   renderer.readRenderTargetPixels(capRT, 0, 0, capW, capH, capBuf);
   renderer.setRenderTarget(null);
   setXray(false);

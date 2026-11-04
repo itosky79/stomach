@@ -32,6 +32,7 @@ function cr1(a, x) {                       // 1次元 Catmull-Rom
 /* ================= モデル用バッファ ================= */
 const pos = new Float32Array(NV * 3), nor = new Float32Array(NV * 3);
 const aLevel = new Float32Array(NV), aWet = new Float32Array(NV), hArr = new Float32Array(NV);
+const aThick = new Float32Array(NV).fill(10);   // その頂点を通る X 線が胃の中のバリウムを通る長さ（模型の単位）。sim.js の updateThickness
 const aRug = new Float32Array(NV * 3);          // (軸方向t, 周方向θ, 皺襞の強さ)
 const frameU = new Float32Array(NN * 3), frameV = new Float32Array(NN * 3);
 const centers = new Float32Array(NN * 3), radius = new Float32Array(NN);
@@ -95,29 +96,77 @@ function buildRings(pts, rads, N, off, taper, radMul) {
 }
 
 /* 圧迫筒：指定部位を前後に押しつぶし、左右へ広げる */
+/* ---- 圧迫筒で胃をつぶす ----
+   圧迫筒（直径 10 cm、実寸）を、選んだ部位の真ん中の断面の正面（X 線管の側、compAxis の向き）から押し当てる。
+   圧迫筒の円の中にある胃の壁のうち、X 線管の側（前の壁）を、後ろの壁へ向けて押し込む。後ろの壁は動かさない（背中側で支えられる）。
+   押し込む深さは強さ amt（0〜1）で決め、amt = 1 で前後の壁の隙間が COMP_GAP（実寸およそ 3 mm）まで薄くなる。
+   円のふちでは押し込みを滑らかに弱める（壁が裂けないように）。
+   つぶれた断面は、輪の多角形の面積から断面積と容量を求め直す。入りきらなくなったバリウムは rebuild の最後で隣の断面へあふれさせる */
+const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
+let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標）。sim.js の setCompAxis が体位から決める
+function ringArea(i) {   // 断面 i の輪の多角形の面積（断面の平面 U・V で測る）
+  const c = i * 3, ux = frameU[c], uy = frameU[c + 1], uz = frameU[c + 2], vx = frameV[c], vy = frameV[c + 1], vz = frameV[c + 2];
+  let A = 0, pu = 0, pv = 0, fu = 0, fv = 0;
+  for (let j = 0; j <= CM; j++) {
+    const k = (i * CM + (j % CM)) * 3;
+    const dx = pos[k] - centers[c], dy = pos[k + 1] - centers[c + 1], dz = pos[k + 2] - centers[c + 2];
+    const u = dx * ux + dy * uy + dz * uz, v = dx * vx + dy * vy + dz * vz;
+    if (j === 0) { fu = u; fv = v; } else A += pu * v - u * pv;
+    pu = u; pv = v;
+  }
+  return Math.abs(A) / 2;
+}
 function applyCompression(key, amt) {
   if (!(amt > 0) || !key) return;
   let f = -1, l = -1;
   for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] === key) { if (f < 0) f = i; l = i; }
   if (f < 0) return;
-  const mid = (f + l) / 2, half = Math.max(1, (l - f) / 2);
-  for (let i = f; i <= l; i++) {
-    const t = Math.abs(i - mid) / half, w = Math.max(0, 1 - t * t);
-    const sq = 1 - 0.62 * amt * w, sp = 1 / Math.sqrt(Math.max(0.25, sq));
-    const c = i * 3, ux = frameU[c], uy = frameU[c + 1], uz = frameU[c + 2];
-    const vx = frameV[c], vy = frameV[c + 1], vz = frameV[c + 2];
-    for (let j = 0; j < CM; j++) {
-      const k = (i * CM + j) * 3;
-      const dx = pos[k] - centers[c], dy = pos[k + 1] - centers[c + 1], dz = pos[k + 2] - centers[c + 2];
-      const du = (dx * ux + dy * uy + dz * uz) * sq, dv = (dx * vx + dy * vy + dz * vz) * sp;
-      pos[k] = centers[c] + du * ux + dv * vx;
-      pos[k + 1] = centers[c + 1] + du * uy + dv * vy;
-      pos[k + 2] = centers[c + 2] + du * uz + dv * vz;
-    }
-    area[i] *= sq * sp; cap[i] = area[i] * dl[i];
-    compMid = i <= mid + 0.5 && i >= mid - 0.5 ? i : compMid;
+  const m = Math.round((f + l) / 2), cx = centers[m * 3], cy = centers[m * 3 + 1], cz = centers[m * 3 + 2];
+  const [ax, ay, az] = compAxis;
+  const wOf = k => {   // 圧迫筒の円の中なら 1、外なら 0（ふちで滑らかに）
+    const dx = pos[k] - cx, dy = pos[k + 1] - cy, dz = pos[k + 2] - cz, h = dx * ax + dy * ay + dz * az;
+    const r = Math.sqrt(Math.max(0, dx * dx + dy * dy + dz * dz - h * h)), t = (r - 0.75 * COMP_R) / (0.5 * COMP_R);
+    return t <= 0 ? 1 : t >= 1 ? 0 : 1 - t * t * (3 - 2 * t);
+  };
+  // 断面ごとの、いちばん前（X 線管の側）といちばん後ろの壁の高さ
+  const hiA = new Float64Array(NMAIN).fill(-1e9), hiP = new Float64Array(NMAIN).fill(1e9);
+  for (let i = 0; i < NMAIN; i++) for (let j = 0; j < CM; j++) {
+    const k = (i * CM + j) * 3, h = pos[k] * ax + pos[k + 1] * ay + pos[k + 2] * az;
+    if (h > hiA[i]) hiA[i] = h; if (h < hiP[i]) hiP[i] = h;
   }
-  compMid = Math.round(mid);
+  // 圧迫筒の面の高さ L：押す場所の真ん中の断面で、前の壁から後ろの壁（＋隙間）まで、強さの割合だけ下ろす。
+  // ほかの断面も同じ面で押されるが、自分の後ろの壁（＋隙間）より奥へは押し込まない（後ろは背中側で支えられる）
+  const L = hiA[m] - amt * Math.max(0, hiA[m] - hiP[m] - COMP_GAP);
+  const before = new Float64Array(NMAIN), touched = new Uint8Array(NMAIN);
+  for (let i = 0; i < NMAIN; i++) {
+    const Li = Math.max(L, hiP[i] + COMP_GAP);
+    for (let j = 0; j < CM; j++) {
+      const k = (i * CM + j) * 3, w = wOf(k);
+      if (w <= 0) continue;
+      const h = pos[k] * ax + pos[k + 1] * ay + pos[k + 2] * az;
+      if (h <= Li) continue;
+      if (!touched[i]) { touched[i] = 1; before[i] = ringArea(i); }
+      const d = (Li - h) * w;   // 前の壁を後ろへ
+      pos[k] += d * ax; pos[k + 1] += d * ay; pos[k + 2] += d * az;
+    }
+  }
+  for (let i = 0; i < NMAIN; i++) if (touched[i] && before[i] > 1e-9) {   // 断面積を、多角形の面積が減った割合で減らす
+    area[i] *= Math.max(0.01, ringArea(i) / before[i]); cap[i] = area[i] * dl[i];
+  }
+  compMid = m;
+}
+/* 入りきらないバリウムを隣の断面へあふれさせる（近い断面から順に。十二指腸と食道へは入れない）。量は減らさない */
+function spillExcess() {
+  for (let i = 0; i < NMAIN; i++) {
+    let ex = wVol[i] - cap[i];
+    if (ex <= 1e-9) continue;
+    wVol[i] = cap[i];
+    for (let d = 1; d < NMAIN && ex > 1e-9; d++) for (const n of [i - d, i + d]) {
+      if (n < 0 || n >= NMAIN || regionList[regionOf[n]][0] === 'duode' || ex <= 1e-9) continue;
+      const room = cap[n] - wVol[n];
+      if (room > 0) { const t = Math.min(room, ex); wVol[n] += t; ex -= t; }
+    }
+  }
 }
 let compMid = -1;
 
@@ -216,7 +265,8 @@ function rebuild() {
   // 下部食道括約筋があるので、胃から食道へは戻らない（以前は 0.17 で戻していて、水平にすると逆流していた）
 
   totalCap = 0;
-  for (let i = 0; i < NMAIN; i++) { if (regionList[regionOf[i]][0] !== 'duode') totalCap += cap[i]; wVol[i] = Math.min(wVol[i], cap[i]); }
+  for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] !== 'duode') totalCap += cap[i];
+  spillExcess();   // 圧迫などで入りきらなくなった分は隣へ（以前は消していた）
   for (let i = NMAIN; i < NN; i++) wVol[i] = Math.min(wVol[i], cap[i]);
   geom.attributes.position.needsUpdate = true;
   geom.computeVertexNormals();

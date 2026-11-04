@@ -208,6 +208,7 @@ function setComp(region, amt) {
   compRegion = r2; compAmt = a2;
   selComp.value = r2;
   lhandle.style.top = (100 - a2 * 100) + '%';
+  setCompAxis();
   rebuildAll();
 }
 
