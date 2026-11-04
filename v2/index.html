@@ -28,6 +28,10 @@
     <div id="labels"></div>
     <div id="fpsPad" hidden>
       <p class="fpsTip" id="fpsTip"></p>
+      <div class="fpsZoom" role="group" aria-label="拡大">
+        <button type="button" id="bZoomOut" aria-label="縮小">−</button>
+        <button type="button" id="bZoomIn" aria-label="拡大">＋</button>
+      </div>
     </div>
     <div id="film">
       <div class="fh"><span id="filmPos">立位</span><span id="filmProj">正面</span></div>
@@ -42,8 +46,8 @@
           <button type="button" data-v="2">X線像</button>
         </div>
         <div class="seg" id="camSeg" role="group" aria-label="視点">
-          <button type="button" data-c="room" aria-pressed="true" title="部屋の外から自由に回して見る">外から</button>
           <button type="button" data-c="fps" aria-pressed="false" title="術者の目で見る。操作室の席に座って見回す">一人称</button>
+          <button type="button" data-c="room" aria-pressed="true" title="部屋の外から自由に回して見る">三人称</button>
         </div>
       </div>
       <div class="barR">

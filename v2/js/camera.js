@@ -46,7 +46,7 @@ function setView(p) {
   if (seg) [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.p === p));
   applyCam();
 }
-/* 視点の切り替え（外から／一人称）。一人称は術者の目で、操作室の席に座って見回す。以前あった「術者」（席から見るだけの固定の視点）は、一人称と同じなので消した */
+/* 視点の切り替え（一人称／三人称）。一人称は術者の目で、操作室の席に座って見回す。以前あった「術者」（席から見るだけの固定の視点）は、一人称と同じなので消した */
 const camSeg = document.getElementById('camSeg'), fpsPad = document.getElementById('fpsPad');
 function syncViewBtns() {
   [...camSeg.children].forEach(b => b.setAttribute('aria-pressed', (b.dataset.c === 'fps') === (viewPreset === 'fps')));
@@ -54,7 +54,7 @@ function syncViewBtns() {
   fpsPad.hidden = viewPreset !== 'fps';
   if (viewPreset === 'fps' && !was) {   // 入ったときだけ操作の説明を出し、8 秒で消す
     const tip = document.getElementById('fpsTip');
-    tip.textContent = 'ドラッグで見回す ／ ホイール（2 本指）で拡大 ／ ダブルクリックで胃のほうを向く';
+    tip.textContent = 'ドラッグで見回す ／ ＋−・ホイール・2 本指で拡大 ／ ダブルクリックで胃のほうを向く';
     tip.classList.remove('off'); clearTimeout(syncViewBtns.t);
     syncViewBtns.t = setTimeout(() => tip.classList.add('off'), 8000);
   }
@@ -133,6 +133,13 @@ function zoomTo(d) {   // 寄るほど注視点を胃（原点）へ近づける
   ctrl.dist = nd;
   applyCam();
 }
+/* 一人称のときは、透視像の小窓やラベルの上でホイールを回しても拡大する（3D 画面の枠の中ならどこでも）。＋−のボタンでも拡大する */
+stage.addEventListener('wheel', e => {
+  if (viewPreset !== 'fps' || e.target === canvas) return;
+  e.preventDefault(); fpsZoom(1 + Math.sign(e.deltaY) * 0.10);
+}, { passive: false });
+document.getElementById('bZoomIn').addEventListener('click', () => fpsZoom(1 / 1.25));
+document.getElementById('bZoomOut').addEventListener('click', () => fpsZoom(1.25));
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   if (viewPreset === 'fps') { fpsZoom(1 + Math.sign(e.deltaY) * 0.10); return; }   // 一人称：席に座ったまま拡大・縮小する

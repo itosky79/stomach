@@ -453,6 +453,9 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 #fpsPad[hidden]{display:none}
 #fpsPad .fpsTip{transition:opacity .6s; margin:0; padding:4px 8px; font-size:11px; color:var(--dim); background:rgba(5,10,14,.72); border-radius:4px; max-width:440px}
 #fpsPad .fpsTip.off{opacity:0}
+#fpsPad .fpsZoom{display:flex; gap:4px; pointer-events:auto}
+#fpsPad .fpsZoom button{width:38px; height:38px; padding:0; border:1px solid var(--line2); border-radius:6px; background:var(--panel2); color:var(--text); font-size:18px; line-height:1; cursor:pointer; touch-action:manipulation}
+#fpsPad .fpsZoom button:hover{border-color:var(--teal)}
 @media (max-width:900px){
   #fpsPad{bottom:74px; left:8px}
   #fpsPad .fpsTip{font-size:10px}
