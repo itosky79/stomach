@@ -135,14 +135,10 @@ function setXcam(aspect) {
   // 管球も受像器も台に固定されているので、向きは体位によらず一定
   const br = bsRadius * BODY_SCALE;
   _xx.crossVectors(AY, AZ);
-  // 視野の真ん中：圧迫しているときは圧迫した断面、そうでなければ胃の容積の重心（断面の中心を容量で重み付けした平均。胃体部〜胃角部のあたり）
+  // 視野の真ん中（xfovCenter）：圧迫しているときは圧迫した断面、そうでなければ体位の目的部位、目的部位がなければ胃の容積の重心。
+  // XFOV.fixed のときは胃を囲む箱の真ん中（評価モードの像）
+  if (XFOV.fixed) _xc.set(0, 0, 0); else _xc.copy(xfovCenter());
   bodyGroup.updateMatrixWorld(true);
-  if (compAmt > 0.01 && compMid >= 0) _xc.set(centers[compMid * 3], centers[compMid * 3 + 1], centers[compMid * 3 + 2]);
-  else {
-    let sx = 0, sy = 0, sz = 0, sw = 0;
-    for (let i = 0; i < NMAIN; i++) { if (regionList[regionOf[i]][0] === 'duode') continue; const w = cap[i]; sx += centers[i * 3] * w; sy += centers[i * 3 + 1] * w; sz += centers[i * 3 + 2] * w; sw += w; }
-    if (sw > 0) _xc.set(sx / sw, sy / sw, sz / sw); else _xc.set(0, 0, 0);
-  }
   _xc.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xc);
   const cx = _xc.dot(_xx), cy = _xc.dot(AY);
   xcam.position.copy(AZ).multiplyScalar(br * 3.2).addScaledVector(_xx, cx + XFOV.panX).addScaledVector(AY, cy + XFOV.panY);
@@ -164,7 +160,7 @@ function layoutFilm() {
 }
 function updateFilmLabels() {
   document.getElementById('filmPos').textContent = poseName(tiltCur, rollCur);
-  document.getElementById('filmProj').textContent = compAmt > 0.01 ? '圧迫' : '';   // 胃の型の名前（解剖モデル）は出さない
+  document.getElementById('filmProj').textContent = compAmt > 0.01 ? '圧迫' : (XAIM.text ? '見る場所：' + XAIM.text : '');   // 胃の型の名前（解剖モデル）は出さない
   const lw = new THREE.Vector3(1, 0, 0).applyQuaternion(bodyGroup.quaternion);
   const cx = new THREE.Vector3().setFromMatrixColumn(xcam.matrixWorld, 0);
   const lr = lw.dot(cx) >= 0;
@@ -349,4 +345,51 @@ function xfovPan(dxPx, dyPx) {   // 画面の画素の移動を、視野の cm �
   const k = XFOV.field / r.film.h, lim = 40;
   XFOV.panX = Math.max(-lim, Math.min(lim, XFOV.panX - dxPx * k));
   XFOV.panY = Math.max(-lim, Math.min(lim, XFOV.panY + dyPx * k));
+}
+
+/* ---- 体位ごとの見る場所（透視の視野の真ん中）----
+   撮影手順で進めているときはその手順の目的部位、そうでなければ今の体位に近い（重力の向きの差が 20° 以内）基準撮影法Ⅱの体位の目的部位を見る。
+   目的部位の言葉は撮影手順の表（js/data.js の SEQ2。教科書の記載）のもので、評価モードと同じ読み取り（measure.js の parseTarget・targetMask）で
+   胃の壁の点に直し、その重心を視野の真ん中にする。目的部位が決まらないときは胃の容積の重心。
+   体位を変えたら、真ん中はなめらかに移る（1 秒でおよそ 9 割）。目的部位の点は 0.3 秒ごとに求め直す */
+const XAIM = { text: '', key: '', t: 0, goal: new THREE.Vector3(), cur: new THREE.Vector3(), has: false, last: 0 };
+function xaimTarget() {   // 今の体位で見る目的部位の手順（なければ null）
+  if (curMode === 1 && seqIdx >= 0 && SEQ[seqIdx]) return SEQ[seqIdx];
+  // 重力の向きの差（20° 以内）で選ぶ。立位のように重力の向きが同じ体位同士は、体の回転角の差で選ぶ（差 1° を 0.25° とみなして足す）。
+  // 目的部位を胃の部位として読めない手順（食道）は選ばない
+  const u = upOf(tiltCur, rollCur), r0 = ((rollCur % 360) + 360) % 360;
+  let best = null, bd = 1e9;
+  for (const s of SEQ2) {
+    const g = angDeg(u, upOf(s.tilt, s.roll));
+    if (g > 20 || !parseTarget(s.etgt || s.tgt || '')) continue;
+    const dr = Math.abs(((s.roll - r0) % 360 + 540) % 360 - 180), d = g + 0.25 * dr;
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+function xfovCenter() {
+  const now = performance.now();
+  if (compAmt > 0.01 && compMid >= 0) {
+    XAIM.goal.set(centers[compMid * 3], centers[compMid * 3 + 1], centers[compMid * 3 + 2]); XAIM.text = '圧迫';
+  } else if (now - XAIM.t > 300 || !XAIM.has) {
+    XAIM.t = now;
+    const st = xaimTarget(), text = st ? (st.etgt || st.tgt || '') : '', tg = text ? parseTarget(text) : null;
+    let ok = false;
+    if (tg) {
+      const m = targetMask(tg, wallSectors());
+      let sx = 0, sy = 0, sz = 0, n = 0;
+      for (let v = 0; v < m.length; v++) if (m[v]) { sx += pos[v * 3]; sy += pos[v * 3 + 1]; sz += pos[v * 3 + 2]; n++; }
+      if (n > 0) { XAIM.goal.set(sx / n, sy / n, sz / n); ok = true; }
+    }
+    if (!ok) {   // 胃の容積の重心
+      let sx = 0, sy = 0, sz = 0, sw = 0;
+      for (let i = 0; i < NMAIN; i++) { if (regionList[regionOf[i]][0] === 'duode') continue; const w = cap[i]; sx += centers[i * 3] * w; sy += centers[i * 3 + 1] * w; sz += centers[i * 3 + 2] * w; sw += w; }
+      XAIM.goal.set(sw > 0 ? sx / sw : 0, sw > 0 ? sy / sw : 0, sw > 0 ? sz / sw : 0);
+    }
+    XAIM.text = ok ? (st.tgt || text) : '';   // 画面には短い書き方（大弯側・小弯側を省いたもの）を出す
+  }
+  const dt = Math.min(0.1, (now - (XAIM.last || now)) / 1000); XAIM.last = now;
+  if (!XAIM.has) { XAIM.cur.copy(XAIM.goal); XAIM.has = true; }
+  else XAIM.cur.lerp(XAIM.goal, 1 - Math.exp(-dt * 2.3));
+  return XAIM.cur;
 }

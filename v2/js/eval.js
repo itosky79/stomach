@@ -128,9 +128,9 @@ const evalRT = new THREE.WebGLRenderTarget(capW, capH, { minFilter: THREE.Linear
 function evalXray() {
   // 評価の像は、以前と同じく胃の全体が入る広さで撮る（画面の透視の視野の設定によらない）
   const keep = { ...XFOV };
-  XFOV.field = bsRadius * BODY_SCALE * 2.12; XFOV.panX = XFOV.panY = 0;
+  XFOV.field = bsRadius * BODY_SCALE * 2.12; XFOV.panX = XFOV.panY = 0; XFOV.fixed = true;
   setXcam(capW / capH);
-  Object.assign(XFOV, keep);
+  Object.assign(XFOV, keep); XFOV.fixed = false;
   setXray(true);
   renderer.setScissorTest(false);
   renderer.setRenderTarget(evalRT);
