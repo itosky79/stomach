@@ -336,6 +336,7 @@ function solidProp(color) {
 const matFrame = solidProp(0x4A5C6B);
 const matPad = solidProp(0x263440);
 const matGear = solidProp(0x6E7F8C);
+const matGrip = solidProp(0x8A9AA6);   // 握り棒
 /* 手前の装置（X 線管・絞り・圧迫筒と、それを支える腕・支柱）：カメラに近づいて画面を覆うと胃が見えなくなるので、
    ふだんから少し透かし（FADE_ALPHA.base）、画面の 1/10 以上を覆ったら大きく透かす（FADE_ALPHA.cover）。
    画面の上で胃と重なり、胃より手前にある部品は、大きさによらずほとんど消す（FADE_ALPHA.front）。
@@ -397,6 +398,7 @@ function setTableToBody(off) {
   TB_BOTTOM = TB.top - TB.thick - TB.house;
   TB_CORNERS = [[TB.x0, TB.top], [TB.x0, TB_BOTTOM], [TB.x1, TB_BOTTOM], [TB.x1, TB.top + TB.foot]];
   PX0 = (TB.x0 + TB.x1) / 2;   // 水平のときは天板の真ん中に回転軸がある
+  TB.off = off.clone();
   buildTable();
 }
 /* その角度で、台と X 線管の全部の角（SWEEP）が床から TB.clear 以上離れるのに要る、天板の滑り（PX0 からのずれ）。
@@ -540,6 +542,11 @@ function buildTable() {
     prop(cradle, new THREE.CylinderGeometry(6, 6, 6, 20), matGear, 0, 0, sz * (TB.w / 2 + 10), Math.PI / 2);
   }
 
+  /* ---- 肩当てと握り棒（台といっしょに傾き、滑る）----
+     体の模型（BodyParts3D）は腕を体の横に下ろした形のままなので、握り棒は手のある位置に置き、手のひらのすぐ外側で握っているように見せる。
+     肩当ては、両肩のすぐ頭側に置く（頭低位で体がずり落ちないように当てる物）。位置は体表の点から、台を作り直すたびに求める */
+  placeHolders();
+
   /* 回したときに床に近づく点：台と X 線管の部品の外接直方体の角（tiltGroup の座標の x, y） */
   SWEEP = [];
   const bb = new THREE.Box3(), v = new THREE.Vector3();
@@ -552,6 +559,39 @@ function buildTable() {
     }
   });
   buildSlideTab();
+}
+function placeHolders() {
+  if (typeof qBase === 'undefined' || !TB.off) return;   // 最初の 1 回（sim.js を読む前）は体の向きがまだ無い。胃の型が決まると作り直す
+  // 体表の点を台の座標に直す（背臥位・回転なしの向き）：台 = qBase ×（BODY_SCALE ×（点 ＋ bodyFit の位置））
+  const a = meshSkin.geometry.attributes.position, v = new THREE.Vector3(), P = [];
+  for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i).add(TB.off).multiplyScalar(BODY_SCALE).applyQuaternion(qBase); P.push([v.x, v.y, v.z]); }
+  let xh = Infinity; for (const q of P) xh = Math.min(xh, q[0]);   // 頭のてっぺん
+  // 肩：頭から 15 cm より足側で、体の幅が初めて 30 cm を超える所
+  let xs = xh + 25, zc = 0;
+  for (let d = 15; d < 45; d += 1) {
+    let z0 = Infinity, z1 = -Infinity;
+    for (const q of P) if (q[0] >= xh + d && q[0] < xh + d + 1) { z0 = Math.min(z0, q[2]); z1 = Math.max(z1, q[2]); }
+    if (z1 - z0 > 30) { xs = xh + d; zc = (z0 + z1) / 2; break; }
+  }
+  for (const sz of [-1, 1]) {   // 肩当て：厚さ 4 cm、高さ 12 cm、幅 10 cm。足側の面が肩に当たる
+    box(tableProps, 4, 12, 10, matPad, xs - 2.5, TB.top + 6, zc + sz * 14);
+    box(tableProps, 2, 4, 3, matFrame, xs - 5.5, TB.top + 2, zc + sz * 14);   // 天板への留め金
+  }
+  // 手：頭から 70〜105 cm の範囲で、左右それぞれいちばん外に出ている点のまわり
+  for (const sz of [-1, 1]) {
+    let ext = 0, xsum = 0, ysum = 0, n = 0;
+    for (const q of P) if (q[0] > xh + 70 && q[0] < xh + 105 && q[2] * sz > ext) ext = q[2] * sz;
+    for (const q of P) if (q[0] > xh + 70 && q[0] < xh + 105 && q[2] * sz > ext - 4) { xsum += q[0]; ysum += q[1]; n++; }
+    if (!n) continue;
+    const hx = xsum / n, hy = ysum / n, gz = sz * (ext + 1.6);   // 握り棒：手のいちばん外の点のすぐ外側
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 18, 14), matGrip);
+    bar.rotation.z = Math.PI / 2; bar.position.set(hx, hy, gz); tableProps.add(bar);   // 体の長さ方向の棒
+    for (const dx of [-8, 8]) {   // 棒を支える 2 本の脚（天板の上面から）
+      const h = Math.max(1, hy - TB.top);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, h, 10), matFrame);
+      leg.position.set(hx + dx, TB.top + h / 2, gz); tableProps.add(leg);
+    }
+  }
 }
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す
 /* ---- 画面の色（ダーク／ライト）に合わせた 3D の色。透視像（X 線像）は本物と同じく暗いまま ---- */
