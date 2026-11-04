@@ -178,8 +178,11 @@ void main(){
   float coat = smoothstep(0.10, 0.50, vWet);
   float edge = clamp(1.0 / max(abs(dot(n, normalize(vVd))), 0.20), 1.0, 4.6);
   // 圧迫：圧迫筒の円（体の正面から見た円。半径 uCompR）の中では、溜まったバリウムが押しのけられて薄くなり、粘膜のひだが透けて見える
-  float cw = uComp.w * (1.0 - smoothstep(0.55 * uCompR, uCompR, length(vP.xy - uComp.xy)));
-  float pool = 0.235 * mix(1.0, 0.22 * rugae(vR, 1.0), cw);
+  // 押しのけられたバリウムは円のふちへ寄るので、ふちのまわりは濃くする（白い輪）
+  float rr = length(vP.xy - uComp.xy) / uCompR;
+  float cw = uComp.w * (1.0 - smoothstep(0.55, 1.0, rr));
+  float rim = uComp.w * exp(-pow((rr - 1.05) / 0.20, 2.0));
+  float pool = 0.235 * mix(1.0, 0.22 * rugae(vR, 1.0), cw) * (1.0 + 1.5 * rim);
   float d = below * pool + (1.0 - below) * coat * 0.058 * rugae(vR, uRug);
   d *= edge;
   gl_FragColor = vec4(vec3(0.93,0.955,1.0) * d, 1.0);
