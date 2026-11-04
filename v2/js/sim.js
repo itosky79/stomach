@@ -73,6 +73,7 @@ function twistFor(tilt, roll) {
 }
 function twistSave() {
   twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0];
+  twistBase.centers.set(escBase.c.subarray((ESO_JOIN - 1) * 3, ESO_JOIN * 3), (NN - 1) * 3);   // ねじれの中心（噴門）は、胃とつなぐ前の食道の下の端
   posTw = pos.slice(); centersTw = centers.slice(); sagS.fill(0); sagTgt.fill(0);
 }
 const _twq = new THREE.Quaternion(), _twb = new THREE.Quaternion(), _twv = new THREE.Vector3(), _twa = new THREE.Vector3(), _twz = new THREE.Vector3(0, 0, 1);
@@ -141,6 +142,7 @@ function shapeApply() {   // 位置 = ねじったあとの位置 − s_i × 上
     centers[c] = centersTw[c] + dx; centers[c + 1] = centersTw[c + 1] + dy; centers[c + 2] = centersTw[c + 2] + dz;
     for (let j = 0; j < CM; j++) { const k = (i * CM + j) * 3; pos[k] = posTw[k] + dx; pos[k + 1] = posTw[k + 1] + dy; pos[k + 2] = posTw[k + 2] + dz; }
   }
+  joinEsophagus();   // 胃が動いたので、食道の下の端を胃の壁までつなぎ直す（model.js）
   geom.attributes.position.needsUpdate = true;
   geom.computeVertexNormals();
 }
@@ -391,8 +393,9 @@ function buildSurface() {
    型の噴門は、食道の管の下端（胃につながるところ）の中心。体を動かした分だけ天板と足台も置き直す。 */
 const _fit = new THREE.Vector3();
 function fitBodyToStomach() {
-  const e = (NN - 1) * 3, c = BP3D.meta.cardia;
-  _fit.set(centers[e] - c[0], centers[e + 1] - c[1], centers[e + 2] - c[2]);
+  // 食道の下の端は、胃とつなぐ前のもとの位置（model.js の escBase）を使う（つなぐ処理で体の位置が変わらないように）
+  const e = (ESO_JOIN - 1) * 3, c = BP3D.meta.cardia;
+  _fit.set(escBase.c[e] - c[0], escBase.c[e + 1] - c[1], escBase.c[e + 2] - c[2]);
   bodyFit.position.copy(_fit);
   setTableToBody(_fit);
 }

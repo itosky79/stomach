@@ -268,6 +268,47 @@ function rebuild() {
   for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] !== 'duode') totalCap += cap[i];
   spillExcess();   // 圧迫などで入りきらなくなった分は隣へ（以前は消していた）
   for (let i = NMAIN; i < NN; i++) wVol[i] = Math.min(wVol[i], cap[i]);
+  saveEsoBase(); joinEsophagus();
   geom.attributes.position.needsUpdate = true;
   geom.computeVertexNormals();
+}
+/* ---- 食道と胃をつなぐ ----
+   食道と胃は別々の管で作っていて、食道の下の端の輪は胃の壁の手前で終わる。体位で胃がねじれたり振れたりすると、すき間が空く。
+   そこで、食道の下の端にいちばん近い胃の壁の点（噴門の前後の断面の中から探す）を求め、食道の最後の ESO_JOIN 個の輪を、
+   その点より少し内側（0.5）まで滑らかに伸ばし、端をラッパのように広げて（最後の輪で 1.7 倍）胃の壁になじませる。
+   胃の形が変わるたび（rebuild の最後と sim.js の shapeApply）に行う。食道のもとの形は escBase に取っておく */
+const ESO_JOIN = 6;
+const escBase = { c: new Float32Array(ESO_JOIN * 3), r: new Float32Array(ESO_JOIN), ok: false };
+function saveEsoBase() {
+  for (let k = 0; k < ESO_JOIN; k++) { const i = NN - ESO_JOIN + k; escBase.c.set(centers.subarray(i * 3, i * 3 + 3), k * 3); escBase.r[k] = radius[i]; }
+  escBase.ok = true;
+}
+function joinEsophagus() {
+  if (!escBase.ok) return;
+  const L = ESO_JOIN - 1, ex = escBase.c[L * 3], ey = escBase.c[L * 3 + 1], ez = escBase.c[L * 3 + 2];
+  // 食道の下の端（もとの位置）にいちばん近い胃の壁の点
+  let best = -1, bd = Infinity, bs = cardiaIdx;
+  for (let i = Math.max(0, cardiaIdx - 14); i <= Math.min(NMAIN - 1, cardiaIdx + 14); i++) for (let j = 0; j < CM; j++) {
+    const k = (i * CM + j) * 3, d = (pos[k] - ex) ** 2 + (pos[k + 1] - ey) ** 2 + (pos[k + 2] - ez) ** 2;
+    if (d < bd) { bd = d; best = k; bs = i; }
+  }
+  if (best < 0) return;
+  // 壁の点から、その断面の中心へ 0.5 入った所を食道の終わりにする
+  let ix = centers[bs * 3] - pos[best], iy = centers[bs * 3 + 1] - pos[best + 1], iz = centers[bs * 3 + 2] - pos[best + 2];
+  const il = Math.hypot(ix, iy, iz) || 1;
+  const tx = pos[best] + ix / il * 0.5, ty = pos[best + 1] + iy / il * 0.5, tz = pos[best + 2] + iz / il * 0.5;
+  const dx = tx - ex, dy = ty - ey, dz = tz - ez;
+  for (let k = 0; k < ESO_JOIN; k++) {
+    const i = NN - ESO_JOIN + k, s = (k + 1) / ESO_JOIN, w = s * s * (3 - 2 * s);   // 端ほど大きく動かす
+    const c = i * 3;
+    centers[c] = escBase.c[k * 3] + dx * w; centers[c + 1] = escBase.c[k * 3 + 1] + dy * w; centers[c + 2] = escBase.c[k * 3 + 2] + dz * w;
+    const r = escBase.r[k] * (1 + 0.7 * s * s * s), rb = r * FLAT;
+    const ux = frameU[c], uy = frameU[c + 1], uz = frameU[c + 2], vx = frameV[c], vy = frameV[c + 1], vz = frameV[c + 2];
+    for (let j = 0; j < CM; j++) {
+      const th = j / CM * Math.PI * 2, cs = Math.cos(th), sn = Math.sin(th), q = (i * CM + j) * 3;
+      pos[q] = centers[c] + r * cs * vx + rb * sn * ux;
+      pos[q + 1] = centers[c + 1] + r * cs * vy + rb * sn * uy;
+      pos[q + 2] = centers[c + 2] + r * cs * vz + rb * sn * uz;
+    }
+  }
 }
