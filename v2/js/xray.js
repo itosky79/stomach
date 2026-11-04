@@ -11,13 +11,15 @@ function viewRects() {
     return { film: { left: (w - fw) / 2, top: (h - fh) / 2, w: fw, h: fh, yb: (h - fh) / 2 }, w: w, h: h, full: true };
   }
   // 3D + 透視：透視像の小窓（ピクチャー・イン・ピクチャー）。位置と大きさは PIP（ドラッグで動かす。filmPip の下）
-  const fw0 = Math.round(Math.min(238, Math.max(w < 420 ? 96 : 132, w * 0.29)));
+  const fw0 = pipBaseW(w);
   let fw = Math.round(fw0 * PIP.s), fh = Math.round(fw * 1.26);
-  const maxH = h - 8, maxW = w - 8;
+  // 上のボタンの帯（3D／3D + 透視／X線像、一人称／三人称、撮影）の下には入れない。入ると小窓の上の角がつかめなくなるため
+  const barEl = stage.querySelector('.bar'), top0 = barEl ? Math.round(barEl.offsetTop + barEl.offsetHeight + 6) : 4;
+  const maxH = h - top0 - 4, maxW = w - 8;
   if (fh > maxH) { fh = maxH; fw = Math.round(fh / 1.26); }
   if (fw > maxW) { fw = maxW; fh = Math.round(fw * 1.26); }
   const left = Math.round(Math.max(4, Math.min(w - fw - 4, PIP.x * w - fw / 2)));
-  const top = Math.round(Math.max(4, Math.min(h - fh - 4, PIP.y * h - fh / 2)));
+  const top = Math.round(Math.max(top0, Math.min(h - fh - 4, PIP.y * h - fh / 2)));
   return { film: { left: left, top: top, w: fw, h: fh, yb: h - top - fh }, w: w, h: h };
 }
 /* ---- 透視像の小窓を動かす（ピクチャー・イン・ピクチャー）----
@@ -27,6 +29,10 @@ function viewRects() {
 const PIP_DEF = { x: -1, y: -1, s: 1 };
 const PIP = { ...PIP_DEF };
 try { const v = JSON.parse(localStorage.getItem('stomach.pip') || 'null'); if (v && isFinite(v.x) && isFinite(v.y) && isFinite(v.s)) Object.assign(PIP, v); } catch (e) {}
+function pipBaseW(w) { return Math.round(Math.min(238, Math.max(w < 420 ? 96 : 132, w * 0.29))); }   // 倍率 1 のときの小窓の幅
+/* 小窓は 3D 画面の大きさで頭打ちになる。操作を始めるときに、倍率を今の見た目の大きさに合わせ直す
+   （合わせないと、頭打ちのあとも倍率だけ上がり続け、角を引いても小さくならなかった） */
+function pipSync() { const r = filmEl.getBoundingClientRect(), w = stage.clientWidth; if (r.width > 0 && w > 0) PIP.s = r.width / pipBaseW(w); }
 function pipDefault() {   // 初めの位置：右下（以前と同じ）
   const w = stage.clientWidth, h = stage.clientHeight;
   if (!w || !h) return;   // まだ画面の大きさが決まっていない
@@ -41,7 +47,7 @@ function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PI
   const EDGE = e => e.pointerType === 'touch' ? 22 : 12;
   const PIP_MIN = 0.35, PIP_MAX = 2.6;
   function edgeAt(e) {   // 辺や角の近くなら、つかんだ角の向き [sx, sy]（−1 = 左・上、+1 = 右・下）。近くなければ null
-    const r = filmEl.getBoundingClientRect(), E = EDGE(e);
+    const r = filmEl.getBoundingClientRect(), E = Math.min(EDGE(e), r.width * 0.2, r.height * 0.2);   // 小さい小窓では端の 2 割まで（全体が角・辺になって動かせなくなるのを防ぐ）
     const nl = e.clientX - r.left < E, nr = r.right - e.clientX < E, nt = e.clientY - r.top < E, nb = r.bottom - e.clientY < E;
     if (!(nl || nr || nt || nb)) return null;
     const sx = nl ? -1 : nr ? 1 : (e.clientX < r.left + r.width / 2 ? -1 : 1);
@@ -59,6 +65,7 @@ function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PI
     e.preventDefault(); e.stopPropagation();
     filmEl.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pipSync();
     const r = filmEl.getBoundingClientRect();
     if (pts.size === 2) {   // 2 本指でつまむ
       const [p1, p2] = [...pts.values()];
@@ -114,6 +121,7 @@ function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PI
   filmEl.addEventListener('wheel', e => {
     if (viewMode !== 1) return;
     e.preventDefault(); e.stopPropagation();
+    pipSync();
     PIP.s = Math.max(PIP_MIN, Math.min(PIP_MAX, PIP.s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
     layoutFilm(); pipSave();
   }, { passive: false });
