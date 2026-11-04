@@ -102,6 +102,7 @@ function buildRings(pts, rads, N, off, taper, radMul) {
    押し込む深さは強さ amt（0〜1）で決め、amt = 1 で前後の壁の隙間が COMP_GAP（実寸およそ 3 mm）まで薄くなる。
    円のふちでは押し込みを滑らかに弱める（壁が裂けないように）。
    つぶれた断面は、輪の多角形の面積から断面積と容量を求め直す。入りきらなくなったバリウムは rebuild の最後で隣の断面へあふれさせる */
+const FUNDUS = { r: 0.35, d: 1.5 };      // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.35 倍、背中側へ 1.5（実寸およそ 1.8 cm）
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標）。sim.js の setCompAxis が体位から決める
 function ringArea(i) {   // 断面 i の輪の多角形の面積（断面の平面 U・V で測る）
@@ -195,7 +196,13 @@ function rebuild() {
   const R0 = S.rad0 || S.rad, S3 = Math.pow(BODY_SCALE, 3), want = targetMl * S3 + gasMl, nC = S.pts.length - 1;
   const reg = k => S.regions.find(r => r[0] === k), ang = reg('angle'), pc = reg('duode')[2];
   const wDist = c => c <= ang[2] ? 0 : c >= ang[3] ? 1 : (c - ang[2]) / (ang[3] - ang[2]);   // 0 = 近位、1 = 遠位
-  buildRings(S.pts, R0, NMAIN, 0, 0.06, null);
+  // 穹窿部（胃底部）を深くする（2026-11-04）：胃底部の断面を太くし（先端ほど。最大 FUNDUS.r 倍）、中心の線を背中側へ下げる（最大 FUNDUS.d）。
+  // 背臥位や頭低位で、胃底部により多くのバリウムが溜まるようにするため。胃全体の容積はこのあとバリウム＋ガスに合わせるので変わらない。
+  // 値は見た目と溜まり方で決めた仮の値（実測と照らし合わせていない）
+  const fEnd = reg('fundus')[3], fW = c => { const t = Math.max(0, Math.min(1, c / fEnd)); return 1 - t * t * (3 - 2 * t); };   // 胃底部の先端 1 → 胃体部との境 0
+  const fMul = c => 1 + FUNDUS.r * fW(c);
+  const pts = S.pts.map((p, k) => [p[0], p[1], p[2] - FUNDUS.d * fW(k)]);   // z は腹側が +、背中側へ下げる
+  buildRings(pts, R0, NMAIN, 0, 0.06, fMul);
   let P1 = 0, D1 = 0;   // 倍率 1 のときの近位・遠位の容量（実寸 mL。胃角部は半分ずつ）
   for (let i = 0; i < NMAIN; i++) { const c = i / (NMAIN - 1) * nC; if (c >= pc) continue; const w = wDist(c); P1 += cap[i] * (1 - w) * S3; D1 += cap[i] * w * S3; }
   const ratio = DISTEND.ratio(want);
@@ -203,7 +210,7 @@ function rebuild() {
   distK = [Math.sqrt(want * ratio / (1 + ratio) / P1), Math.sqrt(want / (1 + ratio) / D1)];
   lumenK = Math.sqrt(want / (P1 + D1));
   const mulD = x => { const c = x, w = wDist(c); return distK[0] * (1 - w) + distK[1] * w; };
-  buildRings(S.pts, R0, NMAIN, 0, 0.06, x => x >= pc ? lumenK : mulD(x));
+  buildRings(pts, R0, NMAIN, 0, 0.06, x => (x >= pc ? lumenK : mulD(x)) * fMul(x));
 
   cardiaIdx = Math.round(S.cardia / nCtl * (NMAIN - 1));
   pylIdx = Math.round((pylStart + 0.5) / nCtl * (NMAIN - 1));

@@ -129,7 +129,7 @@ function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PI
 /* 透視の視野。field：縦の長さ（cm、台の座標は実寸 cm）。以前は胃の全体が入る広さ（縦およそ 29 cm）だったが、
    透視像はひだなどを見るためのもので、胃の全体は 3D で見るので、既定を 17 cm にした。
    視野の真ん中は胃の容積の重心。圧迫しているときは圧迫した場所。pan は「X線像」だけの表示でドラッグして動かした量（cm） */
-const XFOV = { field: 17, panX: 0, panY: 0 };
+const XFOV = { field: 17, auto: true, panX: 0, panY: 0 };   // auto：バリウムの無い所（二重造影の所）が全部入るように視野を自動で決める（既定）
 const _xc = new THREE.Vector3(), _xx = new THREE.Vector3();
 function setXcam(aspect) {
   // 管球も受像器も台に固定されているので、向きは体位によらず一定
@@ -137,13 +137,18 @@ function setXcam(aspect) {
   _xx.crossVectors(AY, AZ);
   // 視野の真ん中（xfovCenter）：圧迫しているときは圧迫した断面、そうでなければ体位の目的部位、目的部位がなければ胃の容積の重心。
   // XFOV.fixed のときは胃を囲む箱の真ん中（評価モードの像）
-  if (XFOV.fixed) _xc.set(0, 0, 0); else _xc.copy(xfovCenter());
-  bodyGroup.updateMatrixWorld(true);
-  _xc.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xc);
-  const cx = _xc.dot(_xx), cy = _xc.dot(AY);
+  let cx, cy, field = XFOV.field;
+  const fr = !XFOV.fixed && XFOV.auto && !(compAmt > 0.01 && compMid >= 0) ? xfovAuto(aspect) : null;
+  if (fr) { cx = fr.cx; cy = fr.cy; field = fr.field; }
+  else {
+    if (XFOV.fixed) _xc.set(0, 0, 0); else _xc.copy(xfovCenter());
+    bodyGroup.updateMatrixWorld(true);
+    _xc.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xc);
+    cx = _xc.dot(_xx); cy = _xc.dot(AY);
+  }
   xcam.position.copy(AZ).multiplyScalar(br * 3.2).addScaledVector(_xx, cx + XFOV.panX).addScaledVector(AY, cy + XFOV.panY);
   xcam.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(_xx.clone(), AY.clone(), AZ.clone()));
-  const hh = XFOV.field / 2, hw = hh * aspect;
+  const hh = field / 2, hw = hh * aspect;
   xcam.left = -hw; xcam.right = hw; xcam.top = hh; xcam.bottom = -hh;
   xcam.near = 1; xcam.far = br * 9;
   xcam.updateProjectionMatrix();
@@ -336,8 +341,12 @@ function renderStrip() {
 /* 透視の視野の切り替えと、「X線像」だけの表示でのドラッグ（視野を動かす） */
 {
   const seg = document.getElementById('fovSeg');
-  const sync = () => [...seg.children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.f === XFOV.field));
-  seg.addEventListener('click', e => { const b = e.target.closest('button[data-f]'); if (!b) return; XFOV.field = +b.dataset.f; sync(); });
+  const sync = () => [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.f === 'auto' ? XFOV.auto : (!XFOV.auto && +b.dataset.f === XFOV.field)));
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button[data-f]'); if (!b) return;
+    if (b.dataset.f === 'auto') XFOV.auto = true; else { XFOV.auto = false; XFOV.field = +b.dataset.f; }
+    sync();
+  });
   sync();
 }
 function xfovPan(dxPx, dyPx) {   // 画面の画素の移動を、視野の cm に直して動かす（像をつかんで動かす向き）
@@ -402,4 +411,43 @@ function zoomFade() {
   matSkin.uniforms.uO.value = skinOpacity * (0.35 + 0.65 * f);
   matBone.uniforms.uO.value = 0.26 * (0.45 + 0.55 * f);
   uMucA.value = theme3d.mucA * (1 + 0.8 * (1 - f));
+}
+
+/* ---- 透視の視野を自動で決める（既定）----
+   透視で撮るのはバリウムの無い所（ガスで膨らみ、壁に付いたバリウムで二重造影になる所）。溜まったバリウムの所は写しても意味が無い。
+   そこで、胃（十二指腸を除く）の壁のうち液面より上にある点を、透視の画面（受像器の面）に写した範囲を求め、それが全部入るように
+   視野の真ん中と大きさ（縦 10〜32 cm、ふちに 1 割の余白）を決める。0.2 秒ごとに求め直し、なめらかに動かす。
+   液面より上の点が無いとき（ほぼ満杯）は、体位の目的部位を真ん中にして 17 cm */
+const XAUTO = { t: 0, last: 0, goal: { cx: 0, cy: 0, field: 17 }, cur: null };
+const _xa = new THREE.Vector3(), _xm = new THREE.Matrix4();
+function xfovAuto(aspect) {
+  const now = performance.now();
+  if (now - XAUTO.t > 200 || !XAUTO.cur) {
+    XAUTO.t = now;
+    bodyGroup.updateMatrix(); _xm.copy(bodyGroup.matrix);   // 胃の座標 → 台（tiltGroup）の座標
+    const ax = new THREE.Vector3().crossVectors(AY, AZ);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, n = 0;
+    for (let i = 0; i < NMAIN; i++) {
+      if (regionList[regionOf[i]][0] === 'duode') continue;
+      for (let j = 0; j < CM; j++) {
+        const v = i * CM + j;
+        if (hArr[v] <= lvl[i]) continue;   // 液面の下（溜まったバリウム）は除く
+        _xa.set(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]).applyMatrix4(_xm);
+        const px = _xa.dot(ax), py = _xa.dot(AY);
+        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py; n++;
+      }
+    }
+    if (n > 20) {
+      const h = Math.max(y1 - y0, (x1 - x0) / Math.max(0.3, aspect)) * 1.1;
+      XAUTO.goal = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, field: Math.max(10, Math.min(32, h)) };
+      XAIM.text = 'バリウムの無い所（二重造影）';
+    } else {
+      _xa.copy(xfovCenter()); bodyGroup.updateMatrixWorld(true); _xa.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xa);
+      XAUTO.goal = { cx: _xa.dot(ax), cy: _xa.dot(AY), field: 17 };
+    }
+  }
+  const dt = Math.min(0.1, (now - (XAUTO.last || now)) / 1000); XAUTO.last = now;
+  if (!XAUTO.cur) XAUTO.cur = { ...XAUTO.goal };
+  else { const k = 1 - Math.exp(-dt * 2.3); for (const key of ['cx', 'cy', 'field']) XAUTO.cur[key] += (XAUTO.goal[key] - XAUTO.cur[key]) * k; }
+  return XAUTO.cur;
 }
