@@ -104,10 +104,10 @@ canvas.addEventListener('pointermove', e => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   drag.x = e.clientX; drag.y = e.clientY;
-  if (viewPreset === 'fps') {   // 一人称：見回す（ドラッグした向きを見る）
+  if (viewPreset === 'fps') {   // 一人称：見回す。景色をつかんで動かす向き（三人称のドラッグと同じ感覚。右へドラッグすると景色が右へ動き、左を向く）
     const k = 0.004 * FPS.fov / 60;   // 拡大しているときはゆっくり回す
-    FPS.yaw -= dx * k;
-    FPS.pitch = Math.max(-1.4, Math.min(1.4, FPS.pitch - dy * k));
+    FPS.yaw += dx * k;
+    FPS.pitch = Math.max(-1.4, Math.min(1.4, FPS.pitch + dy * k));
   } else if (drag.pan) {
     const s = ctrl.dist * 0.0016;
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
