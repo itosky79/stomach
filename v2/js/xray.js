@@ -4,14 +4,74 @@ const filmEl = document.getElementById('film');
 const fRel = filmEl.querySelector('.fR'), fLel = filmEl.querySelector('.fL');
 function viewRects() {
   const w = stage.clientWidth, h = stage.clientHeight;
+  if (PIP.x < 0) pipDefault();
   if (viewMode === 0) return { film: null, w: w, h: h };
   if (viewMode === 2) {
     const fh = Math.max(120, Math.min(h - 26, (w - 26) * 1.25)), fw = fh / 1.25;
     return { film: { left: (w - fw) / 2, top: (h - fh) / 2, w: fw, h: fh, yb: (h - fh) / 2 }, w: w, h: h, full: true };
   }
-  const fw = Math.round(Math.min(238, Math.max(w < 420 ? 96 : 132, w * 0.29)));
-  const fh = Math.round(Math.min(fw * 1.26, h * 0.62));
-  return { film: { left: w - fw - 14, top: h - fh - 14, w: fw, h: fh, yb: 14 }, w: w, h: h };
+  // 3D + 透視：透視像の小窓（ピクチャー・イン・ピクチャー）。位置と大きさは PIP（ドラッグで動かす。filmPip の下）
+  const fw0 = Math.round(Math.min(238, Math.max(w < 420 ? 96 : 132, w * 0.29)));
+  let fw = Math.round(fw0 * PIP.s), fh = Math.round(fw * 1.26);
+  const maxH = h - 8, maxW = w - 8;
+  if (fh > maxH) { fh = maxH; fw = Math.round(fh / 1.26); }
+  if (fw > maxW) { fw = maxW; fh = Math.round(fw * 1.26); }
+  const left = Math.round(Math.max(4, Math.min(w - fw - 4, PIP.x * w - fw / 2)));
+  const top = Math.round(Math.max(4, Math.min(h - fh - 4, PIP.y * h - fh / 2)));
+  return { film: { left: left, top: top, w: fw, h: fh, yb: h - top - fh }, w: w, h: h };
+}
+/* ---- 透視像の小窓を動かす（ピクチャー・イン・ピクチャー）----
+   PIP.x, PIP.y：小窓の中心の位置（3D 画面の幅・高さに対する割合）。PIP.s：大きさ（初めの大きさに対する倍率 0.6〜2.6）。
+   小窓をドラッグで動かす。左上の角をドラッグするか、小窓の上でホイールを回すと大きさが変わる。ダブルクリックで元に戻す。
+   置いた場所はブラウザに覚えておく（保存できないブラウザでは、そのときだけ） */
+const PIP_DEF = { x: -1, y: -1, s: 1 };
+const PIP = { ...PIP_DEF };
+try { const v = JSON.parse(localStorage.getItem('stomach.pip') || 'null'); if (v && isFinite(v.x) && isFinite(v.y) && isFinite(v.s)) Object.assign(PIP, v); } catch (e) {}
+function pipDefault() {   // 初めの位置：右下（以前と同じ）
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;   // まだ画面の大きさが決まっていない
+  const fw = Math.round(Math.min(238, Math.max(w < 420 ? 96 : 132, w * 0.29))), fh = Math.round(fw * 1.26);
+  PIP.s = 1; PIP.x = (w - fw / 2 - 14) / w; PIP.y = (h - fh / 2 - 14) / h;
+}
+function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PIP)); } catch (e) {} }
+{
+  let drag = null, lastDown = 0, lastX = 0, lastY = 0;
+  filmEl.addEventListener('pointerdown', e => {
+    if (viewMode !== 1) return;
+    e.preventDefault(); e.stopPropagation();
+    // 2 回続けて押したら元の位置と大きさに戻す（押したときにブラウザの動きを止めているので、dblclick は届かない）
+    const now = performance.now();
+    if (now - lastDown < 350 && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 8) { lastDown = 0; drag = null; pipDefault(); layoutFilm(); pipSave(); return; }
+    lastDown = now; lastX = e.clientX; lastY = e.clientY;
+    filmEl.setPointerCapture(e.pointerId);
+    const r = filmEl.getBoundingClientRect();
+    drag = { mode: e.target.closest('.fResize') ? 'size' : 'move', x: e.clientX, y: e.clientY,
+             cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width, s: PIP.s };
+  });
+  filmEl.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const st = stage.getBoundingClientRect();
+    if (drag.mode === 'move') {
+      PIP.x = (drag.cx + e.clientX - drag.x - st.left) / st.width;
+      PIP.y = (drag.cy + e.clientY - drag.y - st.top) / st.height;
+    } else {   // 左上の角：右下の角を動かさずに大きさを変える
+      const nw = Math.max(60, drag.w - (e.clientX - drag.x));
+      const k = nw / drag.w;
+      PIP.s = Math.max(0.6, Math.min(2.6, drag.s * k));
+      const fw = drag.w * PIP.s / drag.s, fh = fw * 1.26;
+      const right = drag.cx + drag.w / 2, bottom = drag.cy + drag.w * 1.26 / 2;
+      PIP.x = (right - fw / 2 - st.left) / st.width; PIP.y = (bottom - fh / 2 - st.top) / st.height;
+    }
+    layoutFilm();
+  });
+  const end = () => { if (drag) { drag = null; layoutFilm(); const r = viewRects(); if (r.film) { PIP.x = (r.film.left + r.film.w / 2) / r.w; PIP.y = (r.film.top + r.film.h / 2) / r.h; } pipSave(); } };
+  filmEl.addEventListener('pointerup', end); filmEl.addEventListener('pointercancel', end);
+  filmEl.addEventListener('wheel', e => {
+    if (viewMode !== 1) return;
+    e.preventDefault(); e.stopPropagation();
+    PIP.s = Math.max(0.6, Math.min(2.6, PIP.s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    layoutFilm(); pipSave();
+  }, { passive: false });
 }
 function setXcam(aspect) {
   // 管球も受像器も台に固定されているので、向きは体位によらず一定
@@ -30,6 +90,7 @@ function layoutFilm() {
   fpsPad.style.visibility = r.full ? 'hidden' : '';   // X 線像だけを出しているときは操作の説明を隠す
   if (!r.film) { filmEl.style.display = 'none'; return; }
   filmEl.style.display = 'block';
+  filmEl.classList.toggle('pip', viewMode === 1);
   filmEl.style.left = r.film.left + 'px'; filmEl.style.top = r.film.top + 'px';
   filmEl.style.width = r.film.w + 'px'; filmEl.style.height = r.film.h + 'px';
 }
