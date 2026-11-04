@@ -149,7 +149,7 @@ function layoutFilm() {
 }
 function updateFilmLabels() {
   document.getElementById('filmPos').textContent = poseName(tiltCur, rollCur);
-  document.getElementById('filmProj').textContent = TYPES[curType].name + (compAmt > 0.01 ? '・圧迫' : '');
+  document.getElementById('filmProj').textContent = compAmt > 0.01 ? '圧迫' : '';   // 胃の型の名前（解剖モデル）は出さない
   const lw = new THREE.Vector3(1, 0, 0).applyQuaternion(bodyGroup.quaternion);
   const cx = new THREE.Vector3().setFromMatrixColumn(xcam.matrixWorld, 0);
   const lr = lw.dot(cx) >= 0;
