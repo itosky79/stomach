@@ -336,8 +336,11 @@ const matGear = solidProp(0x6E7F8C);
    画面の上で胃と重なり、胃より手前にある部品は、大きさによらずほとんど消す（FADE_ALPHA.front）。
    部品ごとに材質を分け、xray.js の render で毎回、部品ごとに決める */
 const FADE_ALPHA = { base: 0.8, cover: 0.25, front: 0.08, from: 0.07, to: 0.10 };   // from〜to：画面に占める割合で滑らかに切り替える。front：胃の手前に重なるとき
+let themeReady = false;   // setTheme3D が一度動いたら true（それより前は配色の値がまだ無い）
 function fadeMat(color) {
   const m = solidProp(color);
+  m.userData.base = color;   // 配色で明るくするときの元の色（setTheme3D・tintEquip）
+  if (themeReady) tintEquip(m);
   m.uniforms.uA = { value: FADE_ALPHA.base };
   m.fragmentShader = m.fragmentShader.replace('uniform vec3 uC;', 'uniform vec3 uC; uniform float uA;')
     .replace('*fr*0.35, 1.0);', '*fr*0.35, uA);');
@@ -546,11 +549,17 @@ setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fi
 const THEME3D = {
   dark:  { bg: 0x0A0F14, bgFull: 0x070B0F, wall: 0x202C37, floor: 0x18222B, ceil: 0x141C24, frame: 0x4A5C6B, pad: 0x263440, grid: [0x2A3B4A, 0x1D2935],
            skin: 0xB8CBD8, skinA: [0.07, 1.9], bone: 0xD6DEE6, boneA: [0.07, 0.95], rim: [0.36, 0.50, 0.60], stRim: [0.34, 0.46, 0.56], mucA: 0.17 },
-  // ライト：明るい背景に溶けないよう、体の表面と骨を濃い色にし、ふちを暗い色で縁取る。胃の粘膜も少し濃くする
-  light: { bg: 0xDCE3E9, bgFull: 0xD3DBE2, wall: 0xC4CFD8, floor: 0xA9B6C1, ceil: 0xE2E8ED, frame: 0x6F8292, pad: 0x4E6274, grid: [0x8496A5, 0x9AAAB7],
-           skin: 0x3E566A, skinA: [0.14, 2.3], bone: 0x52626F, boneA: [0.16, 1.2], rim: [0.06, 0.12, 0.18], stRim: [0.30, 0.10, 0.12], mucA: 0.30 }
+  // ライト（2026-11-04 に 12 案を画像で見比べて決めた）：背景と部屋を中間の灰色にし、人体と骨は白く描く。
+  // 背景を明るくして人体を濃く描く案は、引いた視点で人体全体が濃い影のかたまりになり、胃が埋もれた。背景をもっと明るくした案は、白い人体とバリウムが背景に溶けた
+  light: { bg: 0x9AA7B2, bgFull: 0x9AA7B2, wall: 0x8C99A4, floor: 0x76838E, ceil: 0xA5B0B9, frame: 0x4F5F6C, pad: 0x3A4855, grid: [0x5F6E7B, 0x6E7C88],
+           skin: 0xE8F0F6, skinA: [0.10, 2.0], bone: 0xF2F6FA, boneA: [0.10, 1.0], rim: [0.95, 0.98, 1.0], stRim: [0.95, 0.80, 0.80], mucA: 0.24, equip: 0 }
 };
 let theme3d = THEME3D.dark;
+/* X 線管・支柱・腕・歯車など装置の色を、配色の equip（0〜1）だけ背景の色へ寄せる。明るい配色で、濃い人体が濃い装置に重なって見えなくなるのを防ぐ */
+function tintEquip(m) {
+  const t = theme3d.equip || 0, base = new THREE.Color(m.userData.base);
+  m.uniforms.uC.value.copy(base).lerp(new THREE.Color(theme3d.bg), t);
+}
 function setTheme3D(name) {
   theme3d = THEME3D[name] || THEME3D.dark;
   matWall.uniforms.uC.value.setHex(theme3d.wall); matFloor.uniforms.uC.value.setHex(theme3d.floor); matCeil.uniforms.uC.value.setHex(theme3d.ceil);
@@ -558,6 +567,9 @@ function setTheme3D(name) {
   matSkin.uniforms.uC.value.setHex(theme3d.skin); matSkin.uniforms.uA.value.set(...theme3d.skinA); matSkin.uniforms.uR.value.setRGB(...theme3d.rim);
   matBone.uniforms.uC.value.setHex(theme3d.bone); matBone.uniforms.uA.value.set(...theme3d.boneA); matBone.uniforms.uR.value.setRGB(...theme3d.rim);
   uRimS.value.setRGB(...theme3d.stRim); uMucA.value = theme3d.mucA;
+  fadeParts.forEach(m => tintEquip(m.material));
+  matGear.userData.base = matGear.userData.base || 0x6E7F8C; tintEquip(matGear);
+  themeReady = true;
   if (roomGrid) { const c = roomGrid.geometry.attributes.color; const a = new THREE.Color(theme3d.grid[0]), b = new THREE.Color(theme3d.grid[1]);
     // 真ん中の線だけ濃く（GridHelper と同じ並び：1 本の線ごとに 4 点、真ん中は 10 本目）
     for (let i = 0; i < c.count; i++) { const k = Math.floor(i / 4) === 10 ? a : b; c.setXYZ(i, k.r, k.g, k.b); }
