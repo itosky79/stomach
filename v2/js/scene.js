@@ -37,16 +37,17 @@ void main(){
 function litMat(color, opacity, baseA, rimA) {
   return new THREE.ShaderMaterial({
     uniforms: { uC: { value: new THREE.Color(color) }, uO: { value: opacity },
-                uA: { value: new THREE.Vector2(baseA === undefined ? 0.34 : baseA, rimA === undefined ? 1.25 : rimA) } },
+                uA: { value: new THREE.Vector2(baseA === undefined ? 0.34 : baseA, rimA === undefined ? 1.25 : rimA) },
+                uR: { value: new THREE.Color(0.36, 0.50, 0.60) } },   // ふちの光の色（ライトでは暗くする。setTheme3D）
     vertexShader: SIMPLE_VERT,
-    fragmentShader: `uniform vec3 uC; uniform float uO; uniform vec2 uA;
+    fragmentShader: `uniform vec3 uC; uniform float uO; uniform vec2 uA; uniform vec3 uR;
       varying vec3 vN; varying vec3 vVd; varying vec3 vL;
       void main(){
         vec3 n = normalize(vN);
         float l1 = max(dot(n, normalize(vec3(0.42,0.80,0.62))),0.0);
         float l2 = max(dot(n, normalize(vec3(-0.70,0.10,-0.45))),0.0);
         float fr = pow(1.0 - abs(dot(n, normalize(vVd))), 2.4);
-        vec3 col = uC * (0.34 + 0.62*l1 + 0.22*l2) + vec3(0.36,0.50,0.60)*fr*0.7;
+        vec3 col = uC * (0.34 + 0.62*l1 + 0.22*l2) + uR*fr*0.7;
         gl_FragColor = vec4(col, clamp(uO * (uA.x + uA.y*fr), 0.0, 1.0));
       }`,
     transparent: true, depthWrite: false, side: THREE.DoubleSide
@@ -140,7 +141,7 @@ float rugae(vec3 r, float on){
 }`;
 
 const FRAG_SOLID = `
-uniform vec3 uUp; uniform float uFlip; uniform float uRug;
+uniform vec3 uUp; uniform float uFlip; uniform float uRug; uniform vec3 uRimS; uniform float uMucA;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
 varying vec3 vNL; varying vec3 vNW; varying vec3 vVd;
 ${RUGAE}
@@ -160,8 +161,8 @@ void main(){
   float l1 = max(dot(n, normalize(vec3(0.42,0.80,0.62))), 0.0);
   float l2 = max(dot(n, normalize(vec3(-0.70,0.10,-0.45))), 0.0);
   float fr = pow(1.0 - max(dot(n, normalize(vVd)), 0.0), 2.1);
-  vec3 col = base * (0.30 + 0.70*l1 + 0.24*l2) + vec3(0.34,0.46,0.56) * fr * 0.55;
-  float a = mix(mix(0.17, 0.80, dbl), 0.985, below);
+  vec3 col = base * (0.30 + 0.70*l1 + 0.24*l2) + uRimS * fr * 0.55;
+  float a = mix(mix(uMucA, 0.80, dbl), 0.985, below);
   a = max(a, fr * 0.48);
   gl_FragColor = vec4(col, a);
 }`;
@@ -183,10 +184,11 @@ void main(){
 
 const uUp = { value: new THREE.Vector3(0, 1, 0) };
 const uRug = { value: 1 };
+const uRimS = { value: new THREE.Color(0.34, 0.46, 0.56) }, uMucA = { value: 0.17 };   // 胃のふちの光の色と、粘膜の不透明度（ライトでは変える。setTheme3D）
 function solidMat(side, flip) {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG_SOLID,
-    uniforms: { uUp: uUp, uFlip: { value: flip }, uRug: uRug },
+    uniforms: { uUp: uUp, uFlip: { value: flip }, uRug: uRug, uRimS: uRimS, uMucA: uMucA },
     transparent: true, depthWrite: false, side: side
   });
 }
@@ -542,14 +544,20 @@ function buildTable() {
 setTableToBody(new THREE.Vector3());   // 胃の型が決まると sim.js の fitBodyToStomach が置き直す
 /* ---- 画面の色（ダーク／ライト）に合わせた 3D の色。透視像（X 線像）は本物と同じく暗いまま ---- */
 const THEME3D = {
-  dark:  { bg: 0x0A0F14, bgFull: 0x070B0F, wall: 0x202C37, floor: 0x18222B, ceil: 0x141C24, frame: 0x4A5C6B, pad: 0x263440, grid: [0x2A3B4A, 0x1D2935] },
-  light: { bg: 0xDCE3E9, bgFull: 0xD3DBE2, wall: 0xC4CFD8, floor: 0xA9B6C1, ceil: 0xE2E8ED, frame: 0x6F8292, pad: 0x4E6274, grid: [0x8496A5, 0x9AAAB7] }
+  dark:  { bg: 0x0A0F14, bgFull: 0x070B0F, wall: 0x202C37, floor: 0x18222B, ceil: 0x141C24, frame: 0x4A5C6B, pad: 0x263440, grid: [0x2A3B4A, 0x1D2935],
+           skin: 0xB8CBD8, skinA: [0.07, 1.9], bone: 0xD6DEE6, boneA: [0.07, 0.95], rim: [0.36, 0.50, 0.60], stRim: [0.34, 0.46, 0.56], mucA: 0.17 },
+  // ライト：明るい背景に溶けないよう、体の表面と骨を濃い色にし、ふちを暗い色で縁取る。胃の粘膜も少し濃くする
+  light: { bg: 0xDCE3E9, bgFull: 0xD3DBE2, wall: 0xC4CFD8, floor: 0xA9B6C1, ceil: 0xE2E8ED, frame: 0x6F8292, pad: 0x4E6274, grid: [0x8496A5, 0x9AAAB7],
+           skin: 0x3E566A, skinA: [0.14, 2.3], bone: 0x52626F, boneA: [0.16, 1.2], rim: [0.06, 0.12, 0.18], stRim: [0.30, 0.10, 0.12], mucA: 0.30 }
 };
 let theme3d = THEME3D.dark;
 function setTheme3D(name) {
   theme3d = THEME3D[name] || THEME3D.dark;
   matWall.uniforms.uC.value.setHex(theme3d.wall); matFloor.uniforms.uC.value.setHex(theme3d.floor); matCeil.uniforms.uC.value.setHex(theme3d.ceil);
   matFrame.uniforms.uC.value.setHex(theme3d.frame); matPad.uniforms.uC.value.setHex(theme3d.pad);
+  matSkin.uniforms.uC.value.setHex(theme3d.skin); matSkin.uniforms.uA.value.set(...theme3d.skinA); matSkin.uniforms.uR.value.setRGB(...theme3d.rim);
+  matBone.uniforms.uC.value.setHex(theme3d.bone); matBone.uniforms.uA.value.set(...theme3d.boneA); matBone.uniforms.uR.value.setRGB(...theme3d.rim);
+  uRimS.value.setRGB(...theme3d.stRim); uMucA.value = theme3d.mucA;
   if (roomGrid) { const c = roomGrid.geometry.attributes.color; const a = new THREE.Color(theme3d.grid[0]), b = new THREE.Color(theme3d.grid[1]);
     // 真ん中の線だけ濃く（GridHelper と同じ並び：1 本の線ごとに 4 点、真ん中は 10 本目）
     for (let i = 0; i < c.count; i++) { const k = Math.floor(i / 4) === 10 ? a : b; c.setXYZ(i, k.r, k.g, k.b); }
