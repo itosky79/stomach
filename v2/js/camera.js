@@ -5,7 +5,7 @@ const AX = new THREE.Vector3(0, 0, -1), AY = new THREE.Vector3(-1, 0, 0), AZ = n
 const ctrl = { theta: 0.62, phi: 1.16, dist: 46, base: 46, target: new THREE.Vector3(0, 0, 0) };
 const VIEWS = { room: [0.62, 1.02, 2.90, -2], oblique: [1.05, 1.26, 1.45, -1] };
 let viewPreset = 'room';
-const FPS = { x: 0, z: 0, eye: 128, yaw: 0, pitch: 0 };
+const FPS = { x: 0, z: 0, eye: 128, yaw: 0, pitch: 0, fov: 60 };   // fov：拡大（画角。小さいほど大きく見える）
 const _dir = new THREE.Vector3(), _qt = new THREE.Quaternion(), _look = new THREE.Vector3();
 function applyCam() {
   if (viewPreset === 'fps') { applyFpsCam(); return; }
@@ -54,7 +54,7 @@ function syncViewBtns() {
   fpsPad.hidden = viewPreset !== 'fps';
   if (viewPreset === 'fps' && !was) {   // 入ったときだけ操作の説明を出し、8 秒で消す
     const tip = document.getElementById('fpsTip');
-    tip.textContent = 'ドラッグで見回す ／ ダブルクリックで胃のほうを向く';
+    tip.textContent = 'ドラッグで見回す ／ ホイール（2 本指）で拡大 ／ ダブルクリックで胃のほうを向く';
     tip.classList.remove('off'); clearTimeout(syncViewBtns.t);
     syncViewBtns.t = setTimeout(() => tip.classList.add('off'), 8000);
   }
@@ -78,12 +78,15 @@ function fpsLookAt(v) {   // 目から点 v を向く
   _fd.set(v.x - FPS.x, v.y - FPS.eye, v.z - FPS.z).normalize();
   FPS.yaw = Math.atan2(-_fd.x, -_fd.z); FPS.pitch = Math.asin(Math.max(-1, Math.min(1, _fd.y)));
 }
-function fpsSeat() {   // 席に座り、胃（tiltGroup の原点）のほうを向く
+function fpsSeat() {   // 席に座り、胃（tiltGroup の原点）のほうを向く。拡大も戻す
+  FPS.fov = 60;
   FPS.x = OPERATOR_EYE.x; FPS.z = OPERATOR_EYE.z; FPS.eye = OPERATOR_EYE.y;
   fpsLookAt(tiltGroup.position.clone());
 }
+/* 一人称の拡大：画角を 8°〜75° の間で変える（席からは動かない）。見回す速さも画角に合わせて変える */
+function fpsZoom(k) { FPS.fov = Math.max(8, Math.min(75, FPS.fov * k)); applyCam(); }
 function applyFpsCam() {
-  if (camera.fov !== 60) { camera.fov = 60; camera.updateProjectionMatrix(); }
+  if (camera.fov !== FPS.fov) { camera.fov = FPS.fov; camera.updateProjectionMatrix(); }
   camera.position.set(FPS.x, FPS.eye, FPS.z);
   camera.up.set(0, 1, 0);
   const cp = Math.cos(FPS.pitch);
@@ -102,8 +105,9 @@ canvas.addEventListener('pointermove', e => {
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   drag.x = e.clientX; drag.y = e.clientY;
   if (viewPreset === 'fps') {   // 一人称：見回す（ドラッグした向きを見る）
-    FPS.yaw -= dx * 0.004;
-    FPS.pitch = Math.max(-1.4, Math.min(1.4, FPS.pitch - dy * 0.004));
+    const k = 0.004 * FPS.fov / 60;   // 拡大しているときはゆっくり回す
+    FPS.yaw -= dx * k;
+    FPS.pitch = Math.max(-1.4, Math.min(1.4, FPS.pitch - dy * k));
   } else if (drag.pan) {
     const s = ctrl.dist * 0.0016;
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
@@ -131,13 +135,13 @@ function zoomTo(d) {   // 寄るほど注視点を胃（原点）へ近づける
 }
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  if (viewPreset === 'fps') return;   // 一人称：席に座ったまま（前後に動かない）
+  if (viewPreset === 'fps') { fpsZoom(1 + Math.sign(e.deltaY) * 0.10); return; }   // 一人称：席に座ったまま拡大・縮小する
   zoomTo(ctrl.dist * (1 + Math.sign(e.deltaY) * 0.10));
 }, { passive: false });
 canvas.addEventListener('touchmove', e => {
   if (e.touches.length === 2) {
     const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-    if (pinch && viewPreset !== 'fps') zoomTo(ctrl.dist * pinch / d);
+    if (pinch) { if (viewPreset === 'fps') fpsZoom(pinch / d); else zoomTo(ctrl.dist * pinch / d); }
     pinch = d; drag = null;
   }
 }, { passive: true });
