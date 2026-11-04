@@ -90,9 +90,11 @@ body.detached .railbar{display:flex; cursor:move; touch-action:none}
 }
 /* 3D + 透視の小窓は動かせる（ピクチャー・イン・ピクチャー） */
 #film.pip{pointer-events:auto; cursor:move; touch-action:none; user-select:none; -webkit-user-select:none}
-#film .fResize{display:none; position:absolute; left:0; top:0; width:18px; height:18px; cursor:nwse-resize;
-  background:linear-gradient(135deg, rgba(127,169,189,.85) 0 3px, transparent 3px 6px, rgba(127,169,189,.85) 6px 8px, transparent 8px);
-  border-top-left-radius:2px}
+#film .fResize{display:none; position:absolute; width:12px; height:12px; border:0 solid rgba(127,169,189,.9); pointer-events:none}
+#film .fResize.tl{left:2px; top:2px; border-left-width:2px; border-top-width:2px}
+#film .fResize.tr{right:2px; top:2px; border-right-width:2px; border-top-width:2px}
+#film .fResize.bl{left:2px; bottom:2px; border-left-width:2px; border-bottom-width:2px}
+#film .fResize.br{right:2px; bottom:2px; border-right-width:2px; border-bottom-width:2px}
 #film.pip .fResize{display:block}
 #film.pip:hover{border-color:var(--teal)}
 #tiltGiz{position:absolute; left:10px; bottom:6px; width:118px; height:82px; pointer-events:none}

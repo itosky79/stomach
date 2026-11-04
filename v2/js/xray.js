@@ -21,8 +21,8 @@ function viewRects() {
   return { film: { left: left, top: top, w: fw, h: fh, yb: h - top - fh }, w: w, h: h };
 }
 /* ---- 透視像の小窓を動かす（ピクチャー・イン・ピクチャー）----
-   PIP.x, PIP.y：小窓の中心の位置（3D 画面の幅・高さに対する割合）。PIP.s：大きさ（初めの大きさに対する倍率 0.6〜2.6）。
-   小窓をドラッグで動かす。左上の角をドラッグするか、小窓の上でホイールを回すと大きさが変わる。ダブルクリックで元に戻す。
+   PIP.x, PIP.y：小窓の中心の位置（3D 画面の幅・高さに対する割合）。PIP.s：大きさ（初めの大きさに対する倍率 0.35〜2.6）。
+   小窓をドラッグで動かす。4 つの角・4 つの辺をドラッグするか、小窓の上でホイールを回すか、2 本指でつまむと大きさが変わる。2 回続けて押すと元に戻す。
    置いた場所はブラウザに覚えておく（保存できないブラウザでは、そのときだけ） */
 const PIP_DEF = { x: -1, y: -1, s: 1 };
 const PIP = { ...PIP_DEF };
@@ -35,41 +35,86 @@ function pipDefault() {   // 初めの位置：右下（以前と同じ）
 }
 function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PIP)); } catch (e) {} }
 {
-  let drag = null, lastDown = 0, lastX = 0, lastY = 0;
+  /* 指やマウスごとの位置。1 本：辺や角の近く（EDGE px 以内）なら大きさを変え、それ以外なら動かす。2 本（スマートフォン）：つまんで大きさを変える */
+  const pts = new Map();
+  let drag = null, lastDown = 0, lastX = 0, lastY = 0, moved = false;
+  const EDGE = e => e.pointerType === 'touch' ? 22 : 12;
+  const PIP_MIN = 0.35, PIP_MAX = 2.6;
+  function edgeAt(e) {   // 辺や角の近くなら、つかんだ角の向き [sx, sy]（−1 = 左・上、+1 = 右・下）。近くなければ null
+    const r = filmEl.getBoundingClientRect(), E = EDGE(e);
+    const nl = e.clientX - r.left < E, nr = r.right - e.clientX < E, nt = e.clientY - r.top < E, nb = r.bottom - e.clientY < E;
+    if (!(nl || nr || nt || nb)) return null;
+    const sx = nl ? -1 : nr ? 1 : (e.clientX < r.left + r.width / 2 ? -1 : 1);
+    const sy = nt ? -1 : nb ? 1 : (e.clientY < r.top + r.height / 2 ? -1 : 1);
+    return [sx, sy];
+  }
+  function setRect(cx, cy, s) {   // 画面上の中心（ページの座標）と倍率から PIP を決める
+    const st = stage.getBoundingClientRect();
+    PIP.s = Math.max(PIP_MIN, Math.min(PIP_MAX, s));
+    PIP.x = (cx - st.left) / st.width; PIP.y = (cy - st.top) / st.height;
+    layoutFilm();
+  }
   filmEl.addEventListener('pointerdown', e => {
     if (viewMode !== 1) return;
     e.preventDefault(); e.stopPropagation();
+    filmEl.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = filmEl.getBoundingClientRect();
+    if (pts.size === 2) {   // 2 本指でつまむ
+      const [p1, p2] = [...pts.values()];
+      drag = { mode: 'pinch', d: Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1, s: PIP.s, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+      lastDown = 0; return;
+    }
+    if (pts.size > 2) return;
     // 2 回続けて押したら元の位置と大きさに戻す（押したときにブラウザの動きを止めているので、dblclick は届かない）
     const now = performance.now();
-    if (now - lastDown < 350 && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 8) { lastDown = 0; drag = null; pipDefault(); layoutFilm(); pipSave(); return; }
-    lastDown = now; lastX = e.clientX; lastY = e.clientY;
-    filmEl.setPointerCapture(e.pointerId);
-    const r = filmEl.getBoundingClientRect();
-    drag = { mode: e.target.closest('.fResize') ? 'size' : 'move', x: e.clientX, y: e.clientY,
-             cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width, s: PIP.s };
+    if (now - lastDown < 350 && Math.hypot(e.clientX - lastX, e.clientY - lastY) < 10) {
+      lastDown = 0; drag = null; pts.clear(); pipDefault(); layoutFilm(); pipSave(); return;
+    }
+    lastDown = now; lastX = e.clientX; lastY = e.clientY; moved = false;
+    const c = edgeAt(e);
+    drag = c
+      ? { mode: 'size', ax: c[0] < 0 ? r.right : r.left, ay: c[1] < 0 ? r.bottom : r.top, sx: c[0], sy: c[1], w: r.width, s: PIP.s }   // 反対側の角（ax, ay）を動かさない
+      : { mode: 'move', x: e.clientX, y: e.clientY, cx: r.left + r.width / 2, cy: r.top + r.height / 2, s: PIP.s };
   });
   filmEl.addEventListener('pointermove', e => {
-    if (!drag) return;
-    const st = stage.getBoundingClientRect();
-    if (drag.mode === 'move') {
-      PIP.x = (drag.cx + e.clientX - drag.x - st.left) / st.width;
-      PIP.y = (drag.cy + e.clientY - drag.y - st.top) / st.height;
-    } else {   // 左上の角：右下の角を動かさずに大きさを変える
-      const nw = Math.max(60, drag.w - (e.clientX - drag.x));
-      const k = nw / drag.w;
-      PIP.s = Math.max(0.6, Math.min(2.6, drag.s * k));
-      const fw = drag.w * PIP.s / drag.s, fh = fw * 1.26;
-      const right = drag.cx + drag.w / 2, bottom = drag.cy + drag.w * 1.26 / 2;
-      PIP.x = (right - fw / 2 - st.left) / st.width; PIP.y = (bottom - fh / 2 - st.top) / st.height;
+    if (!drag) {   // マウスを乗せただけ：辺や角ならカーソルを変える
+      if (viewMode === 1) { const c = edgeAt(e); filmEl.style.cursor = c ? (c[0] === c[1] ? 'nwse-resize' : 'nesw-resize') : 'move'; }
+      return;
     }
-    layoutFilm();
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (Math.hypot(e.clientX - lastX, e.clientY - lastY) > 10) moved = true;
+    if (drag.mode === 'pinch') {
+      if (pts.size < 2) return;
+      const [p1, p2] = [...pts.values()];
+      setRect(drag.cx, drag.cy, drag.s * Math.hypot(p1.x - p2.x, p1.y - p2.y) / drag.d);
+    } else if (drag.mode === 'move') {
+      setRect(drag.cx + e.clientX - drag.x, drag.cy + e.clientY - drag.y, drag.s);
+    } else {   // 角や辺：つかんだ点と反対側の角の距離から新しい幅を決める（縦横比は 1 : 1.26 のまま）
+      const nw = Math.max(Math.abs(e.clientX - drag.ax), Math.abs(e.clientY - drag.ay) / 1.26, 40);
+      const s = Math.max(PIP_MIN, Math.min(PIP_MAX, drag.s * nw / drag.w)), fw = drag.w * s / drag.s, fh = fw * 1.26;
+      setRect(drag.ax + drag.sx * fw / 2, drag.ay + drag.sy * fh / 2, s);
+    }
   });
-  const end = () => { if (drag) { drag = null; layoutFilm(); const r = viewRects(); if (r.film) { PIP.x = (r.film.left + r.film.w / 2) / r.w; PIP.y = (r.film.top + r.film.h / 2) / r.h; } pipSave(); } };
+  const end = e => {
+    pts.delete(e.pointerId);
+    if (!drag) return;
+    if (drag.mode === 'pinch' && pts.size === 1) {   // 1 本だけ残ったら、そこから動かすのに切り替える
+      const [p] = [...pts.values()], r = filmEl.getBoundingClientRect();
+      drag = { mode: 'move', x: p.x, y: p.y, cx: r.left + r.width / 2, cy: r.top + r.height / 2, s: PIP.s }; return;
+    }
+    if (pts.size) return;
+    if (moved) lastDown = 0;   // 動かしたあとは 2 回押しとみなさない
+    drag = null; layoutFilm();
+    const r = viewRects(); if (r.film) { PIP.x = (r.film.left + r.film.w / 2) / r.w; PIP.y = (r.film.top + r.film.h / 2) / r.h; }
+    pipSave();
+  };
   filmEl.addEventListener('pointerup', end); filmEl.addEventListener('pointercancel', end);
   filmEl.addEventListener('wheel', e => {
     if (viewMode !== 1) return;
     e.preventDefault(); e.stopPropagation();
-    PIP.s = Math.max(0.6, Math.min(2.6, PIP.s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    PIP.s = Math.max(PIP_MIN, Math.min(PIP_MAX, PIP.s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
     layoutFilm(); pipSave();
   }, { passive: false });
 }
