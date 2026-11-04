@@ -403,3 +403,36 @@ function rebuildAll() {
   geom.attributes.aRug.needsUpdate = true;
   twistSave(); applyTwist();
 }
+
+/* ---- 圧迫 ----
+   胃の形は model.js の applyCompression でつぶす（断面を前後につぶし左右に広げる）。ここでは、
+   ① 透視像：圧迫した断面の中心（胃の座標）と強さをシェーダに渡し、圧迫筒の円の中のバリウムを薄く描く（scene.js の FRAG_XRAY）
+   ② 3D：圧迫筒を、圧迫する場所の真上（X 線管の軸に沿って）へ動かし、お腹の表面まで下ろして押し込む（押し込みは強さ × 4 cm） */
+const _cw = new THREE.Vector3(), _co = new THREE.Vector3(), _cd = new THREE.Vector3(), _ray = new THREE.Raycaster();
+function updateCompress() {
+  const on = compAmt > 0.01 && compMid >= 0 && compRegion;
+  if (!on) {
+    uComp.value.w = 0;
+    if (compCone) { compCone.position.set(0, COMP_HOME, 0); compRod.visible = false; }
+    return;
+  }
+  const c = compMid * 3;
+  uComp.value.set(centers[c], centers[c + 1], centers[c + 2], compAmt);
+  if (!compCone) return;
+  // 圧迫の中心を台（tiltGroup）の座標へ
+  bodyGroup.updateMatrixWorld(true);
+  _cw.set(centers[c], centers[c + 1], centers[c + 2]).applyMatrix4(bodyGroup.matrixWorld);
+  tiltGroup.worldToLocal(_cw);
+  // X 線管の側から、台の法線（−y）に沿ってお腹の表面を探す
+  _co.set(_cw.x, COMP_TOP, _cw.z); tiltGroup.localToWorld(_co);
+  _cd.set(0, -1, 0).applyQuaternion(tiltGroup.quaternion);
+  _ray.set(_co, _cd); _ray.far = 400;
+  meshSkin.updateMatrixWorld(true);
+  const hit = _ray.intersectObject(meshSkin, false)[0];
+  let bottom;
+  if (hit) { const h = tiltGroup.worldToLocal(hit.point.clone()); bottom = h.y - 4 * compAmt; }
+  else bottom = _cw.y + 8;   // 体の表面が見つからないとき（念のため）：胃の中心の 8 cm 上
+  compCone.position.set(_cw.x, bottom + 5, _cw.z);
+  const top = COMP_TOP, len = Math.max(0.5, top - (bottom + 10));
+  compRod.visible = true; compRod.position.set(_cw.x, bottom + 10 + len / 2, _cw.z); compRod.scale.set(1, len, 1);
+}

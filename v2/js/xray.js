@@ -244,6 +244,7 @@ function fadeAlpha(w, h) {
       a = FADE_ALPHA.base + (FADE_ALPHA.cover - FADE_ALPHA.base) * t;
       const overlap = r.behind || (r.x0 < st.x1 && r.x1 > st.x0 && r.y0 < st.y1 && r.y1 > st.y0);
       if (overlap && r.near < stDepth) a = FADE_ALPHA.front;   // 胃の手前に重なる
+      if ((m === compCone || m === compRod) && compRod && compRod.visible) a = Math.max(a, 0.35);   // 圧迫しているときの圧迫筒は、押しているのが分かるよう半透明より薄くしない
     }
     m.material.uniforms.uA.value = a;
   }

@@ -125,9 +125,9 @@ const VERT = `
 attribute float aLevel; attribute float aWet; attribute vec3 aRug;
 uniform vec3 uUp;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
-varying vec3 vNL; varying vec3 vNW; varying vec3 vVd;
+varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying vec3 vP;
 void main(){
-  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug;
+  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug; vP = position;
   vec4 wp = modelMatrix * vec4(position,1.0);
   vNW = normalize(mat3(modelMatrix) * normal);
   vVd = normalize(cameraPosition - wp.xyz);
@@ -168,16 +168,19 @@ void main(){
 }`;
 
 const FRAG_XRAY = `
-uniform vec3 uUp; uniform float uRug;
+uniform vec3 uUp; uniform float uRug; uniform vec4 uComp; uniform float uCompR;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
-varying vec3 vNL; varying vec3 vNW; varying vec3 vVd;
+varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying vec3 vP;
 ${RUGAE}
 void main(){
   vec3 n = normalize(vNW);
   float below = step(vH, vLevel);
   float coat = smoothstep(0.10, 0.50, vWet);
   float edge = clamp(1.0 / max(abs(dot(n, normalize(vVd))), 0.20), 1.0, 4.6);
-  float d = below * 0.235 + (1.0 - below) * coat * 0.058 * rugae(vR, uRug);
+  // 圧迫：圧迫筒の円（体の正面から見た円。半径 uCompR）の中では、溜まったバリウムが押しのけられて薄くなり、粘膜のひだが透けて見える
+  float cw = uComp.w * (1.0 - smoothstep(0.55 * uCompR, uCompR, length(vP.xy - uComp.xy)));
+  float pool = 0.235 * mix(1.0, 0.22 * rugae(vR, 1.0), cw);
+  float d = below * pool + (1.0 - below) * coat * 0.058 * rugae(vR, uRug);
   d *= edge;
   gl_FragColor = vec4(vec3(0.93,0.955,1.0) * d, 1.0);
 }`;
@@ -193,8 +196,9 @@ function solidMat(side, flip) {
   });
 }
 const matBack = solidMat(THREE.BackSide, -1), matFront = solidMat(THREE.FrontSide, 1);
+const uComp = { value: new THREE.Vector4(0, 0, 0, 0) }, uCompR = { value: 6 / BODY_SCALE };   // 圧迫の中心（胃の座標）と強さ、円の半径（実寸 6 cm）。sim.js の updateCompress が決める
 const matXray = new THREE.ShaderMaterial({
-  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug },
+  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug, uComp: uComp, uCompR: uCompR },
   transparent: true, depthWrite: false, depthTest: false,
   blending: THREE.AdditiveBlending, side: THREE.DoubleSide
 });
@@ -348,6 +352,7 @@ function fadeMat(color) {
   return m;
 }
 let fadeParts = [];
+let compCone = null, compRod = null, COMP_HOME = 0, COMP_TOP = 0;   // 圧迫筒と棒、たたんだときの高さ、棒の上端（tiltGroup の座標）
 function fadePart(mesh) { mesh.renderOrder = 8; fadeParts.push(mesh); return mesh; }   // 透けるので、不透明なものの後に描く
 function prop(parent, geo, mat, x, y, z, rx) {
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
@@ -520,7 +525,9 @@ function buildTable() {
   const tube = fadePart(prop(tableProps, new THREE.CylinderGeometry(9, 9, 34, 20), fadeMat(0x6E7F8C), 0, fy + 10, 0, Math.PI / 2));   // 管球
   tube.rotation.set(Math.PI / 2, 0, 0);
   fadePart(box(tableProps, 22, 12, 22, fadeMat(0x4A5C6B), 0, fy - 6, 0));             // 絞り
-  fadePart(prop(tableProps, new THREE.CylinderGeometry(5, 5, 10, 20), fadeMat(0x6E7F8C), 0, fy - 17, 0));   // 圧迫筒（たたんだ状態。第 3 段階で動かす）
+  compCone = fadePart(prop(tableProps, new THREE.CylinderGeometry(5, 5, 10, 20), fadeMat(0x6E7F8C), 0, fy - 17, 0));   // 圧迫筒（直径 10 cm）。圧迫するときは sim.js の updateCompress が動かす
+  compRod = fadePart(prop(tableProps, new THREE.CylinderGeometry(1.2, 1.2, 1, 10), fadeMat(0x4A5C6B), 0, fy - 12, 0));   // 圧迫筒を押し下げる棒
+  compRod.visible = false; COMP_HOME = fy - 17; COMP_TOP = fy - 6;
   const armZ = -(TB.w / 2 + 16);                                  // 支柱は窓と反対側（−z）に置く
   fadePart(box(tableProps, 10, 10, armZ, fadeMat(0x4A5C6B), 0, fy + 10, armZ / 2));   // 横の腕
   fadePart(box(tableProps, 12, fy + 15 - TB_BOTTOM, 12, fadeMat(0x4A5C6B), 0, (fy + 15 + TB_BOTTOM) / 2, armZ));   // 支柱

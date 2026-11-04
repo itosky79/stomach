@@ -52,6 +52,7 @@ function loop(now) {
   rollCur += (rollT - rollCur) * k;
   if (autoSpin) ctrl.az += dt * 0.28;
   applyPose(); applyCam();
+  updateCompress();
 
   tiltGroup.updateMatrixWorld(true);
   upLocal(uUp.value);
