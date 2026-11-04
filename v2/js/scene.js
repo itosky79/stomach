@@ -359,6 +359,7 @@ const tableProps = new THREE.Group(); tiltGroup.add(tableProps);    // 天板・
 const cradle = new THREE.Group(); scene.add(cradle);                // 回転軸のまわりの受け枠（傾くが、滑らない）
 const partition = new THREE.Group(); roomProps.add(partition);      // 仕切り壁・窓・操作室の机（画面でカメラが操作室側に出たら隠す）
 const ROOM_Z0 = 250;                                                 // 仕切り壁の位置（z）
+const wallMonitor = new THREE.Group(); roomProps.add(wallMonitor);   // 透視室の奥の壁のモニタ。一人称では窓越しに患者と重なって紛らわしいので隠す
 let roomGrid = null;                                                 // 床の格子（色の切り替えで色を変える）
 const DOOR = [150, 240], DOOR_H = 210;                               // 仕切り壁の扉の開口（x の範囲、高さ）
 
@@ -480,8 +481,8 @@ function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxG
   glass.position.set(0, (WY0 + WY1) / 2, Z0); glass.renderOrder = 8; partition.add(glass);
 
   /* ---- 透視室のモニタ（55 インチ）、近接操作卓、操作室の遠隔操作卓 ---- */
-  box(roomProps, 122, 69, 5, matDark, 60, 175, Z1 + 4);                // 奥の壁のモニタ
-  box(roomProps, 116, 63, 1, matScreen, 60, 175, Z1 + 7);
+  box(wallMonitor, 122, 69, 5, matDark, 60, 175, Z1 + 4);              // 奥の壁のモニタ
+  box(wallMonitor, 116, 63, 1, matScreen, 60, 175, Z1 + 7);
   box(roomProps, 6, 100, 6, matFrame, -150, 50, 70);                   // 近接操作卓（台の頭側、窓の側）
   box(roomProps, 40, 6, 28, matFrame, -150, 102, 70);
   box(partition, 180, 6, 70, matFrame, 0, 75, Z0 + 50);                // 遠隔操作卓の机
@@ -498,7 +499,7 @@ function monitorImage(h, x, y, z) {   // 縦 h cm の透視像（縦横比 4:5�
   const m = new THREE.Mesh(new THREE.PlaneGeometry(h * FLUORO_W / FLUORO_H, h), matMonitor);
   m.position.set(x, y, z); return m;
 }
-roomProps.add(monitorImage(60, 60, 175, -350 + 7.6));          // 透視室の奥の壁の 55 インチ
+wallMonitor.add(monitorImage(60, 60, 175, -350 + 7.6));        // 透視室の奥の壁の 55 インチ（一人称のときは隠す。xray.js の setXray）
 partition.add(monitorImage(32, -75, 100, ROOM_Z0 + 32.2));      // 操作室の机の左のモニタ
 /* 天板・足台・受像器・X 線管・回転軸の受け枠を作る（胃の型が変わると体の位置が変わるので作り直す） */
 function buildTable() {

@@ -6,7 +6,9 @@
 <link id="webfont" rel="stylesheet" media="print"
       href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <script>addEventListener('load', function () { var w = document.getElementById('webfont'); if (w) w.media = 'all'; });</script>
-<link rel="stylesheet" href="css/app.css">
+<script>/* 見た目の指定（CSS）も、ページの更新日時を付けて読む。更新のあと、古い CSS がブラウザに残って新しい画面と食い違うのを防ぐ（js は boot.js で同じことをしている） */
+document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(document.lastModified) || Date.now()) + '">');</script>
+<noscript><link rel="stylesheet" href="css/app.css"></noscript>
 <script>/* 色（ダーク／ライト）：保存した選択、なければ端末の設定。描き始める前に決めて、ちらつかないようにする */
 (function () { var t = null; try { t = localStorage.getItem('stomach.theme'); } catch (e) {}
   if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';

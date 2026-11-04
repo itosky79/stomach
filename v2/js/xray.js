@@ -113,6 +113,7 @@ function setXray(on) {
   // 引いているときだけ装置を出す。寄ったときは解剖の邪魔をしない
   const showRoom = !on && viewMode !== 2 && viewPreset !== 'tube' && (viewPreset === 'fps' || ctrl.dist >= ctrl.base * 1.9);
   roomProps.visible = showRoom; tableProps.visible = showRoom; cradle.visible = showRoom;
+  wallMonitor.visible = viewPreset !== 'fps';
   partition.visible = viewPreset === 'fps' || camera.position.z < ROOM_Z0 - 10;
   boneGroup.visible = on || showBone;
   boneGroup.traverse(o => { if (o.isMesh) o.material = on ? matBoneX : matBone; });
