@@ -216,7 +216,7 @@ function render() {
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, r.w, r.h); renderer.setScissor(0, 0, r.w, r.h);
   renderer.setClearColor(r.full ? theme3d.bgFull : theme3d.bg, 1); renderer.clear();
-  if (!r.full) { setXray(false); fadeAlpha(r.w, r.h); renderer.render(scene, camera); }
+  if (!r.full) { setXray(false); fadeAlpha(r.w, r.h); zoomFade(); renderer.render(scene, camera); }
   if (r.film) {
     setXcam(r.film.w / r.film.h);
     setXray(true);
@@ -392,4 +392,14 @@ function xfovCenter() {
   if (!XAIM.has) { XAIM.cur.copy(XAIM.goal); XAIM.has = true; }
   else XAIM.cur.lerp(XAIM.goal, 1 - Math.exp(-dt * 2.3));
   return XAIM.cur;
+}
+
+/* 三人称で寄るほど、体の表面と骨を薄くし、胃の粘膜を少し濃くする。寄ると半透明の体表や骨が画面いっぱいに重なって白っぽくなり、
+   胃がぼやけて見えにくくなるため。引いたとき（距離が基準の 2 倍以上）は今までどおり。一人称ではしない */
+function zoomFade() {
+  const z = viewPreset === 'fps' ? 9 : ctrl.dist / ctrl.base;
+  const t = Math.max(0, Math.min(1, (z - 0.7) / 1.3)), f = t * t * (3 - 2 * t);   // 寄る 0 〜 引く 1
+  matSkin.uniforms.uO.value = skinOpacity * (0.35 + 0.65 * f);
+  matBone.uniforms.uO.value = 0.26 * (0.45 + 0.55 * f);
+  uMucA.value = theme3d.mucA * (1 + 0.8 * (1 - f));
 }

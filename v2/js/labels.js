@@ -69,9 +69,27 @@ function updateLabels() {
     }
     const p = v.project(camera);
     if (p.z > 1) { L.el.style.opacity = '0'; continue; }
-    L.el.style.transform = 'translate(-50%,-50%) translate(' + ((p.x * .5 + .5) * w) + 'px,' + ((-p.y * .5 + .5) * h) + 'px)';
+    L.sx = (p.x * .5 + .5) * w; L.sy = (-p.y * .5 + .5) * h; L.on = true;
     L.el.style.opacity = '1';
   }
+  // 重なったラベルを上下にずらす（上から順に置き、前に置いたものと重なれば、重ならない所まで下げる）
+  const shown = labels.filter(L => L.on && L.el.style.opacity === '1');
+  for (const L of shown) { if (!L.bw) { L.bw = L.el.offsetWidth || 50; L.bh = L.el.offsetHeight || 18; } }
+  shown.sort((a, b) => a.sy - b.sy);
+  const placed = [];
+  for (const L of shown) {
+    let y = L.sy;
+    for (let k = 0; k < 6; k++) {
+      let moved = false;
+      for (const Q of placed) {
+        if (Math.abs(L.sx - Q.sx) < (L.bw + Q.bw) / 2 + 2 && Math.abs(y - Q.y) < (L.bh + Q.bh) / 2 + 1) { y = Q.y + (L.bh + Q.bh) / 2 + 1; moved = true; }
+      }
+      if (!moved) break;
+    }
+    placed.push({ sx: L.sx, y, bw: L.bw, bh: L.bh });
+    L.el.style.transform = 'translate(-50%,-50%) translate(' + L.sx + 'px,' + y + 'px)';
+  }
+  for (const L of labels) L.on = false;
 }
 
 function updateNotes() {
