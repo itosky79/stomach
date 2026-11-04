@@ -230,6 +230,14 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
       <label class="rng">バリウム <input type="range" id="rBa" min="120" max="150" step="5" value="150"><output id="oBa">150 mL</output></label>
       <label class="rng">発泡剤のガス <input type="range" id="rGas" min="100" max="400" step="25" value="250"><output id="oGas">250 mL</output></label>
       <p class="glinfo">バリウムは学会マニュアルの 120〜150 mL、ガスは発泡剤の添付文書の 100〜400 mL。胃の大きさはこの合計に合わせる。</p>
+      <p class="grp-h" style="margin-top:10px">透視の視野（縦の長さ）</p>
+      <div class="seg wide" id="fovSeg">
+        <button type="button" data-f="30">30 cm</button>
+        <button type="button" data-f="22">22 cm</button>
+        <button type="button" data-f="17" aria-pressed="true">17 cm</button>
+        <button type="button" data-f="12">12 cm</button>
+      </div>
+      <p class="glinfo">狭いほど大きく写り、ひだが見やすい。胃の全体は 3D で見る。真ん中は胃の容積の重心（圧迫しているときは圧迫した場所）。「X線像」だけの表示ではドラッグで視野を動かせる（ダブルクリックで戻る）。</p>
       <p class="grp-h" style="margin-top:10px">ラベル</p>
       <div class="seg wide" id="labSeg">
         <button type="button" data-l="0">なし</button>

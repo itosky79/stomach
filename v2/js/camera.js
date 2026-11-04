@@ -104,6 +104,9 @@ canvas.addEventListener('pointermove', e => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   drag.x = e.clientX; drag.y = e.clientY;
+  if (viewMode === 2) {   // 「X線像」だけの表示：視野（受像器）を動かす
+    xfovPan(dx, dy); return;
+  }
   if (viewPreset === 'fps') {   // 一人称：見回す。景色をつかんで動かす向き（三人称のドラッグと同じ感覚。右へドラッグすると景色が右へ動き、左を向く）
     const k = 0.004 * FPS.fov / 60;   // 拡大しているときはゆっくり回す
     FPS.yaw += dx * k;
@@ -126,7 +129,7 @@ const endDrag = () => { drag = null; };
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('dblclick', () => { if (viewPreset === 'fps') { fpsSeat(); applyCam(); } else fitCam(); });   // 視点を戻す（一人称では胃のほうを向く）
+canvas.addEventListener('dblclick', () => { if (viewMode === 2) { XFOV.panX = XFOV.panY = 0; return; } if (viewPreset === 'fps') { fpsSeat(); applyCam(); } else fitCam(); });   // 視点を戻す（一人称では胃のほうを向く）
 function zoomTo(d) {   // 寄るほど注視点を胃（原点）へ近づける。引けば元に戻る
   const r = bsRadius * BODY_SCALE, nd = Math.max(r * 0.5, Math.min(r * 24, d));
   ctrl.target.multiplyScalar(nd / ctrl.dist);

@@ -126,13 +126,28 @@ function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PI
     layoutFilm(); pipSave();
   }, { passive: false });
 }
+/* 透視の視野。field：縦の長さ（cm、台の座標は実寸 cm）。以前は胃の全体が入る広さ（縦およそ 29 cm）だったが、
+   透視像はひだなどを見るためのもので、胃の全体は 3D で見るので、既定を 17 cm にした。
+   視野の真ん中は胃の容積の重心。圧迫しているときは圧迫した場所。pan は「X線像」だけの表示でドラッグして動かした量（cm） */
+const XFOV = { field: 17, panX: 0, panY: 0 };
+const _xc = new THREE.Vector3(), _xx = new THREE.Vector3();
 function setXcam(aspect) {
   // 管球も受像器も台に固定されているので、向きは体位によらず一定
   const br = bsRadius * BODY_SCALE;
-  xcam.position.copy(AZ).multiplyScalar(br * 3.2);
-  const x = new THREE.Vector3().crossVectors(AY, AZ);
-  xcam.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, AY.clone(), AZ.clone()));
-  const hh = br * 1.06, hw = hh * aspect;
+  _xx.crossVectors(AY, AZ);
+  // 視野の真ん中：圧迫しているときは圧迫した断面、そうでなければ胃の容積の重心（断面の中心を容量で重み付けした平均。胃体部〜胃角部のあたり）
+  bodyGroup.updateMatrixWorld(true);
+  if (compAmt > 0.01 && compMid >= 0) _xc.set(centers[compMid * 3], centers[compMid * 3 + 1], centers[compMid * 3 + 2]);
+  else {
+    let sx = 0, sy = 0, sz = 0, sw = 0;
+    for (let i = 0; i < NMAIN; i++) { if (regionList[regionOf[i]][0] === 'duode') continue; const w = cap[i]; sx += centers[i * 3] * w; sy += centers[i * 3 + 1] * w; sz += centers[i * 3 + 2] * w; sw += w; }
+    if (sw > 0) _xc.set(sx / sw, sy / sw, sz / sw); else _xc.set(0, 0, 0);
+  }
+  _xc.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xc);
+  const cx = _xc.dot(_xx), cy = _xc.dot(AY);
+  xcam.position.copy(AZ).multiplyScalar(br * 3.2).addScaledVector(_xx, cx + XFOV.panX).addScaledVector(AY, cy + XFOV.panY);
+  xcam.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(_xx.clone(), AY.clone(), AZ.clone()));
+  const hh = XFOV.field / 2, hw = hh * aspect;
   xcam.left = -hw; xcam.right = hw; xcam.top = hh; xcam.bottom = -hh;
   xcam.near = 1; xcam.far = br * 9;
   xcam.updateProjectionMatrix();
@@ -320,4 +335,18 @@ function renderStrip() {
     });
     strip.appendChild(fig);
   });
+}
+
+/* 透視の視野の切り替えと、「X線像」だけの表示でのドラッグ（視野を動かす） */
+{
+  const seg = document.getElementById('fovSeg');
+  const sync = () => [...seg.children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.f === XFOV.field));
+  seg.addEventListener('click', e => { const b = e.target.closest('button[data-f]'); if (!b) return; XFOV.field = +b.dataset.f; sync(); });
+  sync();
+}
+function xfovPan(dxPx, dyPx) {   // 画面の画素の移動を、視野の cm に直して動かす（像をつかんで動かす向き）
+  const r = viewRects(); if (!r.film) return;
+  const k = XFOV.field / r.film.h, lim = 40;
+  XFOV.panX = Math.max(-lim, Math.min(lim, XFOV.panX - dxPx * k));
+  XFOV.panY = Math.max(-lim, Math.min(lim, XFOV.panY + dyPx * k));
 }

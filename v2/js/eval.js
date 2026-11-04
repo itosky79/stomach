@@ -126,7 +126,11 @@ function meshVolume() {   // Σ（輪の多角形の液面より下の面積 × 
 /* ---- ③ 透視像（撮影と同じ 520 × 650）---- */
 const evalRT = new THREE.WebGLRenderTarget(capW, capH, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat });
 function evalXray() {
+  // 評価の像は、以前と同じく胃の全体が入る広さで撮る（画面の透視の視野の設定によらない）
+  const keep = { ...XFOV };
+  XFOV.field = bsRadius * BODY_SCALE * 2.12; XFOV.panX = XFOV.panY = 0;
   setXcam(capW / capH);
+  Object.assign(XFOV, keep);
   setXray(true);
   renderer.setScissorTest(false);
   renderer.setRenderTarget(evalRT);
