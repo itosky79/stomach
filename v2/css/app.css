@@ -653,3 +653,48 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 :root[data-ui="soft"] .rail{scrollbar-color:var(--fill) transparent}
 :root[data-ui="soft"] .rail::-webkit-scrollbar-thumb{background:var(--fill)}
 :root[data-ui="soft"] .tabs button{white-space:nowrap; font-size:11.5px}
+
+/* ============================================================
+   標準（data-ui="classic"）の読みやすさ。見た目（枠線・色合い）はそのままで、文字だけ読みやすくする。
+   - 小さい字に使っていた英数字用の等幅の文字をやめ、本文と同じゴシックにする。数字は幅をそろえる
+   - 字と字の間を広げた書き方・大文字だけの書き方をやめる
+   - かなの詰め（palt）で、日本語の字の間のすき間を自然にする
+   - 9 px 前後の小さい字を 10.5〜12 px に上げ、薄い灰色の字を濃くする
+   ============================================================ */
+:root[data-ui="classic"]{
+  --mono:"Zen Kaku Gothic New",'Hiragino Sans','Yu Gothic UI','Yu Gothic',system-ui,sans-serif;
+  --muted:#A9BCCB; --dim:#8296A8;
+}
+:root[data-ui="classic"][data-theme="light"]{ --muted:#3B4D5E; --dim:#53677A; }
+:root[data-ui="classic"] body{font-feature-settings:"palt"; font-variant-numeric:tabular-nums; font-weight:500}
+:root[data-ui="classic"] h1{letter-spacing:.01em}
+:root[data-ui="classic"] :is(.grp-h,.grp-h b,.seg button,.expose,.vrbtn,.rbname,.fluoro,.sticklab,.films .hint,details.fold summary,
+  .qhead span,.readout .sm,.ep-h span,button.opt .ruby,.qsrc,.qsrc b,.qfigzoom,#film .fh,.lab,.lab.axis,ol.seq .no,ol.seq .tg2,
+  .choices .n,.detent button,.strip figcaption,.ep-q,#perf,.glinfo){letter-spacing:0; text-transform:none}
+:root[data-ui="classic"] .grp-h{font-size:12px; font-weight:700; color:var(--muted)}
+:root[data-ui="classic"] .grp-h b{font-size:12px}
+:root[data-ui="classic"] .seg button{font-size:12px; font-weight:500}
+:root[data-ui="classic"] .seg.wide button{font-size:11.5px}
+:root[data-ui="classic"] .tabs button{font-size:12px; white-space:nowrap}
+:root[data-ui="classic"] :is(.expose,.vrbtn){font-size:12.5px; font-weight:700}
+:root[data-ui="classic"] button.opt{font-size:12px}
+:root[data-ui="classic"] .pos-grid.four button.opt{font-size:11px}
+:root[data-ui="classic"] .pos-grid.five button.opt{font-size:11px}
+:root[data-ui="classic"] button.opt .ruby{font-size:10px}
+:root[data-ui="classic"] :is(.rbname,.fluoro,.sticklab,.films .hint,.readout .sm,.qhead span,.qsrc,.qfigzoom,.annnote,.gcredit,.ep-h span,.detent button){font-size:11px}
+:root[data-ui="classic"] :is(ol.seq .no,ol.seq .tg2,.choices .n,.ep-q,.strip figcaption){font-size:11px}
+:root[data-ui="classic"] ol.seq button{font-size:12.5px}
+:root[data-ui="classic"] .choices button{font-size:13px}
+:root[data-ui="classic"] .readout .big{font-size:13.5px; font-weight:700}
+:root[data-ui="classic"] details.fold summary{font-size:12px}
+:root[data-ui="classic"] details.fold p{font-size:12px}
+:root[data-ui="classic"] label.tg{font-size:13px}
+:root[data-ui="classic"] #film .fh{font-size:11px; color:#A9CBDB}
+:root[data-ui="classic"] #film :is(.fR,.fL){opacity:.9}
+:root[data-ui="classic"] .lab{font-size:11px}
+:root[data-ui="classic"] .lab.axis{font-size:10.5px}
+:root[data-ui="classic"] #fpsPad .fpsTip{font-size:12px}
+:root[data-ui="classic"] .films h2{font-family:var(--gothic)}
+@media (max-width:560px){
+  :root[data-ui="classic"] #film .fh{font-size:10px}
+}
