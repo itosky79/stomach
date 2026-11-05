@@ -5,68 +5,50 @@
 > **公開範囲：限定公開（学会発表準備中）**
 > 公開 URL は関係者にだけ個別に伝えている。検索エンジンには載せない設定にしてある。詳しくは [docs/publishing.md](docs/publishing.md)。
 
-## 版
+## 公開 URL
 
-| 版 | 場所 | 状態 |
-|---|---|---|
-| v1.0 | フォルダ直下（`index.html`）／タグ `v1.0` | 学会発表用。手を入れない |
-| v2 | `v2/` | 開発中。改良はここで行う。計画は [v2/ROADMAP.md](v2/ROADMAP.md) |
-| v2 試作版 | `v2/preview/` | 試作の置き場所。いまは v2 に、ガスの溜まった断面ほど膨らむ動き（`v2/preview/js/sim.js` の INFLATE）と、ガスの既定量 400 mL（v2 は 250 mL）を加えたもの。URL：https://itosky79.github.io/stomach/v2/preview/ 。保存データは v2 と分けてある |
+https://itosky79.github.io/stomach/ （ここ 1 つだけ。2026-11-05 に v2 をメインにした）
 
-v1.0 の状態はタグ `v1.0` でいつでも取り出せる。v2 は v1.0 と保存データ（問題の並び・パネルの状態）を分けてあるので、同じブラウザで両方開いても影響しない。
+- 評価モード：https://itosky79.github.io/stomach/?eval=1 （定義は [EVAL.md](EVAL.md)）
+- 以前の URL `…/stomach/v2/` は、上の URL へ自動で移る
+- 以前のフォルダ直下の v1.0、`v2/preview/`（試作版）、`v2/proto/physics/`（物理の試作）は消した。v1.0 はタグ `v1.0`（コミット 6e1a000）で取り出せる
 
 ## 使い方
 
-ZIP を展開し、フォルダの中の **`index.html` をダブルクリック**する。いつものブラウザでシミュレーターが開く。インストールもインターネット接続も要らない。
-
-- `index.html` と `three.min.js` は同じフォルダに置いたままにする
-- ZIP を開いただけの状態ではなく、「すべて展開」してから開く
+ブラウザで公開 URL を開く。手元で動かすときは、このフォルダをウェブサーバーで配信して `index.html` を開く（js をファイルに分けて読み込むので、ダブルクリックでは開けない）。例：`python3 -m http.server` のあと http://localhost:8000/
 
 ## フォルダ構成
 
 ```
 stomach/
-├── index.html              シミュレーター本体 v1.0（これをダブルクリック）。収録問題と図も中に入っている
-├── v2/                     開発版（v2）。中身は v2/ROADMAP.md
-├── three.min.js            3D 描画ライブラリ（three.js r128、同梱）
-├── data/
-│   ├── questions.json      収録問題（問題文・選択肢・正答・解説・体位・名札）
-│   └── figures/            設問の図 5 枚
-├── docs/
-│   ├── features.md         機能と操作
-│   ├── positions.md        体位の定義（第1・第2斜位）と撮影手順（基準撮影法）
-│   ├── questions.md        収録問題の一覧
-│   ├── model.md            シミュレーションの仕組み
-│   ├── sources.md          出典とライセンス
-│   └── publishing.md       公開範囲の設定と NAS への保管
-└── tools/
-    ├── extract_questions.py   index.html から data/ と docs/questions.md を作る
-    └── verify_answers.py      収録問題の正答を厚生労働省の正答値表と照合する
+├── index.html        シミュレーター本体（画面の骨組み）
+├── css/  js/  lib/   見た目・動き・three.js など。中身は ROADMAP.md の「ファイル構成」
+├── FIXES.md          直したことの確認リストと修正の記録（毎回これで確かめる）
+├── BASICS.md         胃 X 線検査の基本と出典
+├── ROADMAP.md        計画と、これまでの記録
+├── DIMENSIONS.md     寸法
+├── EVAL.md           評価モード（学会発表用の定量評価）
+├── TEXTBOOK_CHECK.md 教科書の記載との照合
+├── results/          評価の結果（CSV）
+├── v2/index.html     以前の URL（…/stomach/v2/）から本体へ移すだけのページ
+├── data/             v1.0 のときの収録問題（questions.json）と図
+├── docs/             v1.0 のときの説明（出典とライセンス sources.md、公開範囲 publishing.md など）
+└── tools/            BodyParts3D から体・胃の形を作る道具、CT との照合、問題の正答照合など
 ```
 
-`data/` と `docs/questions.md` は `index.html` から作ったもの。問題を直すときは `index.html` を直し、`python3 tools/extract_questions.py` で作り直す。
+収録問題は `js/questions.js` にある。`data/`・`docs/questions.md`・`tools/extract_questions.py`・`tools/verify_answers.py` は v1.0 の `index.html`（22 問）を元にした道具で、今の本体（16 問）とは対応していない。
 
 ## できること
 
-| モード | 内容 |
+| タブ | 内容 |
 |---|---|
-| 学習 | 起倒角 4 通り × 体軸の回転 8 通りで体位を組み立てる |
-| 手順 | 日本消化器がん検診学会の基準撮影法Ⅰ（8 体位）・Ⅱ（12 体位）を順にたどる |
+| 学習 | 起倒角（立位・半立位・半臥位・水平・頭低位）× 体軸の回転 8 通りで体位を組み立てる。回転法（右回り回転変換法・左右交互変換法）を動かす |
+| 手順 | 基準撮影法Ⅰ・Ⅱを順にたどる。「次へ」「順に再生」では本の体位変換の経路どおりに回る |
 | フリー | スティックで台と体を連続的に動かす。国試に出た体位には目印があり、出題番号が出る |
-| 問題 | 国試の過去問 22 問。出典つき、出題順はシャッフル、図に解剖の名札 |
+| 問題 | 国試の過去問 16 問。出典つき、図に解剖の名札 |
+| ミッション | 決められた体位・描出を目指して操作する |
 
-詳しくは [docs/features.md](docs/features.md)。
-
-## 収録問題の検証
-
-正答はすべて厚生労働省が公表している正答値表と照合してある（22 問中 22 問一致）。次で確かめ直せる。
-
-```sh
-pip install pdfminer.six
-python3 tools/verify_answers.py
-```
-
-正答値表 PDF を厚生労働省のサイトから取ってきて、表の座標から正答を読み、アプリ側の正答と突き合わせる。
+バリウムの性質（濃度・粘度・降伏値）を変えて、壁への付き方（膜）を試せる。直したことと確かめ方は [FIXES.md](FIXES.md)、出典は [BASICS.md](BASICS.md) と [docs/sources.md](docs/sources.md)。
 
 ## 注意
 

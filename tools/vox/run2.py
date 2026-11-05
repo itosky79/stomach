@@ -3,7 +3,7 @@ import sys, runpy, io, contextlib, time, numpy as np, pickle
 sys.path.insert(0, '.')
 SRC = os.environ.get('BP3D', 'bp3d')
 sys.argv = ['fit_stomach.py', SRC]
-with contextlib.redirect_stdout(io.StringIO()): fit = runpy.run_path('/home/user/stomach/v2/tools/fit_stomach.py')
+with contextlib.redirect_stdout(io.StringIO()): fit = runpy.run_path('/home/user/stomach/tools/fit_stomach.py')
 from soft import Soft
 S = Soft(fit)
 comp = float(sys.argv[1]) if False else None

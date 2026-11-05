@@ -1,5 +1,7 @@
 # v2 ロードマップ
 
+（2026-11-05：v2 をフォルダ直下に移してメインにした。v1.0・試作版・物理の試作は消した。v1.0 はタグ `v1.0` で取り出せる。以下は v2 を作ってきたときの記録）
+
 v1.0（フォルダ直下の `index.html`、タグ `v1.0`）はそのまま残し、改良は `v2/` で行う。v2 は v1.0 の機能をそのまま土台にする。
 
 ## 最終目標
@@ -114,7 +116,7 @@ VR の中での置き方：1 単位 = 1 cm を 0.01 m として表示する。�
 
 手順：
 1. PC で Meta Horizon Link アプリを起動し、Quest をケーブルか Air Link でつなぐ（ゴーグルの中で Link を有効にする）
-2. PC の Chrome で `https://itosky79.github.io/stomach/v2/` を開く
+2. PC の Chrome で `https://itosky79.github.io/stomach/` を開く
 3. 「VR」ボタンを押すと、ゴーグルの中に透視室が出る。PC の画面にも同じ映像が出るので、周りの人も見られる
 
 「VR」ボタンが出ないときは、Meta Horizon Link アプリが OpenXR ランタイムとして有効になっているか（アプリの設定 → 一般）を確かめる。
@@ -167,7 +169,7 @@ VR の操作：
 
 ## 胃の物理の試作（proto/physics/）
 
-本体とは別の 1 ページ。URL は `…/stomach/v2/proto/physics/`。
+本体とは別の 1 ページ。URL は `…/stomach/v2/proto/physics/`（2026-11-05 に消した）。
 
 - 胃：J 字の管と両端の半球。位置ベースの柔らかい物体として、辺の長さ・体積（ガスの圧）・元の形へ戻る力で形を保つ
 - 圧迫筒：先端の直径 10 cm。筒の先より奥に入った前壁を押し戻す。背側は台で支える。画面ではマウスを押し続けて押す。VR ではコントローラーの先が筒の先端
@@ -189,15 +191,14 @@ PC での参考値（この開発環境はグラフィックを専用部品な�
 
 学会発表用の定量評価（目的部位の描出率、体積の整合性、再現性、動作性能）。`?eval=1` のときだけ出る。定義と使い方は [EVAL.md](EVAL.md)。
 
-## v2 のファイル構成
+## ファイル構成
 
 ```
-v2/
+stomach/
 ├── index.html        画面の骨組み（HTML）
 ├── ROADMAP.md        このファイル
 ├── DIMENSIONS.md     寸法
 ├── EVAL.md           評価モードの定義と使い方
-├── proto/physics/    胃の物理の試作（index.html と main.js）
 ├── tools/build_anatomy.py  BodyParts3D から js/anatomy-data.js を作る
 ├── tools/fit_stomach.py    BodyParts3D の胃から管の形（TYPES.bp3d）を作る
 ├── lib/

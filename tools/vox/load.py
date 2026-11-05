@@ -6,7 +6,7 @@ sys.argv = ['fit_stomach.py', SRC]
 import io, contextlib
 buf = io.StringIO()
 with contextlib.redirect_stdout(buf):
-    g = runpy.run_path('/home/user/stomach/v2/tools/fit_stomach.py')
+    g = runpy.run_path('/home/user/stomach/tools/fit_stomach.py')
 st = g['st']
 print('watertight', st.is_watertight, 'volume mL', st.volume / 1000 if st.is_watertight else None, 'faces', len(st.faces))
 

@@ -2,7 +2,7 @@ import os
 import sys, runpy, io, contextlib, numpy as np
 sys.path.insert(0, '.')
 sys.argv = ['fit_stomach.py', os.environ.get('BP3D', 'bp3d')]
-with contextlib.redirect_stdout(io.StringIO()): fit = runpy.run_path('/home/user/stomach/v2/tools/fit_stomach.py')
+with contextlib.redirect_stdout(io.StringIO()): fit = runpy.run_path('/home/user/stomach/tools/fit_stomach.py')
 from soft import Soft, load
 S = Soft(fit)
 sp = load('FMA9140'); spc = sp.vertices[:, 0].mean()   # 胸椎の左右の中心

@@ -1,5 +1,5 @@
 // CT の胃を一人ずつアプリの評価モードで教科書と比べる（ねじれなし、内腔 400 mL、バリウム 150 mL、項目 1 を除く 10 項目）
-// 使い方：node tools/ct/screen.js <fit_ct.py の出力 JSON> <出力 JSON>（http://localhost:8123/v2/ で v2 を配信しておく）
+// 使い方：node tools/ct/screen.js <fit_ct.py の出力 JSON> <出力 JSON>（http://localhost:8123/ でシミュレーターを配信しておく）
 const { chromium } = require('playwright');
 const fs = require('fs');
 (async () => {
@@ -8,7 +8,7 @@ const fs = require('fs');
   const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'] });
   const page = await (await b.newContext({ viewport: { width: 1000, height: 700 } })).newPage();
   page.on('pageerror', e => console.log('ERR', e.message));
-  await page.goto('http://localhost:8123/v2/?eval=1'); await page.waitForTimeout(4000);
+  await page.goto('http://localhost:8123/?eval=1'); await page.waitForTimeout(4000);
   await page.evaluate(() => renderer.setAnimationLoop(null));
   const res = fs.existsSync(outp) ? JSON.parse(fs.readFileSync(outp, 'utf8')) : {};
   for (let i = 0; i < ids.length; i++) {

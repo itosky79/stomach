@@ -4,7 +4,7 @@ import sys, runpy, io, contextlib, pickle, numpy as np
 ARGS = sys.argv[1:]
 sys.path.insert(0, '.')
 sys.argv = ['fit_stomach.py', os.environ.get('BP3D', 'bp3d')]
-with contextlib.redirect_stdout(io.StringIO()): fit = runpy.run_path('/home/user/stomach/v2/tools/fit_stomach.py')
+with contextlib.redirect_stdout(io.StringIO()): fit = runpy.run_path('/home/user/stomach/tools/fit_stomach.py')
 from soft import Soft, up_bp, RHO_BA, RHO_ABD
 from fill import neighbors, settle
 from scipy.spatial import cKDTree
