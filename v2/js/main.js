@@ -12,11 +12,8 @@ function settle() {
   computeHeights();
   for (let s = 0; s < 150; s++) flowStep(1 / 60);
   for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
-  for (let i = 0; i < NMAIN; i++) {
-    const on = regionList[regionOf[i]][0] === 'duode' ? 0 : 1;
-    for (let j = 0; j < CM; j++) aWet[i * CM + j] = on;
-  }
-  for (let i = NMAIN * CM; i < NV; i++) aWet[i] = 0;
+  // 胃の壁全体に膜を付ける（ローリングのあと、という扱い。粘液は 3 回ぶん取れたことにする）
+  resetFilm(i => i < NMAIN && regionList[regionOf[i]][0] !== 'duode', Math.pow(1 - BA_WASH, 3));
 }
 function resize() {
   if (renderer.xr.isPresenting) return;   // VR 中の大きさはゴーグルが決める

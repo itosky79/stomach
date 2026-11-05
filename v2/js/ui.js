@@ -383,9 +383,27 @@ bind('tPyl', v => { pylorusOpen = v; rebuildAll(); });
   rBa.addEventListener('input', () => { targetMl = +rBa.value / S3; document.getElementById('oBa').textContent = rBa.value + ' mL'; rebuildAll(); buildLabels(); });
   rGas.addEventListener('input', () => { gasMl = +rGas.value; document.getElementById('oGas').textContent = rGas.value + ' mL'; rebuildAll(); buildLabels(); });
 }
+{ // バリウムの性質：濃度（w/v%）・粘度・降伏値。壁に残る膜の厚さと流れ落ち方が変わる（sim.js の updateWet）
+  const B = [['rBaC', 'oBaC', 'C', v => v + ' w/v%'], ['rBaMu', 'oBaMu', 'mu', v => v + ' mPa·s'], ['rBaTy', 'oBaTy', 'ty', v => (+v).toFixed(2) + ' Pa']];
+  for (const [r, o, k, f] of B) {
+    const el = document.getElementById(r);
+    el.addEventListener('input', () => { BA[k] = +el.value; document.getElementById(o).textContent = f(el.value); });
+  }
+}
+// 膜のようす（0.5 秒ごと）：液面より上の胃の壁の、膜の厚さの中央値と、粘液が取れた割合
+setInterval(() => {
+  const el = document.getElementById('baInfo'); if (!el || el.offsetParent === null) return;
+  const hs = [], ms = [];
+  for (let v = 0; v < NMAIN * CM; v++) if (hArr[v] > aLevel[v] && regionList[regionOf[(v / CM) | 0]][0] !== 'duode') { hs.push(filmH[v]); ms.push(mucus[v]); }
+  if (!hs.length) { el.textContent = ''; return; }
+  hs.sort((a, b) => a - b); const med = hs[hs.length >> 1] * 1e6;
+  const wash = 1 - ms.reduce((a, b) => a + b, 0) / ms.length;
+  el.textContent = '液面より上の壁の膜：厚さ（中央値）' + med.toFixed(0) + ' µm／粘液が取れた割合 ' + Math.round(wash * 100) + ' %／バリウムの密度 ' + (baRho() / 1000).toFixed(2) + ' g/mL';
+}, 500);
 document.getElementById('bDrink').addEventListener('click', () => {
   for (let n = 0; n < NN; n++) wVol[n] = 0;
   for (let i = 0; i < NV; i++) { aWet[i] = 0; aLevel[i] = -1e3; }
+  resetFilm(() => false, 1);   // 飲み直し：膜なし、粘液は全部残る
   administered = 0; drained = 0;
 });
 document.getElementById('bClear').addEventListener('click', () => { films = []; shotCount = 0; renderStrip(); });

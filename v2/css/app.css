@@ -645,3 +645,4 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
   font-size:12px; line-height:1.8; color:var(--muted)}
 .rottip[hidden]{display:none}
 .rotsrc{display:block; margin-top:3px; font-size:11px; color:var(--dim)}
+.bainfo{margin:4px 0 0; font-size:11px; line-height:1.6; color:var(--dim)}

@@ -273,7 +273,7 @@ function pourInto(amt, dt) {
 /* 流れた跡にはバリウムが付く（付着）。流れている間の見た目は updatePour の帯で描く */
 function drawPourTrail() {
   if (!(pourFlow > 0.05)) return;
-  for (const v of pour.trail) aWet[v] = 1;
+  for (const v of pour.trail) { subT[v] = 1; prevS[v] = 0; }   // 流れ込むバリウムが通った壁：次の刻みで膜が残る（updateWet）
 }
 /* 流れている間：たどった道をならし（前後 4 点の平均）、胃の壁の少し内側に、壁に沿った細い帯として描く。
    網目の点を塗ると、網目が粗いので階段やギザギザに見えたため */
@@ -337,27 +337,98 @@ function dose(dt) {
     wVol[n] -= d; drained += d;
   }
 }
-/* 付着：液面の下に入った壁は付着 1。液面より上に出た壁では膜が少しずつ減る。
-   減る速さは壁の向きで変える。床側の壁（外向きの法線が下向き、膜が壁の上に載る）と横向きの壁は毎秒 WET_KEEP とゆっくり減り、
-   天井側の壁（膜が壁からぶら下がる）は上を向く度合い（法線・上向き、0〜1）に比例して毎秒 WET_DRIP まで速く垂れ落ちる。
-   以前は向きによらず毎秒 0.05 で、床側の膜も 20 秒ほどで消えて二重造影が見えなくなっていた。値は実測と照合していない仮の値 */
-const WET_KEEP = 0.01, WET_DRIP = 1.0;
+/* ================= バリウムの付着（壁に残る膜） =================
+   液面が下がって壁が出ると、壁にバリウムの薄い膜が残る。膜は重力で流れ落ちて薄くなり、
+   バリウムの「降伏値」（これより弱い力では流れない強さ）で止まる。粘液が残っている壁では膜が滑って落ちやすい。
+
+   使う物性（画面の「バリウムの性質」で変えられる）
+   - 濃度 C（w/v%）：100 mL の中の硫酸バリウムの g 数。添付文書（バリトップHD）は胃の二重造影で 200〜240 w/v%、
+     学会マニュアル 2025［A］は 200 w/v% 以上を 150 mL 前後
+   - 粘度 μ（mPa·s）と降伏値 τy（Pa）：特許 JP3717007B2 の高濃度製剤（260〜290 w/v%）で 見掛け粘度 70〜250 cP、
+     降伏値 1.5〜6.6 dyne/cm²（0.15〜0.66 Pa）、24 ℃。注腸用の製剤では 200 w/v% で 135 mPa·s という報告もある（日本放射線技術学会雑誌 54 巻 4 号）。
+     製剤ごとに大きく違い、200〜240 w/v% の胃用製剤の値は見つからなかったので、初めの値は 100 mPa·s・0.4 Pa とした（仮）
+   - 密度：硫酸バリウム 4.50 g/cm³ と水から計算（C = 200 なら 2.56 g/mL）
+   - X 線の吸収：硫酸バリウムの質量減弱係数を、透視の実効エネルギーを 50 keV と仮定して 8.2 cm²/g
+     （NIST の表で Ba 13.79、S と O は小さいので重さの割合で足した）。膜 1 枚の光学的な厚み od = 8.2 × (C/100) × 厚み(cm)
+
+   膜の式（流体力学の教科書的な式。どれも実測とは照合していない）
+   - 残る厚み（液面が速さ U で下がるとき。Landau–Levich）：h0 = 0.94 (μU)^(2/3) / (σ^(1/6) (ρg)^(1/2))、表面張力 σ = 0.07 N/m（水と同じと仮定）
+   - 流れ落ち（壁に沿った重力 g_t。Jeffreys の膜の流れ落ちに、ビンガム流体の降伏値を入れた形）：
+       dh/dt = −(3/2) q / X、q = ρ g_t h³ /(3μ) × (1 − 1.5 r + 0.5 r³) × (1 + 3b/h)、r = hy/h、hy = τy /(ρ g_t)
+     X は膜が流れ下る長さ（3 cm と仮定）。b は粘液による滑り（滑り長さ）
+   - 天井側の壁（膜がぶら下がる）：ρ g_n h が τy を超えると、垂れて落ちる（薄い膜のレイリー・テイラー不安定の成長率 h³(ρ g_n)²/(12μσ)）
+   - 粘液：初めは粘液で膜が滑る（滑り長さ 200 µm と仮定）。バリウムが壁の上を通るたびに粘液が取れて、付きがよくなる
+     （「ローリングごとに粘液が除かれる」は特許 JP3717007B2 の記載。取れる割合は仮に 1 回で 40 %）
+*/
+const BA = { C: 200, mu: 100, ty: 0.4 };      // 濃度 w/v%、粘度 mPa·s、降伏値 Pa
+const BA_MUM = 8.2, BA_SIG = 0.07, BA_X = 0.03, BA_SLIP = 200e-6, BA_WASH = 0.4, G0 = 9.8;
+const BA_FOLD = 0.01;                          // ひだの間の溝に、膜より多くたまるバリウムの厚み（cm）。溝の深さ・形の資料がないので仮に 0.1 mm
+const UNIT_M = 0.012;                          // 模型の長さ 1 ＝ 1.2 cm（BODY_SCALE）
+const OD_FULL = BA_MUM * 2.0 * 50e-4;          // aWet ＝ 1 にあたる膜（200 w/v%、50 µm）の od。評価・表示のしきい値はこの割合
+const filmH = new Float32Array(NV);            // 膜の厚さ（m）
+const mucus = new Float32Array(NV).fill(1);    // 粘液の残り（1 ＝ 全部、0 ＝ 取れた）
+const subT = new Float32Array(NV);             // 液面の下にいた時間（秒）
+const prevS = new Float32Array(NV);            // 前の刻みの、液面からの高さ（模型の長さ）
+function baRho() { const c = BA.C / 100; return (c + (1 - c / 4.5)) * 1000; }   // kg/m³
 function updateWet(dt) {
   const nrm = geom.attributes.normal.array, u = uUp.value;
+  const rho = baRho(), mu = BA.mu * 1e-3, c = BA.C / 100, ODk = BA_MUM * c * 100;   // od ＝ ODk × h(m)
+  uGroove.value = BA_MUM * c * BA_FOLD;
   for (let n = 0; n < NN; n++) {
     const L = lvl[n], b = n * CM;
     for (let j = 0; j < CM; j++) {
-      const idx = b + j;
+      const idx = b + j, s = hArr[idx] - L;
       aLevel[idx] = L;
-      if (hArr[idx] <= L) aWet[idx] = 1;
-      else {
-        const up = Math.max(0, nrm[idx * 3] * u.x + nrm[idx * 3 + 1] * u.y + nrm[idx * 3 + 2] * u.z);
-        const v = aWet[idx] - (WET_KEEP + (WET_DRIP - WET_KEEP) * up) * dt; aWet[idx] = v > 0 ? v : 0;
+      if (s <= 0) {                                   // 液面の下：バリウムの中
+        subT[idx] += dt;
+        filmH[idx] = 0; aFilm[idx] = 0; aWet[idx] = 1; prevS[idx] = s;
+        continue;
       }
+      if (prevS[idx] <= 0 && subT[idx] > 0) {         // いま液面から出た：膜が残る
+        const U = Math.min(0.2, Math.max(0.002, (s - prevS[idx]) * UNIT_M / Math.max(dt, 1e-3)));
+        filmH[idx] = 0.94 * Math.pow(mu * U, 2 / 3) / (Math.pow(BA_SIG, 1 / 6) * Math.sqrt(rho * G0));
+        if (subT[idx] > 0.3) mucus[idx] *= 1 - BA_WASH;   // バリウムが上を通ったので、粘液が少し取れる
+        subT[idx] = 0;
+      }
+      prevS[idx] = s;
+      let h = filmH[idx];
+      if (h > 0) {
+        const un = nrm[idx * 3] * u.x + nrm[idx * 3 + 1] * u.y + nrm[idx * 3 + 2] * u.z;   // 外向きの法線と上向き（1 ＝ 天井側）
+        const gt = G0 * Math.sqrt(Math.max(0, 1 - un * un)), gn = G0 * Math.max(0, un);
+        const ty = BA.ty, bslip = BA_SLIP * mucus[idx];
+        // 壁に沿って流れ落ちる
+        if (gt > 1e-3) {
+          const hy = ty / (rho * gt), r = Math.min(1, hy / h);
+          const q = rho * gt * h * h * h / (3 * mu) * (1 - 1.5 * r + 0.5 * r * r * r) * (1 + 3 * bslip / h);
+          h -= 1.5 * q / BA_X * dt;
+        }
+        // 天井側：重さが降伏値を超えると垂れ落ちる
+        if (gn > 1e-3 && h > 0 && rho * gn * h > ty * (1 - mucus[idx] * 0.9)) {
+          const k = h * h * h * (rho * gn) * (rho * gn) / (12 * mu * BA_SIG);
+          h -= h * Math.min(1, k * dt);
+        }
+        h = Math.max(0, h);
+        filmH[idx] = h;
+      }
+      const od = ODk * h;
+      aFilm[idx] = od;
+      aWet[idx] = Math.min(1, od / OD_FULL);
     }
   }
   geom.attributes.aLevel.needsUpdate = true;
   geom.attributes.aWet.needsUpdate = true;
+  geom.attributes.aFilm.needsUpdate = true;
+}
+// 壁全体を「いまバリウムの中から出たところ」にする（settle やバリウムを入れ直したとき）
+//   on(i)：その輪（断面 i）に膜を付けるか。washed：粘液がどれだけ取れたことにするか（1 ＝ 全部残る）
+function resetFilm(on, muc) {
+  const rho = baRho(), mu = BA.mu * 1e-3, ODk = BA_MUM * BA.C / 100 * 100;
+  const h0 = 0.94 * Math.pow(mu * 0.02, 2 / 3) / (Math.pow(BA_SIG, 1 / 6) * Math.sqrt(rho * G0));   // 液面が 2 cm/秒で下がったときの膜
+  mucus.fill(muc); subT.fill(0); prevS.fill(1);
+  for (let i = 0; i < NN; i++) for (let j = 0; j < CM; j++) {
+    const v = i * CM + j, h = on(i) ? h0 : 0;
+    filmH[v] = h; aFilm[v] = ODk * h; aWet[v] = Math.min(1, aFilm[v] / OD_FULL);
+  }
 }
 function buildSurface() {
   let p = 0, prev = null;

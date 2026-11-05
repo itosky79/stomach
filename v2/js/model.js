@@ -32,6 +32,7 @@ function cr1(a, x) {                       // 1次元 Catmull-Rom
 /* ================= モデル用バッファ ================= */
 const pos = new Float32Array(NV * 3), nor = new Float32Array(NV * 3);
 const aLevel = new Float32Array(NV), aWet = new Float32Array(NV), hArr = new Float32Array(NV);
+const aFilm = new Float32Array(NV);            // 壁に残ったバリウムの膜 1 枚の光学的な厚み（sim.js の updateWet）
 const aThick = new Float32Array(NV).fill(10);   // その頂点を通る X 線が胃の中のバリウムを通る長さ（模型の単位）。sim.js の updateThickness
 const aRug = new Float32Array(NV * 3);          // (軸方向t, 周方向θ, 皺襞の強さ)
 const frameU = new Float32Array(NN * 3), frameV = new Float32Array(NN * 3);

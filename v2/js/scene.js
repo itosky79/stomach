@@ -118,17 +118,18 @@ geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 geom.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
 geom.setAttribute('aLevel', new THREE.BufferAttribute(aLevel, 1));
 geom.setAttribute('aWet', new THREE.BufferAttribute(aWet, 1));
+geom.setAttribute('aFilm', new THREE.BufferAttribute(aFilm, 1));
 geom.setAttribute('aRug', new THREE.BufferAttribute(aRug, 3));
 geom.setAttribute('aThick', new THREE.BufferAttribute(aThick, 1));
 geom.setIndex(new THREE.BufferAttribute(indices, 1));
 
 const VERT = `
-attribute float aLevel; attribute float aWet; attribute vec3 aRug; attribute float aThick;
+attribute float aLevel; attribute float aWet; attribute vec3 aRug; attribute float aThick; attribute float aFilm;
 uniform vec3 uUp;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
-varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick;
+varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick; varying float vFilm;
 void main(){
-  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug; vThick = aThick;
+  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug; vThick = aThick; vFilm = aFilm;
   vec4 wp = modelMatrix * vec4(position,1.0);
   vNW = normalize(mat3(modelMatrix) * normal);
   vVd = normalize(cameraPosition - wp.xyz);
@@ -169,9 +170,9 @@ void main(){
 }`;
 
 const FRAG_XRAY = `
-uniform vec3 uUp; uniform float uRug;
+uniform vec3 uUp; uniform float uRug; uniform float uGroove;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
-varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick;
+varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick; varying float vFilm;
 ${RUGAE}
 void main(){
   vec3 n = normalize(vNW);
@@ -183,13 +184,20 @@ void main(){
   // 厚みは 1 − exp(−厚み/0.9) で効かせる：実寸 1 cm ほどでほぼ白く、圧迫で数 mm まで薄くなった層だけが透けて粘膜のひだが見える
   float th = 1.0 - exp(-max(vThick, 0.0) / 0.9);
   float pool = 0.62 * th * mix(rugae(vR, 1.0), 1.0, th);
-  float d = below * pool + (1.0 - below) * coat * 0.058 * rugae(vR, uRug);
-  d *= edge;
+  // 液面より上の壁：付いたバリウムの膜（vFilm ＝ 膜 1 枚の光学的な厚み。sim.js の updateWet が流れの式から求める）。
+  // ひだ（皺襞）の間の溝には、膜より多くバリウムがたまる（uGroove ＝ 溝にたまる分の光学的な厚み）。膜が無ければ溝にもたまっていない。
+  // X 線が膜を斜めに通るほど道のりが長く白い（edge）。
+  // 白さは光学的な厚み（透過した X 線の対数）に比例させ、0〜3 を黒〜白に割り当てる（デジタル透視の表示に近いと仮定）
+  float fold = pow(sin(vR.y*6.2831*6.0 + vR.x*24.0) * 0.5 + 0.5, 1.9) * vR.z * uRug;
+  float od = (vFilm + uGroove * fold * clamp(vFilm / 0.05, 0.0, 1.0)) * edge;
+  float d = below * pool + (1.0 - below) * min(od / 3.0, 1.0);
+  d *= mix(1.0, edge, below);
   gl_FragColor = vec4(vec3(0.93,0.955,1.0) * d, 1.0);
 }`;
 
 const uUp = { value: new THREE.Vector3(0, 1, 0) };
 const uRug = { value: 1 };
+const uGroove = { value: 0.5 };   // ひだの間の溝にたまるバリウムの光学的な厚み（sim.js の updateWet で毎回決める）
 const uRimS = { value: new THREE.Color(0.34, 0.46, 0.56) }, uMucA = { value: 0.17 };   // 胃のふちの光の色と、粘膜の不透明度（ライトでは変える。setTheme3D）
 function solidMat(side, flip) {
   return new THREE.ShaderMaterial({
@@ -200,7 +208,7 @@ function solidMat(side, flip) {
 }
 const matBack = solidMat(THREE.BackSide, -1), matFront = solidMat(THREE.FrontSide, 1);
 const matXray = new THREE.ShaderMaterial({
-  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug },
+  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug, uGroove: uGroove },
   transparent: true, depthWrite: false, depthTest: false,
   blending: THREE.AdditiveBlending, side: THREE.DoubleSide
 });
