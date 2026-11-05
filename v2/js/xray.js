@@ -165,7 +165,7 @@ function layoutFilm() {
 }
 function updateFilmLabels() {
   document.getElementById('filmPos').textContent = poseName(tiltCur, rollCur);
-  document.getElementById('filmProj').textContent = compAmt > 0.01 ? '圧迫' : (XAIM.text ? '見る場所：' + XAIM.text : '');   // 胃の型の名前（解剖モデル）は出さない
+  document.getElementById('filmProj').textContent = compAmt > 0.01 ? '圧迫' : '';   // 透視像には余計な文字を出さない（胃の型の名前や「見る場所」は出さない）
   const lw = new THREE.Vector3(1, 0, 0).applyQuaternion(bodyGroup.quaternion);
   const cx = new THREE.Vector3().setFromMatrixColumn(xcam.matrixWorld, 0);
   const lr = lw.dot(cx) >= 0;
