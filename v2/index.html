@@ -125,6 +125,7 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
           <button class="act" id="bPlay" type="button">順に再生</button>
           <button class="act" id="bNext" type="button">次へ</button>
         </div>
+        <p class="rotnow seqmove" id="seqMove" aria-live="polite"></p>
       </div>
 
       <div class="pane" id="pane2" hidden>
@@ -162,6 +163,7 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
           <option value="antrum">前庭部</option>
           <option value="angle">胃角部</option>
           <option value="body">胃体部</option>
+          <option value="pylorus">幽門前部</option>
         </select>
         <div class="epose" id="ePose" hidden>
           <p class="ep-h"><b id="epName"></b><span>国試に出ています</span></p>

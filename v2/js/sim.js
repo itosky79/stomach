@@ -151,7 +151,7 @@ function upLocal(out) {
   return out.set(0, 1, 0).applyQuaternion(qA);
 }
 function goPose(t, r) {
-  if (typeof rotStop === 'function') rotStop();   // 回転法（学習）の途中でほかの体位を選んだら、回転をやめる
+  if (typeof rotStop === 'function') { rotStop(); seqPathStop(); }   // 回転法（学習）や手順の経路の途中でほかの体位を選んだら、やめる
   tiltT = t;
   rollT = rollCur + (((r - rollCur) % 360 + 540) % 360 - 180);
 }
