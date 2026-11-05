@@ -651,3 +651,7 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 .drink{padding:5px 14px; border:1px solid var(--line2); border-radius:999px; background:var(--mat); color:var(--text);
   font-family:var(--gothic); font-size:12.5px; font-weight:700; cursor:pointer; backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px)}
 .drink:hover{border-color:var(--teal); color:var(--teal)}
+/* 手順タブ：前へ・順に再生・次へは一覧の上に置く */
+#pane1 .seqnav{margin:0 0 4px}
+#pane1 .seqmove{margin:6px 0 10px; min-height:0}
+#pane1 .seqmove:empty{display:none}
