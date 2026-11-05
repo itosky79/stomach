@@ -647,3 +647,7 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 .rotsrc{display:block; margin-top:3px; font-size:11px; color:var(--dim)}
 .bainfo{margin:4px 0 0; font-size:11px; line-height:1.6; color:var(--dim)}
 .seqmove{font-weight:500; font-size:12px; line-height:1.7; margin-top:10px}
+/* 飲み直す（3D の上、撮影の左）。付き方を試し直すことが多いので押しやすい所に置く */
+.drink{padding:5px 14px; border:1px solid var(--line2); border-radius:999px; background:var(--mat); color:var(--text);
+  font-family:var(--gothic); font-size:12.5px; font-weight:700; cursor:pointer; backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px)}
+.drink:hover{border-color:var(--teal); color:var(--teal)}

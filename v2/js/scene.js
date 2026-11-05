@@ -153,7 +153,9 @@ float areaNet(vec3 r){
     float d = length(g + o - fp);
     if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
   }
-  return 1.0 - smoothstep(0.03, 0.14, d2 - d1);
+  // 網目が画面の画素より細かいとき（引いて見ているとき）は、ちらつくので薄くする
+  float px = length(fwidth(uv));
+  return (1.0 - smoothstep(0.03, 0.14, d2 - d1)) * (1.0 - smoothstep(0.12, 0.35, px));
 }
 float rugae(vec3 r, float on){
   return mix(1.0, 0.30 + 1.55*foldGroove(r), r.z * on);

@@ -420,26 +420,54 @@ function zoomFade() {
    液面より上の点が無いとき（ほぼ満杯）は、体位の目的部位を真ん中にして 17 cm */
 const XAUTO = { t: 0, last: 0, goal: { cx: 0, cy: 0, field: 17 }, cur: null };
 const _xa = new THREE.Vector3(), _xm = new THREE.Matrix4();
+const XG_CELL = 0.4;   // 自動の視野を決める升目の大きさ（台の座標。胃の幅がおよそ 12）
 function xfovAuto(aspect) {
   const now = performance.now();
   if (now - XAUTO.t > 200 || !XAUTO.cur) {
     XAUTO.t = now;
     bodyGroup.updateMatrix(); _xm.copy(bodyGroup.matrix);   // 胃の座標 → 台（tiltGroup）の座標
     const ax = new THREE.Vector3().crossVectors(AY, AZ);
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, n = 0;
+    // 胃の壁を X 線の向きに投影して、升目（XG_CELL 角）ごとに「溜まったバリウムが写る」「バリウムの無い壁（二重造影）だけが写る」を数える。
+    // 液面より上の壁でも、同じ X 線の通り道に溜まったバリウムがあれば真っ白で見えないので、二重造影には数えない。
+    const pts = [];
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (let i = 0; i < NMAIN; i++) {
       if (regionList[regionOf[i]][0] === 'duode') continue;
       for (let j = 0; j < CM; j++) {
         const v = i * CM + j;
-        if (hArr[v] <= lvl[i]) continue;   // 液面の下（溜まったバリウム）は除く
         _xa.set(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]).applyMatrix4(_xm);
         const px = _xa.dot(ax), py = _xa.dot(AY);
-        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py; n++;
+        pts.push(px, py, hArr[v] <= lvl[i] && aThick[v] > 0.4 ? 1 : 0);   // 溜まりが厚い（実寸およそ 5 mm 以上で真っ白）所だけを「写らない」とする
+        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
       }
     }
-    if (n > 20) {
-      const h = Math.max(y1 - y0, (x1 - x0) / Math.max(0.3, aspect)) * 1.1;
-      XAUTO.goal = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, field: Math.max(10, Math.min(32, h)) };
+    const C = XG_CELL, gx = Math.max(1, Math.ceil((x1 - x0) / C) + 1), gy = Math.max(1, Math.ceil((y1 - y0) / C) + 1);
+    const pool = new Uint8Array(gx * gy), wall = new Uint8Array(gx * gy);
+    for (let k = 0; k < pts.length; k += 3) {
+      const c = Math.floor((pts[k] - x0) / C) + Math.floor((pts[k + 1] - y0) / C) * gx;
+      if (pts[k + 2]) pool[c] = 1; else wall[c] = 1;
+    }
+    // 溜まったバリウムの升目は、隣の升目も白くなるので 1 升ふくらませる。残った「二重造影だけ」の升目の範囲（端の 5 % ずつを除く）を視野にする
+    const cxs = [], cys = [];
+    for (let y = 0; y < gy; y++) for (let x = 0; x < gx; x++) {
+      if (!wall[x + y * gx]) continue;
+      let p = 0;
+      for (let dy = -1; dy <= 1 && !p; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx >= 0 && yy >= 0 && xx < gx && yy < gy && pool[xx + yy * gx]) { p = 1; break; }
+      }
+      if (!p) { cxs.push(x0 + (x + 0.5) * C); cys.push(y0 + (y + 0.5) * C); }
+    }
+    let best = null, bs = cxs.length;
+    if (bs) {
+      cxs.sort((a, b) => a - b); cys.sort((a, b) => a - b);
+      const q = (A, f) => A[Math.min(A.length - 1, Math.floor(A.length * f))];
+      const ax0 = q(cxs, 0.05), ax1 = q(cxs, 0.95), ay0 = q(cys, 0.05), ay1 = q(cys, 0.95);
+      const h = Math.max(ay1 - ay0, (ax1 - ax0) / Math.max(0.3, aspect)) * 1.15 + C;
+      best = { cx: (ax0 + ax1) / 2, cy: (ay0 + ay1) / 2, field: Math.max(7, Math.min(20, h)) };
+    }
+    if (best && bs >= 15) {
+      XAUTO.goal = best;
       XAIM.text = 'バリウムの無い所（二重造影）';
     } else {
       _xa.copy(xfovCenter()); bodyGroup.updateMatrixWorld(true); _xa.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xa);

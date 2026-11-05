@@ -77,8 +77,8 @@ function gotoStep(i) {
   [...seqList.querySelectorAll('button')].forEach(b => {
     if (+b.dataset.i === seqIdx) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
   });
-  // 基準撮影法Ⅱで 1 つ先へ進むときは、本に書いてある体位変換の経路をたどる（SEQ2_ROUTES）。それ以外はまっすぐその体位へ
-  const R = SEQ === SEQ2 ? SEQ2_ROUTES[seqIdx] : null, follow = R && seqIdx === prevIdx + 1;
+  // 1 つ先へ進むとき（次へ・順に再生）は、本に書いてある体位変換の経路をたどる（data.js の SEQ1_ROUTES・SEQ2_ROUTES）。番号で飛んだときはまっすぐその体位へ
+  const R = (SEQ === SEQ2 ? SEQ2_ROUTES : SEQ === SEQ1 ? SEQ1_ROUTES : [])[seqIdx] || null, follow = R && seqIdx === prevIdx + 1;
   if (follow) seqPathStart(R); else goPose(S.tilt, S.roll);
   document.getElementById('seqMove').textContent = R ? '前の撮影から：' + R.note : '';
   setComp(S.comp || '', S.comp ? 0.7 : 0);
