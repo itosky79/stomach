@@ -465,8 +465,7 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 }
 
 /* ---------- 色の切り替え（ライト）。ダークは :root の値。透視像（X 線像）は本物と同じく暗いまま ---------- */
-.uiSeg{margin-left:auto; background:var(--panel2)}
-.themeSeg{background:var(--panel2)}
+.themeSeg{margin-left:auto; background:var(--panel2)}
 :root[data-theme="light"]{
   color-scheme: light;
   --ink:#EEF2F5; --ink2:#F7F9FB; --panel:#FFFFFF; --panel2:#E6ECF1;
@@ -506,195 +505,127 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 :root[data-theme="light"] .fluoro{background:rgba(255,255,255,.85)}
 
 /* ============================================================
-   新デザイン（data-ui="soft"）：iPhone や Mac の画面に近い見た目。
-   丸みのある角、枠線の少ないカード、すりガラスのボタン、スイッチ型のチェック、システムの文字。
-   「標準」に戻すと上の見た目のまま。透視像の中身は変えない
-   ============================================================ */
-:root[data-ui="soft"]{
-  --ink:#000000; --ink2:#1C1C1E; --panel:#1C1C1E; --panel2:#2C2C2E;
-  --line:rgba(84,84,88,.45); --line2:rgba(120,120,128,.5);
-  --text:#F5F5F7; --muted:rgba(235,235,245,.68); --dim:rgba(235,235,245,.42);
-  --teal:#0A84FF; --amber:#FF9F0A; --alert:#FF453A;
-  --fill:rgba(118,118,128,.24); --thumb:#636366; --mat:rgba(28,28,30,.66); --tint:rgba(10,132,255,.2);
-  --shadow:none;
-  --gothic:-apple-system,BlinkMacSystemFont,"SF Pro Text","Hiragino Sans","Hiragino Kaku Gothic ProN","Helvetica Neue","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
-  --mincho:var(--gothic); --mono:var(--gothic);
-  --r:14px;
-}
-:root[data-ui="soft"][data-theme="light"]{
-  --ink:#F2F2F7; --ink2:#FFFFFF; --panel:#FFFFFF; --panel2:#E9E9EE;
-  --line:rgba(60,60,67,.16); --line2:rgba(60,60,67,.26);
-  --text:#1D1D1F; --muted:#6E6E73; --dim:#8E8E93;
-  --teal:#007AFF; --amber:#FF9500; --alert:#FF3B30;
-  --fill:rgba(118,118,128,.12); --thumb:#FFFFFF; --mat:rgba(255,255,255,.72); --tint:rgba(0,122,255,.12);
-  --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 14px rgba(0,0,0,.05);
-}
-:root[data-ui="soft"] body{font-size:14px; letter-spacing:0; font-variant-numeric:tabular-nums}
-:root[data-ui="soft"] h1{font-weight:700; letter-spacing:-.01em}
-:root[data-ui="soft"] header{border-bottom:none}
-/* 小さな見出し・ラベル：大文字や字間を広げた書き方をやめる */
-:root[data-ui="soft"] :is(.grp-h,.seg button,.expose,.vrbtn,.rbname,.fluoro,.sticklab,.films .hint,details.fold summary,
-  .qhead span,.readout .sm,.ep-h span,button.opt .ruby,.qsrc,.qsrc b,.qfigzoom,#film .fh,.lab.axis,ol.seq .no,.choices .n,.detent button){
-  letter-spacing:0; text-transform:none}
-:root[data-ui="soft"] .grp-h{font-size:12px; font-weight:600; color:var(--muted); margin-bottom:10px}
-:root[data-ui="soft"] .grp-h b{font-size:12px; color:var(--dim)}
-
-/* カード */
-:root[data-ui="soft"] :is(.grp,.films,.gcard){border:none; border-radius:var(--r); box-shadow:var(--shadow)}
-:root[data-ui="soft"] .grp{padding:14px 14px 15px}
-:root[data-ui="soft"] .stage{border:none; border-radius:var(--r)}
-:root[data-ui="soft"] .gcard{border-radius:20px; padding:20px 20px 18px; box-shadow:0 24px 70px rgba(0,0,0,.35)}
-:root[data-ui="soft"] #guide{backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%)}
-:root[data-ui="soft"] body.detached .rail{border:none; border-radius:16px; background:var(--mat);
-  backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%)}
-:root[data-ui="soft"] .split::after{left:2.5px; right:2.5px; border-radius:2px; background:var(--fill)}
-
-/* 区切りボタン（セグメント）：薄い地に、選んだものだけ白い（ダークでは灰色の）つまみ */
-:root[data-ui="soft"] :is(.seg,.tabs){border:none; border-radius:10px; padding:2px; gap:2px; background:var(--fill)}
-:root[data-ui="soft"] :is(.seg,.tabs) button{border:none; border-radius:8px; background:none; color:var(--text);
-  font-family:var(--gothic); font-size:12px; font-weight:500; transition:background .2s,box-shadow .2s}
-:root[data-ui="soft"] .seg button{padding:4px 12px}
-:root[data-ui="soft"] .tabs button{padding:6px 1px; font-size:12px}
-:root[data-ui="soft"] :is(.seg,.tabs) button[aria-pressed="true"]{background:var(--thumb); color:var(--text);
-  box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
-:root[data-ui="soft"] .tabs{margin-bottom:14px}
-:root[data-ui="soft"] .seg.wide{background:var(--fill)}
-:root[data-ui="soft"] .seg.wide button{font-size:11.5px}
-/* 3D の上に浮かぶボタンは、すりガラス */
-:root[data-ui="soft"] .bar .seg,:root[data-ui="soft"] .fluoro,:root[data-ui="soft"] #fpsPad .fpsTip{
-  background:var(--mat); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
-  box-shadow:0 2px 10px rgba(0,0,0,.18)}
-:root[data-ui="soft"] .fluoro,:root[data-ui="soft"] #fpsPad .fpsTip{border-radius:8px; font-size:11px; color:var(--muted)}
-
-/* 大きいボタン */
-:root[data-ui="soft"] .hbtn{border:none; border-radius:999px; background:var(--fill); color:var(--text); font-size:12.5px; font-weight:500; padding:5px 14px}
-:root[data-ui="soft"] .hbtn:hover{background:var(--tint); color:var(--teal)}
-:root[data-ui="soft"] .expose{border:none; border-radius:999px; background:var(--amber); color:#fff; font-family:var(--gothic);
-  font-size:13px; font-weight:600; padding:6px 18px; box-shadow:0 2px 10px rgba(255,149,0,.35)}
-:root[data-ui="soft"] .expose:hover{background:var(--amber); color:#fff; filter:brightness(1.08)}
-:root[data-ui="soft"] .vrbtn{border:none; border-radius:999px; background:var(--mat); color:var(--teal); font-family:var(--gothic); font-size:13px; font-weight:600;
-  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px)}
-:root[data-ui="soft"] .vrbtn[aria-pressed="true"]{background:var(--teal); color:#fff}
-:root[data-ui="soft"] button.act{border:none; border-radius:10px; background:var(--tint); color:var(--teal); font-size:12.5px; font-weight:500; padding:8px 4px}
-:root[data-ui="soft"] button.act:hover{background:var(--tint); color:var(--teal); filter:brightness(1.15)}
-:root[data-ui="soft"] button.act.wide{background:var(--teal); color:#fff}
-:root[data-ui="soft"] :is(.rbbtn,.annbtn,.detent button){border:none; border-radius:999px; background:var(--fill); color:var(--text)}
-:root[data-ui="soft"] .annbtn[aria-pressed="true"]{background:var(--amber); color:#fff}
-:root[data-ui="soft"] #gClose{border:none; border-radius:12px; background:var(--teal); color:#fff; font-size:14px; font-weight:600; padding:11px}
-:root[data-ui="soft"] #gClose:hover{background:var(--teal); filter:brightness(1.08)}
-:root[data-ui="soft"] #lightbox button{border:none; border-radius:999px; background:rgba(118,118,128,.3); color:#fff}
-:root[data-ui="soft"] #lightbox{backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px)}
-:root[data-ui="soft"] #fpsPad .fpsZoom button{border:none; border-radius:50%; background:var(--mat); color:var(--text);
-  backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); box-shadow:0 2px 10px rgba(0,0,0,.2)}
-
-/* 体位などの選ぶボタン */
-:root[data-ui="soft"] button.opt{border:none; border-radius:12px; background:var(--fill); color:var(--text); font-size:11.5px}
-:root[data-ui="soft"] button.opt:hover{background:var(--tint)}
-:root[data-ui="soft"] button.opt[aria-pressed="true"]{background:var(--teal); color:#fff}
-:root[data-ui="soft"] button.opt .ruby{font-size:9.5px; color:var(--dim)}
-:root[data-ui="soft"] button.opt[aria-pressed="true"] .ruby{color:rgba(255,255,255,.8)}
-:root[data-ui="soft"] .pos-grid.five button.opt{font-size:10.5px}
-
-/* チェックはスイッチ（右寄せ） */
-:root[data-ui="soft"] label.tg{justify-content:space-between; flex-direction:row-reverse; font-size:13px; color:var(--text);
-  padding:7px 0; border-bottom:.5px solid var(--line)}
-:root[data-ui="soft"] label.tg:last-child{border-bottom:none}
-:root[data-ui="soft"] input[type=checkbox]{width:40px; height:24px; border:none; border-radius:999px; background:var(--fill); transition:background .2s}
-:root[data-ui="soft"] input[type=checkbox]::after{content:""; position:absolute; left:2px; top:2px; width:20px; height:20px; border:none;
-  border-radius:50%; background:#fff; transform:none; box-shadow:0 2px 5px rgba(0,0,0,.25); transition:left .2s}
-:root[data-ui="soft"] input[type=checkbox]:checked{background:#34C759}
-:root[data-ui="soft"] input[type=checkbox]:checked::after{left:18px; top:2px; width:20px; height:20px; border:none; transform:none}
-:root[data-ui="soft"] .rng input{accent-color:var(--teal)}
-:root[data-ui="soft"] .rng output{font-family:var(--gothic)}
-:root[data-ui="soft"] select.sel{border:none; border-radius:10px; background:var(--fill); padding:8px 10px; font-size:13px}
-
-/* 表示・手順・問題 */
-:root[data-ui="soft"] .readout{border:none; border-radius:12px; background:var(--fill); padding:9px 12px}
-:root[data-ui="soft"] .readout .big{color:var(--text); font-size:13.5px; font-weight:600}
-:root[data-ui="soft"] ol.seq button{border:none; border-radius:10px; padding:7px 9px; font-size:12.5px}
-:root[data-ui="soft"] ol.seq button:hover{background:var(--fill)}
-:root[data-ui="soft"] ol.seq button[aria-current="step"]{background:var(--tint); color:var(--text)}
-:root[data-ui="soft"] ol.seq button[aria-current="step"] .tg2{color:var(--teal)}
-:root[data-ui="soft"] ol.seq .no{font-weight:600}
-:root[data-ui="soft"] .choices button{border:none; border-radius:12px; background:var(--fill); color:var(--text); padding:9px 11px; font-size:13px}
-:root[data-ui="soft"] .choices button.sel{background:var(--tint); color:var(--text); box-shadow:inset 0 0 0 1.5px var(--teal)}
-:root[data-ui="soft"] .choices button.ok{background:rgba(52,199,89,.18); color:var(--text); box-shadow:inset 0 0 0 1.5px #34C759}
-:root[data-ui="soft"] .choices button.ng{background:rgba(255,59,48,.16); color:var(--text); box-shadow:inset 0 0 0 1.5px var(--alert)}
-:root[data-ui="soft"] .qtext{color:var(--text); font-size:14px}
-:root[data-ui="soft"] :is(.qexp,.epose){border-left:none; border-radius:12px; background:var(--fill); padding:11px 13px}
-:root[data-ui="soft"] .ep-h b{color:var(--text)}
-:root[data-ui="soft"] .ep-q{font-family:var(--gothic)}
-:root[data-ui="soft"] :is(#qPaste,pre.fmt){border:none; border-radius:12px; background:var(--fill)}
-:root[data-ui="soft"] pre.fmt{font-family:ui-monospace,"SF Mono",Menlo,monospace}
-:root[data-ui="soft"] .ms-meter{border:none; border-radius:999px; background:var(--fill)}
-:root[data-ui="soft"] .ms-meter i{border-radius:999px; opacity:1}
-:root[data-ui="soft"] .ms-result{border:none; border-radius:12px; background:var(--fill)}
-:root[data-ui="soft"] details.fold{border-top:.5px solid var(--line)}
-:root[data-ui="soft"] details.fold summary{font-size:12px; color:var(--teal)}
-:root[data-ui="soft"] details.fold summary::before{color:var(--teal)}
-:root[data-ui="soft"] .films h2{color:var(--text); font-size:15px}
-:root[data-ui="soft"] .strip img{border:none; border-radius:8px}
-:root[data-ui="soft"] .qfig{border:none; border-radius:10px}
-
-/* 操作卓（スティックとレバー） */
-:root[data-ui="soft"] .stick{border:none; border-radius:22px; background:var(--fill); box-shadow:inset 0 1px 6px rgba(0,0,0,.18)}
-:root[data-ui="soft"] .knob{width:32px; height:32px; margin:-16px 0 0 -16px; border:none; background:#fff;
-  box-shadow:0 3px 10px rgba(0,0,0,.35),0 0 0 .5px rgba(0,0,0,.08)}
-:root[data-ui="soft"] .knob::after{inset:11px; background:var(--amber)}
-:root[data-ui="soft"] .lever{border:none; border-radius:999px; background:var(--fill); box-shadow:inset 0 1px 6px rgba(0,0,0,.18)}
-:root[data-ui="soft"] .lhandle{border:none; border-radius:999px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.35)}
-:root[data-ui="soft"] .lhandle::after{display:none}
-
-/* 3D の中のラベル */
-:root[data-ui="soft"] .lab{border:none; border-radius:6px; background:rgba(28,28,30,.62); color:#fff; text-shadow:none;
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); font-weight:500}
-:root[data-ui="soft"] .lab.axis{background:none; backdrop-filter:none; -webkit-backdrop-filter:none}
-:root[data-ui="soft"] .lab.curv{color:#64D2FF}
-:root[data-ui="soft"] .rail{scrollbar-color:var(--fill) transparent}
-:root[data-ui="soft"] .rail::-webkit-scrollbar-thumb{background:var(--fill)}
-:root[data-ui="soft"] .tabs button{white-space:nowrap; font-size:11.5px}
-
-/* ============================================================
-   標準（data-ui="classic"）の読みやすさ。見た目（枠線・色合い）はそのままで、文字だけ読みやすくする。
+   字の読みやすさ（iPhone・Mac の画面を参考にした）。
    - 小さい字に使っていた英数字用の等幅の文字をやめ、本文と同じゴシックにする。数字は幅をそろえる
    - 字と字の間を広げた書き方・大文字だけの書き方をやめる
    - かなの詰め（palt）で、日本語の字の間のすき間を自然にする
    - 9 px 前後の小さい字を 10.5〜12 px に上げ、薄い灰色の字を濃くする
    ============================================================ */
-:root[data-ui="classic"]{
+:root{
   --mono:"Zen Kaku Gothic New",'Hiragino Sans','Yu Gothic UI','Yu Gothic',system-ui,sans-serif;
   --muted:#A9BCCB; --dim:#8296A8;
 }
-:root[data-ui="classic"][data-theme="light"]{ --muted:#3B4D5E; --dim:#53677A; }
-:root[data-ui="classic"] body{font-feature-settings:"palt"; font-variant-numeric:tabular-nums; font-weight:500}
-:root[data-ui="classic"] h1{letter-spacing:.01em}
-:root[data-ui="classic"] :is(.grp-h,.grp-h b,.seg button,.expose,.vrbtn,.rbname,.fluoro,.sticklab,.films .hint,details.fold summary,
+:root[data-theme="light"]{ --muted:#3B4D5E; --dim:#53677A; }
+:root body{font-feature-settings:"palt"; font-variant-numeric:tabular-nums; font-weight:500}
+:root h1{letter-spacing:.01em}
+:root :is(.grp-h,.grp-h b,.seg button,.expose,.vrbtn,.rbname,.fluoro,.sticklab,.films .hint,details.fold summary,
   .qhead span,.readout .sm,.ep-h span,button.opt .ruby,.qsrc,.qsrc b,.qfigzoom,#film .fh,.lab,.lab.axis,ol.seq .no,ol.seq .tg2,
   .choices .n,.detent button,.strip figcaption,.ep-q,#perf,.glinfo){letter-spacing:0; text-transform:none}
-:root[data-ui="classic"] .grp-h{font-size:12px; font-weight:700; color:var(--muted)}
-:root[data-ui="classic"] .grp-h b{font-size:12px}
-:root[data-ui="classic"] .seg button{font-size:12px; font-weight:500}
-:root[data-ui="classic"] .seg.wide button{font-size:11.5px}
-:root[data-ui="classic"] .tabs button{font-size:12px; white-space:nowrap}
-:root[data-ui="classic"] :is(.expose,.vrbtn){font-size:12.5px; font-weight:700}
-:root[data-ui="classic"] button.opt{font-size:12px}
-:root[data-ui="classic"] .pos-grid.four button.opt{font-size:11px}
-:root[data-ui="classic"] .pos-grid.five button.opt{font-size:11px}
-:root[data-ui="classic"] button.opt .ruby{font-size:10px}
-:root[data-ui="classic"] :is(.rbname,.fluoro,.sticklab,.films .hint,.readout .sm,.qhead span,.qsrc,.qfigzoom,.annnote,.gcredit,.ep-h span,.detent button){font-size:11px}
-:root[data-ui="classic"] :is(ol.seq .no,ol.seq .tg2,.choices .n,.ep-q,.strip figcaption){font-size:11px}
-:root[data-ui="classic"] ol.seq button{font-size:12.5px}
-:root[data-ui="classic"] .choices button{font-size:13px}
-:root[data-ui="classic"] .readout .big{font-size:13.5px; font-weight:700}
-:root[data-ui="classic"] details.fold summary{font-size:12px}
-:root[data-ui="classic"] details.fold p{font-size:12px}
-:root[data-ui="classic"] label.tg{font-size:13px}
-:root[data-ui="classic"] #film .fh{font-size:11px; color:#A9CBDB}
-:root[data-ui="classic"] #film :is(.fR,.fL){opacity:.9}
-:root[data-ui="classic"] .lab{font-size:11px}
-:root[data-ui="classic"] .lab.axis{font-size:10.5px}
-:root[data-ui="classic"] #fpsPad .fpsTip{font-size:12px}
-:root[data-ui="classic"] .films h2{font-family:var(--gothic)}
+:root .grp-h{font-size:12px; font-weight:700; color:var(--muted)}
+:root .grp-h b{font-size:12px}
+:root .seg button{font-size:12px; font-weight:500}
+:root .seg.wide button{font-size:11.5px}
+:root .tabs button{font-size:12px; white-space:nowrap}
+:root :is(.expose,.vrbtn){font-size:12.5px; font-weight:700}
+:root button.opt{font-size:12px}
+:root .pos-grid.four button.opt{font-size:11px}
+:root .pos-grid.five button.opt{font-size:11px}
+:root button.opt .ruby{font-size:10px}
+:root :is(.rbname,.fluoro,.sticklab,.films .hint,.readout .sm,.qhead span,.qsrc,.qfigzoom,.annnote,.gcredit,.ep-h span,.detent button){font-size:11px}
+:root :is(ol.seq .no,ol.seq .tg2,.choices .n,.ep-q,.strip figcaption){font-size:11px}
+:root ol.seq button{font-size:12.5px}
+:root .choices button{font-size:13px}
+:root .readout .big{font-size:13.5px; font-weight:700}
+:root details.fold summary{font-size:12px}
+:root details.fold p{font-size:12px}
+:root label.tg{font-size:13px}
+:root #film .fh{font-size:11px; color:#A9CBDB}
+:root #film :is(.fR,.fL){opacity:.9}
+:root .lab{font-size:11px}
+:root .lab.axis{font-size:10.5px}
+:root #fpsPad .fpsTip{font-size:12px}
+:root .films h2{font-family:var(--gothic)}
 @media (max-width:560px){
-  :root[data-ui="classic"] #film .fh{font-size:10px}
+  :root #film .fh{font-size:10px}
 }
+
+/* ============================================================
+   iPhone・Mac の画面から、見やすいところだけ取り入れる。色（青緑・オレンジ）と全体の雰囲気は今までのまま
+   - 区切りボタン：薄い地に、選んだものだけ浮き上がったつまみ。どれを選んでいるかが一目で分かる
+   - 選んだボタンは青緑で塗る。チェックはオン／オフが分かるスイッチ
+   - 3D の上に浮かぶボタン・案内は、すりガラス（後ろの 3D がうるさくても字が読める）
+   - 角を少し丸く、ボタンの枠線を減らす。いちばん大事な「撮影」は塗りつぶしの丸いボタン
+   （:root[data-theme] を頭に付けるのは、上のライト用の指定より優先させるため）
+   ============================================================ */
+:root{
+  --r:10px;
+  --fill:rgba(138,166,190,.13); --thumb:#2B4255; --mat:rgba(12,18,25,.62); --tint:rgba(82,184,206,.16); --onAccent:#04222B;
+}
+:root[data-theme="light"]{
+  --fill:rgba(40,70,95,.08); --thumb:#FFFFFF; --mat:rgba(255,255,255,.72); --tint:rgba(30,127,150,.12); --onAccent:#FFFFFF;
+}
+/* 区切りボタン */
+:root[data-theme] :is(.seg,.tabs){border:none; border-radius:9px; padding:2px; gap:2px; background:var(--fill)}
+:root[data-theme] .tabs{display:grid}
+:root[data-theme] :is(.seg,.tabs) button{border:none; border-radius:7px; background:none; color:var(--muted); transition:background .2s,box-shadow .2s,color .2s}
+:root[data-theme] :is(.seg,.tabs) button:hover{color:var(--text)}
+:root[data-theme] :is(.seg,.tabs) button[aria-pressed="true"]{background:var(--thumb); color:var(--text); font-weight:700;
+  box-shadow:0 2px 6px rgba(0,0,0,.22),0 0 0 .5px rgba(0,0,0,.06)}
+:root[data-theme] .seg.wide{background:var(--fill)}
+/* 3D の上に浮かぶもの：すりガラス */
+:root[data-theme] :is(.bar .seg,.fluoro,#fpsPad .fpsTip,#fpsPad .fpsZoom button){background:var(--mat);
+  backdrop-filter:blur(18px) saturate(170%); -webkit-backdrop-filter:blur(18px) saturate(170%); box-shadow:0 2px 10px rgba(0,0,0,.2)}
+:root[data-theme] :is(.fluoro,#fpsPad .fpsTip){border-radius:7px}
+:root[data-theme] #fpsPad .fpsZoom button{border:none; border-radius:50%}
+:root[data-theme] .lab{border:none; border-radius:5px; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px)}
+:root[data-theme] .lab.axis{backdrop-filter:none; -webkit-backdrop-filter:none}
+/* 撮影：塗りつぶしの丸いボタン */
+:root[data-theme] .expose{border:none; border-radius:999px; padding:6px 18px; background:var(--amber); color:#2A1600;
+  box-shadow:0 2px 10px rgba(240,178,75,.3)}
+:root[data-theme] .expose:hover{background:var(--amber); color:#2A1600; filter:brightness(1.08)}
+:root[data-theme="light"] .expose{color:#fff; box-shadow:0 2px 10px rgba(185,116,26,.3)}
+:root[data-theme="light"] .expose:hover{color:#fff}
+:root[data-theme] .vrbtn{border-radius:999px; background:var(--mat); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px)}
+:root[data-theme] .vrbtn[aria-pressed="true"]{background:var(--teal); color:var(--onAccent)}
+/* 選ぶボタン（体位など） */
+:root[data-theme] button.opt{border:none; border-radius:9px; background:var(--fill); color:var(--text)}
+:root[data-theme] button.opt:hover{background:var(--tint); color:var(--text)}
+:root[data-theme] button.opt[aria-pressed="true"]{background:var(--teal); color:var(--onAccent); font-weight:700}
+:root[data-theme] button.opt[aria-pressed="true"] .ruby{color:var(--onAccent); opacity:.8}
+/* そのほかのボタン */
+:root[data-theme] .hbtn{border:none; border-radius:999px; background:var(--fill); color:var(--text)}
+:root[data-theme] .hbtn:hover{background:var(--tint); color:var(--teal)}
+:root[data-theme] button.act{border:none; border-radius:8px; background:var(--tint); color:var(--teal); font-weight:700}
+:root[data-theme] button.act:hover{background:var(--tint); color:var(--teal); filter:brightness(1.15)}
+:root[data-theme] button.act.wide{background:var(--teal); color:var(--onAccent)}
+:root[data-theme] :is(.rbbtn,.annbtn,.detent button){border:none; border-radius:999px; background:var(--fill); color:var(--text)}
+:root[data-theme] .annbtn[aria-pressed="true"]{background:var(--amber); color:#2A1600}
+:root[data-theme] #gClose{border:none; border-radius:10px; background:var(--teal); color:var(--onAccent); font-size:14px; font-weight:700; padding:11px}
+:root[data-theme] #gClose:hover{background:var(--teal); filter:brightness(1.08)}
+:root[data-theme] :is(#guide,#lightbox){backdrop-filter:blur(12px) saturate(150%); -webkit-backdrop-filter:blur(12px) saturate(150%)}
+:root[data-theme] .gcard{border-radius:16px}
+:root[data-theme] select.sel{border:none; border-radius:8px; background:var(--fill)}
+/* チェックはスイッチ（右寄せ） */
+:root[data-theme] label.tg{justify-content:space-between; flex-direction:row-reverse; color:var(--text); padding:6px 0; border-bottom:1px solid var(--line)}
+:root[data-theme] label.tg:last-child{border-bottom:none}
+:root[data-theme] input[type=checkbox]{width:38px; height:22px; border:none; border-radius:999px; background:var(--fill); transition:background .2s}
+:root[data-theme] input[type=checkbox]::after{content:""; position:absolute; left:2px; top:2px; width:18px; height:18px; border:none;
+  border-radius:50%; background:#fff; transform:none; box-shadow:0 2px 4px rgba(0,0,0,.3); transition:left .2s}
+:root[data-theme] input[type=checkbox]:checked{background:var(--teal)}
+:root[data-theme] input[type=checkbox]:checked::after{left:18px; top:2px; width:18px; height:18px; border:none; transform:none}
+/* 手順・問題・表示 */
+:root[data-theme] ol.seq button{border:none; border-radius:8px}
+:root[data-theme] ol.seq button:hover{background:var(--fill)}
+:root[data-theme] ol.seq button[aria-current="step"]{background:var(--tint); color:var(--text); box-shadow:inset 3px 0 0 var(--teal)}
+:root[data-theme] ol.seq button[aria-current="step"] .tg2{color:var(--teal)}
+:root[data-theme] .choices button{border:none; border-radius:9px; background:var(--fill); color:var(--text)}
+:root[data-theme] .choices button.sel{background:var(--tint); box-shadow:inset 0 0 0 1.5px var(--teal)}
+:root[data-theme] .choices button.ok{box-shadow:inset 0 0 0 1.5px #4FBF88}
+:root[data-theme] .choices button.ng{box-shadow:inset 0 0 0 1.5px #D06A6A}
+:root[data-theme] .readout{border:none; border-radius:9px; background:var(--fill)}
+:root[data-theme] :is(.qexp,.epose){border-radius:0 9px 9px 0}
+:root[data-theme] :is(#qPaste,pre.fmt){border-radius:9px}
+:root[data-theme] :is(.strip img,.qfig){border-radius:6px}
+:root[data-theme] .stick{border-radius:16px}
+:root[data-theme] .lever{border-radius:999px}
+:root[data-theme] .lhandle{border-radius:6px}
