@@ -465,7 +465,8 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 }
 
 /* ---------- 色の切り替え（ライト）。ダークは :root の値。透視像（X 線像）は本物と同じく暗いまま ---------- */
-.themeSeg{margin-left:auto; background:var(--panel2)}
+.uiSeg{margin-left:auto; background:var(--panel2)}
+.themeSeg{background:var(--panel2)}
 :root[data-theme="light"]{
   color-scheme: light;
   --ink:#EEF2F5; --ink2:#F7F9FB; --panel:#FFFFFF; --panel2:#E6ECF1;
@@ -503,3 +504,152 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 :root[data-theme="light"] .glerr{background:rgba(240,244,247,.96)}
 :root[data-theme="light"] #fpsPad .fpsTip{background:rgba(255,255,255,.85); color:var(--muted)}
 :root[data-theme="light"] .fluoro{background:rgba(255,255,255,.85)}
+
+/* ============================================================
+   新デザイン（data-ui="soft"）：iPhone や Mac の画面に近い見た目。
+   丸みのある角、枠線の少ないカード、すりガラスのボタン、スイッチ型のチェック、システムの文字。
+   「標準」に戻すと上の見た目のまま。透視像の中身は変えない
+   ============================================================ */
+:root[data-ui="soft"]{
+  --ink:#000000; --ink2:#1C1C1E; --panel:#1C1C1E; --panel2:#2C2C2E;
+  --line:rgba(84,84,88,.45); --line2:rgba(120,120,128,.5);
+  --text:#F5F5F7; --muted:rgba(235,235,245,.68); --dim:rgba(235,235,245,.42);
+  --teal:#0A84FF; --amber:#FF9F0A; --alert:#FF453A;
+  --fill:rgba(118,118,128,.24); --thumb:#636366; --mat:rgba(28,28,30,.66); --tint:rgba(10,132,255,.2);
+  --shadow:none;
+  --gothic:-apple-system,BlinkMacSystemFont,"SF Pro Text","Hiragino Sans","Hiragino Kaku Gothic ProN","Helvetica Neue","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+  --mincho:var(--gothic); --mono:var(--gothic);
+  --r:14px;
+}
+:root[data-ui="soft"][data-theme="light"]{
+  --ink:#F2F2F7; --ink2:#FFFFFF; --panel:#FFFFFF; --panel2:#E9E9EE;
+  --line:rgba(60,60,67,.16); --line2:rgba(60,60,67,.26);
+  --text:#1D1D1F; --muted:#6E6E73; --dim:#8E8E93;
+  --teal:#007AFF; --amber:#FF9500; --alert:#FF3B30;
+  --fill:rgba(118,118,128,.12); --thumb:#FFFFFF; --mat:rgba(255,255,255,.72); --tint:rgba(0,122,255,.12);
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 14px rgba(0,0,0,.05);
+}
+:root[data-ui="soft"] body{font-size:14px; letter-spacing:0; font-variant-numeric:tabular-nums}
+:root[data-ui="soft"] h1{font-weight:700; letter-spacing:-.01em}
+:root[data-ui="soft"] header{border-bottom:none}
+/* 小さな見出し・ラベル：大文字や字間を広げた書き方をやめる */
+:root[data-ui="soft"] :is(.grp-h,.seg button,.expose,.vrbtn,.rbname,.fluoro,.sticklab,.films .hint,details.fold summary,
+  .qhead span,.readout .sm,.ep-h span,button.opt .ruby,.qsrc,.qsrc b,.qfigzoom,#film .fh,.lab.axis,ol.seq .no,.choices .n,.detent button){
+  letter-spacing:0; text-transform:none}
+:root[data-ui="soft"] .grp-h{font-size:12px; font-weight:600; color:var(--muted); margin-bottom:10px}
+:root[data-ui="soft"] .grp-h b{font-size:12px; color:var(--dim)}
+
+/* カード */
+:root[data-ui="soft"] :is(.grp,.films,.gcard){border:none; border-radius:var(--r); box-shadow:var(--shadow)}
+:root[data-ui="soft"] .grp{padding:14px 14px 15px}
+:root[data-ui="soft"] .stage{border:none; border-radius:var(--r)}
+:root[data-ui="soft"] .gcard{border-radius:20px; padding:20px 20px 18px; box-shadow:0 24px 70px rgba(0,0,0,.35)}
+:root[data-ui="soft"] #guide{backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%)}
+:root[data-ui="soft"] body.detached .rail{border:none; border-radius:16px; background:var(--mat);
+  backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%)}
+:root[data-ui="soft"] .split::after{left:2.5px; right:2.5px; border-radius:2px; background:var(--fill)}
+
+/* 区切りボタン（セグメント）：薄い地に、選んだものだけ白い（ダークでは灰色の）つまみ */
+:root[data-ui="soft"] :is(.seg,.tabs){border:none; border-radius:10px; padding:2px; gap:2px; background:var(--fill)}
+:root[data-ui="soft"] :is(.seg,.tabs) button{border:none; border-radius:8px; background:none; color:var(--text);
+  font-family:var(--gothic); font-size:12px; font-weight:500; transition:background .2s,box-shadow .2s}
+:root[data-ui="soft"] .seg button{padding:4px 12px}
+:root[data-ui="soft"] .tabs button{padding:6px 1px; font-size:12px}
+:root[data-ui="soft"] :is(.seg,.tabs) button[aria-pressed="true"]{background:var(--thumb); color:var(--text);
+  box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+:root[data-ui="soft"] .tabs{margin-bottom:14px}
+:root[data-ui="soft"] .seg.wide{background:var(--fill)}
+:root[data-ui="soft"] .seg.wide button{font-size:11.5px}
+/* 3D の上に浮かぶボタンは、すりガラス */
+:root[data-ui="soft"] .bar .seg,:root[data-ui="soft"] .fluoro,:root[data-ui="soft"] #fpsPad .fpsTip{
+  background:var(--mat); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+  box-shadow:0 2px 10px rgba(0,0,0,.18)}
+:root[data-ui="soft"] .fluoro,:root[data-ui="soft"] #fpsPad .fpsTip{border-radius:8px; font-size:11px; color:var(--muted)}
+
+/* 大きいボタン */
+:root[data-ui="soft"] .hbtn{border:none; border-radius:999px; background:var(--fill); color:var(--text); font-size:12.5px; font-weight:500; padding:5px 14px}
+:root[data-ui="soft"] .hbtn:hover{background:var(--tint); color:var(--teal)}
+:root[data-ui="soft"] .expose{border:none; border-radius:999px; background:var(--amber); color:#fff; font-family:var(--gothic);
+  font-size:13px; font-weight:600; padding:6px 18px; box-shadow:0 2px 10px rgba(255,149,0,.35)}
+:root[data-ui="soft"] .expose:hover{background:var(--amber); color:#fff; filter:brightness(1.08)}
+:root[data-ui="soft"] .vrbtn{border:none; border-radius:999px; background:var(--mat); color:var(--teal); font-family:var(--gothic); font-size:13px; font-weight:600;
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px)}
+:root[data-ui="soft"] .vrbtn[aria-pressed="true"]{background:var(--teal); color:#fff}
+:root[data-ui="soft"] button.act{border:none; border-radius:10px; background:var(--tint); color:var(--teal); font-size:12.5px; font-weight:500; padding:8px 4px}
+:root[data-ui="soft"] button.act:hover{background:var(--tint); color:var(--teal); filter:brightness(1.15)}
+:root[data-ui="soft"] button.act.wide{background:var(--teal); color:#fff}
+:root[data-ui="soft"] :is(.rbbtn,.annbtn,.detent button){border:none; border-radius:999px; background:var(--fill); color:var(--text)}
+:root[data-ui="soft"] .annbtn[aria-pressed="true"]{background:var(--amber); color:#fff}
+:root[data-ui="soft"] #gClose{border:none; border-radius:12px; background:var(--teal); color:#fff; font-size:14px; font-weight:600; padding:11px}
+:root[data-ui="soft"] #gClose:hover{background:var(--teal); filter:brightness(1.08)}
+:root[data-ui="soft"] #lightbox button{border:none; border-radius:999px; background:rgba(118,118,128,.3); color:#fff}
+:root[data-ui="soft"] #lightbox{backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px)}
+:root[data-ui="soft"] #fpsPad .fpsZoom button{border:none; border-radius:50%; background:var(--mat); color:var(--text);
+  backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); box-shadow:0 2px 10px rgba(0,0,0,.2)}
+
+/* 体位などの選ぶボタン */
+:root[data-ui="soft"] button.opt{border:none; border-radius:12px; background:var(--fill); color:var(--text); font-size:11.5px}
+:root[data-ui="soft"] button.opt:hover{background:var(--tint)}
+:root[data-ui="soft"] button.opt[aria-pressed="true"]{background:var(--teal); color:#fff}
+:root[data-ui="soft"] button.opt .ruby{font-size:9.5px; color:var(--dim)}
+:root[data-ui="soft"] button.opt[aria-pressed="true"] .ruby{color:rgba(255,255,255,.8)}
+:root[data-ui="soft"] .pos-grid.five button.opt{font-size:10.5px}
+
+/* チェックはスイッチ（右寄せ） */
+:root[data-ui="soft"] label.tg{justify-content:space-between; flex-direction:row-reverse; font-size:13px; color:var(--text);
+  padding:7px 0; border-bottom:.5px solid var(--line)}
+:root[data-ui="soft"] label.tg:last-child{border-bottom:none}
+:root[data-ui="soft"] input[type=checkbox]{width:40px; height:24px; border:none; border-radius:999px; background:var(--fill); transition:background .2s}
+:root[data-ui="soft"] input[type=checkbox]::after{content:""; position:absolute; left:2px; top:2px; width:20px; height:20px; border:none;
+  border-radius:50%; background:#fff; transform:none; box-shadow:0 2px 5px rgba(0,0,0,.25); transition:left .2s}
+:root[data-ui="soft"] input[type=checkbox]:checked{background:#34C759}
+:root[data-ui="soft"] input[type=checkbox]:checked::after{left:18px; top:2px; width:20px; height:20px; border:none; transform:none}
+:root[data-ui="soft"] .rng input{accent-color:var(--teal)}
+:root[data-ui="soft"] .rng output{font-family:var(--gothic)}
+:root[data-ui="soft"] select.sel{border:none; border-radius:10px; background:var(--fill); padding:8px 10px; font-size:13px}
+
+/* 表示・手順・問題 */
+:root[data-ui="soft"] .readout{border:none; border-radius:12px; background:var(--fill); padding:9px 12px}
+:root[data-ui="soft"] .readout .big{color:var(--text); font-size:13.5px; font-weight:600}
+:root[data-ui="soft"] ol.seq button{border:none; border-radius:10px; padding:7px 9px; font-size:12.5px}
+:root[data-ui="soft"] ol.seq button:hover{background:var(--fill)}
+:root[data-ui="soft"] ol.seq button[aria-current="step"]{background:var(--tint); color:var(--text)}
+:root[data-ui="soft"] ol.seq button[aria-current="step"] .tg2{color:var(--teal)}
+:root[data-ui="soft"] ol.seq .no{font-weight:600}
+:root[data-ui="soft"] .choices button{border:none; border-radius:12px; background:var(--fill); color:var(--text); padding:9px 11px; font-size:13px}
+:root[data-ui="soft"] .choices button.sel{background:var(--tint); color:var(--text); box-shadow:inset 0 0 0 1.5px var(--teal)}
+:root[data-ui="soft"] .choices button.ok{background:rgba(52,199,89,.18); color:var(--text); box-shadow:inset 0 0 0 1.5px #34C759}
+:root[data-ui="soft"] .choices button.ng{background:rgba(255,59,48,.16); color:var(--text); box-shadow:inset 0 0 0 1.5px var(--alert)}
+:root[data-ui="soft"] .qtext{color:var(--text); font-size:14px}
+:root[data-ui="soft"] :is(.qexp,.epose){border-left:none; border-radius:12px; background:var(--fill); padding:11px 13px}
+:root[data-ui="soft"] .ep-h b{color:var(--text)}
+:root[data-ui="soft"] .ep-q{font-family:var(--gothic)}
+:root[data-ui="soft"] :is(#qPaste,pre.fmt){border:none; border-radius:12px; background:var(--fill)}
+:root[data-ui="soft"] pre.fmt{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+:root[data-ui="soft"] .ms-meter{border:none; border-radius:999px; background:var(--fill)}
+:root[data-ui="soft"] .ms-meter i{border-radius:999px; opacity:1}
+:root[data-ui="soft"] .ms-result{border:none; border-radius:12px; background:var(--fill)}
+:root[data-ui="soft"] details.fold{border-top:.5px solid var(--line)}
+:root[data-ui="soft"] details.fold summary{font-size:12px; color:var(--teal)}
+:root[data-ui="soft"] details.fold summary::before{color:var(--teal)}
+:root[data-ui="soft"] .films h2{color:var(--text); font-size:15px}
+:root[data-ui="soft"] .strip img{border:none; border-radius:8px}
+:root[data-ui="soft"] .qfig{border:none; border-radius:10px}
+
+/* 操作卓（スティックとレバー） */
+:root[data-ui="soft"] .stick{border:none; border-radius:22px; background:var(--fill); box-shadow:inset 0 1px 6px rgba(0,0,0,.18)}
+:root[data-ui="soft"] .knob{width:32px; height:32px; margin:-16px 0 0 -16px; border:none; background:#fff;
+  box-shadow:0 3px 10px rgba(0,0,0,.35),0 0 0 .5px rgba(0,0,0,.08)}
+:root[data-ui="soft"] .knob::after{inset:11px; background:var(--amber)}
+:root[data-ui="soft"] .lever{border:none; border-radius:999px; background:var(--fill); box-shadow:inset 0 1px 6px rgba(0,0,0,.18)}
+:root[data-ui="soft"] .lhandle{border:none; border-radius:999px; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.35)}
+:root[data-ui="soft"] .lhandle::after{display:none}
+
+/* 3D の中のラベル */
+:root[data-ui="soft"] .lab{border:none; border-radius:6px; background:rgba(28,28,30,.62); color:#fff; text-shadow:none;
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); font-weight:500}
+:root[data-ui="soft"] .lab.axis{background:none; backdrop-filter:none; -webkit-backdrop-filter:none}
+:root[data-ui="soft"] .lab.curv{color:#64D2FF}
+:root[data-ui="soft"] .rail{scrollbar-color:var(--fill) transparent}
+:root[data-ui="soft"] .rail::-webkit-scrollbar-thumb{background:var(--fill)}
+:root[data-ui="soft"] .tabs button{white-space:nowrap; font-size:11.5px}

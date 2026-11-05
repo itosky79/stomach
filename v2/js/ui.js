@@ -500,6 +500,19 @@ addEventListener('keydown', e => {
   if (rst.det) { rst.det = false; applyRail(); saveRail(); }
 });
 
+/* 見た目（標準／新デザイン）の切り替え。選んだものは次に開いたときも使う */
+{
+  const seg = document.getElementById('uiSeg');
+  const sync = () => [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.u === document.documentElement.dataset.ui));
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button[data-u]'); if (!b) return;
+    document.documentElement.dataset.ui = b.dataset.u;
+    try { localStorage.setItem('stomach.ui', b.dataset.u); } catch (err) {}
+    sync(); dispatchEvent(new Event('resize'));   // 文字や余白が変わるので、3D の大きさを測り直す
+  });
+  sync();
+}
+
 /* 画面の色（ダーク／ライト）の切り替え。選んだものは次に開いたときも使う（保存できないブラウザでは、そのときだけ） */
 {
   const seg = document.getElementById('themeSeg');

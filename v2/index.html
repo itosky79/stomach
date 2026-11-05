@@ -12,12 +12,19 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
 <script>/* 色（ダーク／ライト）：保存した選択、なければ端末の設定。描き始める前に決めて、ちらつかないようにする */
 (function () { var t = null; try { t = localStorage.getItem('stomach.theme'); } catch (e) {}
   if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  document.documentElement.dataset.theme = t; })();</script>
+  document.documentElement.dataset.theme = t;
+  /* 見た目（標準／新デザイン）。初めは新デザイン */
+  var u = null; try { u = localStorage.getItem('stomach.ui'); } catch (e) {}
+  document.documentElement.dataset.ui = u === 'classic' ? 'classic' : 'soft'; })();</script>
 
 <div class="wrap">
 <header>
   <h1>胃バリウム透視シミュレーター <small style="font-size:.55em;opacity:.6">v2 開発版</small></h1>
   <button class="hbtn" id="bGuide" type="button">使い方</button>
+  <div class="seg uiSeg" id="uiSeg" role="group" aria-label="見た目">
+    <button type="button" data-u="classic">標準</button>
+    <button type="button" data-u="soft">新デザイン</button>
+  </div>
   <div class="seg themeSeg" id="themeSeg" role="group" aria-label="画面の色">
     <button type="button" data-t="dark">ダーク</button>
     <button type="button" data-t="light">ライト</button>
