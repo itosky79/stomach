@@ -179,9 +179,10 @@ void main(){
   float coat = smoothstep(0.10, 0.50, vWet);
   float edge = clamp(1.0 / max(abs(dot(n, normalize(vVd))), 0.20), 1.0, 4.6);
   // 溜まったバリウムの白さは、X 線が通るバリウムの厚み（vThick。sim.js の updateThickness が胃の形から求める）で決める。
-  // 厚み 2.5（実寸およそ 3 cm）以上で今までと同じ白さ。圧迫などで薄くなると白さが落ち、薄い層ほど粘膜のひだが透けて見える
-  float th = clamp(vThick / 2.5, 0.0, 1.0);
-  float pool = 0.235 * th * mix(rugae(vR, 1.0), 1.0, th);
+  // バリウムは陽性造影剤なので、溜まった所は後ろ（骨など）が透けないほど白く写る。表と裏の面を足すと 1 を超えて真っ白になるよう 1 面 0.62。
+  // 厚みは 1 − exp(−厚み/0.9) で効かせる：実寸 1 cm ほどでほぼ白く、圧迫で数 mm まで薄くなった層だけが透けて粘膜のひだが見える
+  float th = 1.0 - exp(-max(vThick, 0.0) / 0.9);
+  float pool = 0.62 * th * mix(rugae(vR, 1.0), 1.0, th);
   float d = below * pool + (1.0 - below) * coat * 0.058 * rugae(vR, uRug);
   d *= edge;
   gl_FragColor = vec4(vec3(0.93,0.955,1.0) * d, 1.0);
