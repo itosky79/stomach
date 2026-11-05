@@ -136,10 +136,27 @@ void main(){
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 const RUGAE = `
+// ひだ（皺襞）の間の溝：1 ＝ 溝の真ん中（バリウムがたまる）。r.x ＝ 胃の長さ方向（0〜1）、r.y ＝ 周り方向（0〜1）。
+// ひだは胃の長さ方向に、ほぼ平行に少し波打って走る（虎の巻 pp.91-96 の二重造影像を見て合わせた。本数・幅は目で合わせた仮の値）
+float foldGroove(vec3 r){
+  float a = r.y*18.0 + 0.35*sin(r.x*6.2831*4.0 + r.y*12.0) + 0.15*sin(r.x*6.2831*11.0 + r.y*31.0);
+  return pow(0.5 + 0.5*cos(6.2831*a), 6.0);
+}
+// 胃小区（粘膜の細かい網目）：網目の溝にバリウムが入り、二重造影で細かい網目に写る（同じ本の背臥位・腹臥位第一斜位の像を見て合わせた）。
+// 大きさは目で合わせた仮の値（長さ方向 90 個 × 周り 120 個）
+vec2 hash2(vec2 p){ p = vec2(dot(p, vec2(127.1,311.7)), dot(p, vec2(269.5,183.3))); return fract(sin(p)*43758.5453); }
+float areaNet(vec3 r){
+  vec2 uv = vec2(r.x*90.0, r.y*120.0), ip = floor(uv), fp = fract(uv);
+  float d1 = 8.0, d2 = 8.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 g = vec2(float(i), float(j)), o = hash2(ip + g);
+    float d = length(g + o - fp);
+    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+  }
+  return 1.0 - smoothstep(0.03, 0.14, d2 - d1);
+}
 float rugae(vec3 r, float on){
-  float f = sin(r.y*6.2831*6.0 + r.x*24.0) * 0.5 + 0.5;
-  f = pow(f, 1.9);
-  return mix(1.0, 0.30 + 1.55*f, r.z * on);
+  return mix(1.0, 0.30 + 1.55*foldGroove(r), r.z * on);
 }`;
 
 const FRAG_SOLID = `
@@ -170,7 +187,7 @@ void main(){
 }`;
 
 const FRAG_XRAY = `
-uniform vec3 uUp; uniform float uRug; uniform float uGroove;
+uniform vec3 uUp; uniform float uRug; uniform float uGroove; uniform float uArea;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
 varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick; varying float vFilm;
 ${RUGAE}
@@ -188,8 +205,8 @@ void main(){
   // ひだ（皺襞）の間の溝には、膜より多くバリウムがたまる（uGroove ＝ 溝にたまる分の光学的な厚み）。膜が無ければ溝にもたまっていない。
   // X 線が膜を斜めに通るほど道のりが長く白い（edge）。
   // 白さは光学的な厚み（透過した X 線の対数）に比例させ、0〜3 を黒〜白に割り当てる（デジタル透視の表示に近いと仮定）
-  float fold = pow(sin(vR.y*6.2831*6.0 + vR.x*24.0) * 0.5 + 0.5, 1.9) * vR.z * uRug;
-  float od = (vFilm + uGroove * fold * clamp(vFilm / 0.05, 0.0, 1.0)) * edge;
+  float has = clamp(vFilm / 0.05, 0.0, 1.0);                 // 膜が無ければ溝にもたまっていない
+  float od = (vFilm + (uGroove * foldGroove(vR) * vR.z * uRug + uArea * areaNet(vR)) * has) * edge;
   float d = below * pool + (1.0 - below) * min(od / 3.0, 1.0);
   d *= mix(1.0, edge, below);
   gl_FragColor = vec4(vec3(0.93,0.955,1.0) * d, 1.0);
@@ -197,7 +214,7 @@ void main(){
 
 const uUp = { value: new THREE.Vector3(0, 1, 0) };
 const uRug = { value: 1 };
-const uGroove = { value: 0.5 };   // ひだの間の溝にたまるバリウムの光学的な厚み（sim.js の updateWet で毎回決める）
+const uGroove = { value: 0.5 }, uArea = { value: 0.05 };   // ひだの間の溝にたまるバリウムの光学的な厚み（sim.js の updateWet で毎回決める）
 const uRimS = { value: new THREE.Color(0.34, 0.46, 0.56) }, uMucA = { value: 0.17 };   // 胃のふちの光の色と、粘膜の不透明度（ライトでは変える。setTheme3D）
 function solidMat(side, flip) {
   return new THREE.ShaderMaterial({
@@ -208,7 +225,7 @@ function solidMat(side, flip) {
 }
 const matBack = solidMat(THREE.BackSide, -1), matFront = solidMat(THREE.FrontSide, 1);
 const matXray = new THREE.ShaderMaterial({
-  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug, uGroove: uGroove },
+  vertexShader: VERT, fragmentShader: FRAG_XRAY, uniforms: { uUp: uUp, uRug: uRug, uGroove: uGroove, uArea: uArea },
   transparent: true, depthWrite: false, depthTest: false,
   blending: THREE.AdditiveBlending, side: THREE.DoubleSide
 });

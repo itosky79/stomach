@@ -531,39 +531,46 @@ addEventListener('keydown', e => {
   sync();
 }
 
-/* ================= 学習：回転法（右回り回転法・左右交互法） =================
+/* ================= 学習：回転法（右回り回転変換法・左右交互変換法） =================
    台を水平にして、決まった順に体を回す。体の向き（rollT）を一定の速さで動かすだけで、
    バリウムの流れと壁への付き方は、いつもの流れの計算（sim.js）がそのまま決める。
 
-   教科書（G：必携テキスト pp.76-84）に書いてあること
-   - 右回り：背臥位正面位の前に、水平で右方向に 360° 回転を 3 回（p.77）。背臥位第1斜位・第2斜位、腹臥位第1斜位の前にも右回りに 360°（p.79、p.81）
-   - 左右交互：半臥位第2斜位と背臥位第2斜位（振り分け）の前に、水平で左右の交互体位変換（pp.82-83）
+   本に書いてあること
+   - O：『胃癌をしっかり表そう！ 胃X線撮影法 虎の巻』第3章 2「基準撮影法の実際」pp.91-96（名前はこの本に合わせた）
+     - 右回り回転変換法：背臥位正面位の前に 3 回転ほど。回ったあと胃の中の洗浄・付着の状態を透視ですばやく確かめ、
+       洗浄不足で泡が残っていれば体位変換を足す（p.91）。背臥位第一斜位・頭低位第二斜位・腹臥位第一斜位の前に 1 回転ずつ足す（pp.92, 94）。
+       腹臥位正面位へは水平位で右回り（p.93）
+     - 左右交互変換法：半臥位第二斜位の前に、水平位で数回しながら透視で観察し、異常所見の有無を確かめる（p.95）。
+       背臥位第二斜位（振り分け）の前にもして、バリウムを U 領域と L 領域にできるだけ均等に振り分ける。
+       後半をゆっくりめにすると流れを観察しやすく、異常所見に気づきやすい（p.95）
+   - G：必携テキスト pp.77-83 も同じ順番（右方向に 360° を 3 回、左右の交互体位変換）
    本に書いていないので、このアプリで決めたこと
-   - 「右方向」は 背臥位 → 右側臥位 → 腹臥位 → 左側臥位 → 背臥位 の向き（回転角を減らす向き。評価モードと同じ）
+   - 「右回り」は 背臥位 → 右側臥位 → 腹臥位 → 左側臥位 → 背臥位 の向き（回転角を減らす向き。評価モードと同じ）
    - 回る速さ：1 回転 5 秒（72°/秒）
-   - 左右交互の振れ幅と回数：背臥位 → 左側臥位（90°）→ 右側臥位（−90°）→ 背臥位 を 1 往復（評価モードと同じ）
+   - 左右交互の振れ幅：左右の側臥位まで。「数回」は 3 回。「後半はゆっくりめ」は、後ろ半分の往復を半分の速さにする
 */
 const ROT_SPEED = 72;                 // °/秒
-const ROT_SRC_G = '教科書：中谷・木曽・西川「実際の撮影」（『胃X線検診 上部消化管検査必携テキスト』ぱーそん書房 2022）';
+const ROT_SRC_O = '『胃癌をしっかり表そう！ 胃X線撮影法 虎の巻』第3章 2「基準撮影法の実際」';
+const ROT_SRC_G = '中谷・木曽・西川「実際の撮影」（『胃X線検診 上部消化管検査必携テキスト』ぱーそん書房 2022）';
 const ROT_SRC_W = '技師の解説記事：「認定技師が教える胃バリウム検査！回転の意味、飲み方、コツ」（radiographica.com）';
 const ROT_METHODS = [
   null,
-  { name: '右回り回転法', n: 3,
+  { name: '右回り回転変換法', n: 3,
     route: [[0, '背臥位'], [-90, '右側臥位'], [-180, '腹臥位'], [-270, '左側臥位'], [-360, '背臥位']],
-    lead: '台を水平にして、背臥位から右へ 360° ずつ回ります。バリウムを胃の中で転がして、胃の壁全体に付けます。',
-    book: '基準撮影法では、背臥位正面位を撮る前に右回りに 3 回まわります（p.77）。背臥位の第1斜位・第2斜位（p.79）や腹臥位第1斜位（p.81）の前にも 1 回まわります。',
+    lead: '台を水平にして、背臥位から右へ 360° ずつ回ります。バリウムで胃の中を洗い、壁全体に付けます。',
+    book: '背臥位正面位を撮る前に 3 回転ほど回ります。回ったあと、胃の中の洗浄・付着の状態を透視ですばやく確かめ、洗浄不足で泡が残っていれば体位変換を足します（虎の巻 p.91）。背臥位第一斜位・頭低位第二斜位・腹臥位第一斜位の前にも 1 回転ずつ足します（pp.92, 94）。必携テキストも同じです（pp.77, 79, 81）。',
     tip: '右側臥位で止まると、バリウムが十二指腸へ流れやすくなります。止まらずに回ります。',
     tipSrc: ROT_SRC_W,
-    own: '回る速さは本に書いていないので、1 回転 5 秒にしました。「右へ」は、背臥位 → 右側臥位 → 腹臥位 → 左側臥位 → 背臥位 の向きにしました。' },
-  { name: '左右交互法', n: 1,
+    own: '回る速さは本に書いていないので、1 回転 5 秒にしました。「右回り」は、背臥位 → 右側臥位 → 腹臥位 → 左側臥位 → 背臥位 の向きにしました。' },
+  { name: '左右交互変換法', n: 3,
     route: [[0, '背臥位'], [90, '左側臥位'], [-90, '右側臥位'], [0, '背臥位']],
-    lead: '台を水平にして、背臥位から左右の側臥位へ、交互に体を傾けます。',
-    book: '基準撮影法では、半臥位第2斜位と、背臥位第2斜位（振り分け）を撮る前に、水平で左右の交互体位変換をします（pp.82-83）。',
+    lead: '台を水平にして、背臥位から左右の側臥位へ、交互に体を傾けます。バリウムを左右に流して、透視で見ます。',
+    book: '半臥位第二斜位の前に、水平位で数回しながら透視で観察し、異常所見がないかを確かめます。背臥位第二斜位（振り分け）の前にもして、バリウムを U 領域と L 領域にできるだけ均等に振り分けます。後半をゆっくりめにすると、バリウムの流れを観察しやすく、異常所見に気づきやすくなります（虎の巻 p.95）。必携テキストにも同じ順番があります（pp.82-83）。',
     tip: '', tipSrc: '',
-    own: 'どこまで傾けるか・何回するかは本に書いていないので、左側臥位 → 右側臥位 → 背臥位 を 1 往復としました。速さは右回り回転法と同じ（90° を 1.25 秒）です。何のためにするかの説明は、確かめた資料に無かったので書いていません。' }
+    own: 'どこまで傾けるかは本に書いていないので、左右の側臥位までにしました。「数回」は 3 回にしました。「後半はゆっくりめ」は、後ろ半分の往復を半分の速さ（90° を 2.5 秒）にしました。' }
 ];
 
-const ROT = { kind: 1, plan: null, i: 0, base: 0, lap: 0, step: 0, done: false, n: [0, 3, 1] };
+const ROT = { kind: 1, plan: null, i: 0, base: 0, lap: 0, step: 0, done: false, n: [0, 3, 3] };
 
 // 学習タブの「起倒角」「体軸の回転」の下にある「回転法」。2 つの方法を切り替える
 const rotSeg = document.getElementById('rotSeg');
@@ -582,7 +589,7 @@ function rotBuild() {
   const tip = document.getElementById('rotTip'); tip.hidden = !M.tip;
   tip.innerHTML = M.tip ? M.tip + '<span class="rotsrc">出典：' + M.tipSrc + '</span>' : '';
   document.getElementById('rotOwn').textContent = M.own;
-  document.getElementById('rotSrc').textContent = '出典：' + ROT_SRC_G + (M.tipSrc ? '／' + M.tipSrc : '');
+  document.getElementById('rotSrc').textContent = '出典：' + ROT_SRC_O + '／' + ROT_SRC_G + (M.tipSrc ? '／' + M.tipSrc : '');
   const ol = document.getElementById('rotRoute'); ol.innerHTML = '';
   M.route.forEach(([, nm], i) => {
     if (i) { const a = document.createElement('li'); a.className = 'arw'; a.textContent = '→'; a.setAttribute('aria-hidden', 'true'); ol.appendChild(a); }
@@ -604,7 +611,8 @@ function rotStart() {
   // まず水平・背臥位へ（台を倒しきってから回り始める）。そのあと、経路の点を順にたどる
   const plan = [{ tilt: 0, back: true }];
   for (let k = 0; k < ROT.n[ROT.kind]; k++)
-    M.route.forEach(([r], i) => { if (i) plan.push({ roll: r + (ROT.kind === 1 ? -360 * k : 0), lap: k, step: i }); });   // 右回りは 1 回ごとに 360° ずつ先へ
+    M.route.forEach(([r], i) => { if (i) plan.push({ roll: r + (ROT.kind === 1 ? -360 * k : 0), lap: k, step: i,
+      slow: ROT.kind === 2 && ROT.n[2] > 1 && k >= ROT.n[2] / 2 }); });   // 右回りは 1 回ごとに 360° ずつ先へ。左右交互は後ろ半分をゆっくり
   ROT.plan = plan; ROT.i = 0; ROT.lap = 0; ROT.step = 0; ROT.done = false;
   rotShow();
 }
@@ -623,7 +631,7 @@ function rotStep(dt) {
     if (Math.abs(tiltCur) < 0.05 && Math.abs(rollCur - ROT.base) < 1) ROT.i++;
   } else {
     const goal = ROT.base + P.roll;
-    const d = goal - rollT; rollT += Math.sign(d) * Math.min(Math.abs(d), ROT_SPEED * dt);
+    const d = goal - rollT; rollT += Math.sign(d) * Math.min(Math.abs(d), ROT_SPEED * (P.slow ? 0.5 : 1) * dt);
     ROT.lap = P.lap; ROT.step = P.step;
     if (Math.abs(goal - rollCur) < 6) ROT.i++;    // 次の点へ（少し手前で切り替えて、止まらずに回る）
   }
@@ -642,7 +650,7 @@ function rotShow() {
   if (run) cur = ROT.plan[ROT.i] && ROT.plan[ROT.i].back ? 0 : ROT.step;
   const lis = [...document.getElementById('rotRoute').querySelectorAll('.stp')];
   lis.forEach((li, i) => li.classList.toggle('on', run && i === cur));   // いま向かっている体位
-  const txt = run ? (ROT.plan[ROT.i].back ? '台を水平にして、背臥位にしています' : (n > 1 ? (ROT.lap + 1) + ' 回目：' : '') + M.route[ROT.step][1] + 'へ')
+  const txt = run ? (ROT.plan[ROT.i].back ? '台を水平にして、背臥位にしています' : (n > 1 ? (ROT.lap + 1) + ' 回目：' : '') + M.route[ROT.step][1] + 'へ' + (ROT.plan[ROT.i].slow ? '（ゆっくり）' : ''))
                   : (ROT.done ? '終わりました。「3D + 透視」や「X線像」で、バリウムが付いた所を見てみましょう' : '');
   if (txt !== rotLastTxt) { document.getElementById('rotNow').textContent = txt; rotLastTxt = txt; }
 }

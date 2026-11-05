@@ -362,6 +362,7 @@ function dose(dt) {
 */
 const BA = { C: 200, mu: 100, ty: 0.4 };      // 濃度 w/v%、粘度 mPa·s、降伏値 Pa
 const BA_MUM = 8.2, BA_SIG = 0.07, BA_X = 0.03, BA_SLIP = 200e-6, BA_WASH = 0.4, G0 = 9.8;
+const BA_AREA = 0.012;                         // 胃小区の網目の溝に、膜より多くたまる厚み（cm）。資料がないので、本の像で網目が見える程度に仮に 0.12 mm
 const BA_FOLD = 0.01;                          // ひだの間の溝に、膜より多くたまるバリウムの厚み（cm）。溝の深さ・形の資料がないので仮に 0.1 mm
 const UNIT_M = 0.012;                          // 模型の長さ 1 ＝ 1.2 cm（BODY_SCALE）
 const OD_FULL = BA_MUM * 2.0 * 50e-4;          // aWet ＝ 1 にあたる膜（200 w/v%、50 µm）の od。評価・表示のしきい値はこの割合
@@ -373,7 +374,7 @@ function baRho() { const c = BA.C / 100; return (c + (1 - c / 4.5)) * 1000; }   
 function updateWet(dt) {
   const nrm = geom.attributes.normal.array, u = uUp.value;
   const rho = baRho(), mu = BA.mu * 1e-3, c = BA.C / 100, ODk = BA_MUM * c * 100;   // od ＝ ODk × h(m)
-  uGroove.value = BA_MUM * c * BA_FOLD;
+  uGroove.value = BA_MUM * c * BA_FOLD; uArea.value = BA_MUM * c * BA_AREA;
   for (let n = 0; n < NN; n++) {
     const L = lvl[n], b = n * CM;
     for (let j = 0; j < CM; j++) {
