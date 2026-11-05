@@ -629,3 +629,19 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 :root[data-theme] .stick{border-radius:16px}
 :root[data-theme] .lever{border-radius:999px}
 :root[data-theme] .lhandle{border-radius:6px}
+
+/* ---------- 学習：回転法 ---------- */
+.rotlead{margin:0 0 10px; font-size:13px; line-height:1.75; color:var(--text)}
+.rotroute{list-style:none; margin:0 0 12px; padding:0; display:flex; flex-wrap:wrap; align-items:center; gap:4px 3px}
+.rotroute .stp{padding:3px 8px; border-radius:999px; background:var(--fill); color:var(--muted); font-size:11.5px; transition:background .2s,color .2s}
+.rotroute .stp.on{background:var(--teal); color:var(--onAccent); font-weight:700}
+.rotroute .arw{color:var(--dim); font-size:11px}
+.rotctl{display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:stretch}
+.rotctl .seg button{padding:6px 10px}
+.rotnow{min-height:1.7em; margin:8px 0 6px; font-size:12.5px; color:var(--teal); font-weight:700}
+.rotbook{margin:0 0 8px; padding:9px 11px; background:var(--ink2); border-left:2px solid var(--teal); border-radius:0 9px 9px 0;
+  font-size:12px; line-height:1.8; color:var(--muted)}
+.rottip{margin:0 0 4px; padding:9px 11px; background:var(--ink2); border-left:2px solid var(--amber); border-radius:0 9px 9px 0;
+  font-size:12px; line-height:1.8; color:var(--muted)}
+.rottip[hidden]{display:none}
+.rotsrc{display:block; margin-top:3px; font-size:11px; color:var(--dim)}

@@ -49,6 +49,7 @@ function loop(now) {
     if ((tiltT - next) * err <= 0 || (Math.abs(err) < 0.05 && Math.abs(tiltV) < 1)) { tiltCur = tiltT; tiltV = 0; }   // 行き過ぎない
     else tiltCur = next;
   }
+  rotStep(dt);                                   // 回転法（学習）：体の向きを一定の速さで動かす
   rollCur += (rollT - rollCur) * k;
   if (autoSpin) ctrl.az += dt * 0.28;
   applyPose(); applyCam();
