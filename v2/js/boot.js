@@ -19,7 +19,7 @@ if (Q.get('xr') === 'emulate') {
 
 // ページ（index.html）の更新日時を付けて読む。更新のあと、古い js がキャッシュから読まれて新しい HTML と食い違うのを防ぐ
 const VER = Date.parse(document.lastModified) || Date.now();
-const FILES = ['data', 'questions', 'anatomy-data', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'rotate', 'measure', 'mission', 'perf', 'xr', 'main'];
+const FILES = ['data', 'questions', 'anatomy-data', 'model', 'scene', 'sim', 'camera', 'xray', 'labels', 'ui', 'measure', 'mission', 'perf', 'xr', 'main'];
 if (Q.get('eval') === '1') FILES.push('eval');   // 評価モード（学会発表用の定量評価）は ?eval=1 のときだけ
 for (const f of FILES) {
   await new Promise((done, fail) => {

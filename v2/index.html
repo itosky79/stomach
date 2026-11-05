@@ -84,38 +84,34 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
       </div>
 
       <div class="pane" id="pane0">
-        <div class="seg wide" id="learnSeg" role="group" aria-label="学習の内容" style="grid-template-columns:repeat(3,1fr); margin-bottom:10px">
-          <button type="button" data-l="0" aria-pressed="true">体位</button>
-          <button type="button" data-l="1">右回り回転法</button>
-          <button type="button" data-l="2">左右交互法</button>
-        </div>
         <div class="readout"><span class="big" id="poseNow">立位正面</span><span class="sm" id="poseAng">90° / 0°</span></div>
-        <div id="learnPose">
-          <p class="grp-h">起倒角</p>
-          <div class="pos-grid five" id="tiltGrid"></div>
-          <p class="grp-h" style="margin:11px 0 9px">体軸の回転</p>
-          <div class="pos-grid four" id="rollGrid"></div>
+        <p class="grp-h">起倒角</p>
+        <div class="pos-grid five" id="tiltGrid"></div>
+        <p class="grp-h" style="margin:11px 0 9px">体軸の回転</p>
+        <div class="pos-grid four" id="rollGrid"></div>
+        <p class="grp-h" style="margin:13px 0 9px">回転法</p>
+        <div class="seg wide" id="rotSeg" role="group" aria-label="回転法" style="grid-template-columns:repeat(2,1fr); margin-bottom:9px">
+          <button type="button" data-k="1" aria-pressed="true">右回り回転法</button>
+          <button type="button" data-k="2">左右交互法</button>
         </div>
-        <div id="learnRot" hidden>
-          <p class="rotlead" id="rotLead"></p>
-          <ol class="rotroute" id="rotRoute" aria-label="回る順番"></ol>
-          <div class="rotctl">
-            <div class="seg" id="rotCount" role="group" aria-label="回数">
-              <button type="button" data-n="1">1 回</button>
-              <button type="button" data-n="2">2 回</button>
-              <button type="button" data-n="3">3 回</button>
-            </div>
-            <button class="act wide" id="bRot" type="button">回す</button>
+        <p class="rotlead" id="rotLead"></p>
+        <ol class="rotroute" id="rotRoute" aria-label="回る順番"></ol>
+        <div class="rotctl">
+          <div class="seg" id="rotCount" role="group" aria-label="回数">
+            <button type="button" data-n="1">1 回</button>
+            <button type="button" data-n="2">2 回</button>
+            <button type="button" data-n="3">3 回</button>
           </div>
-          <p class="rotnow" id="rotNow" aria-live="polite"></p>
+          <button class="act wide" id="bRot" type="button">回す</button>
+        </div>
+        <p class="rotnow" id="rotNow" aria-live="polite"></p>
+        <details class="fold rotfold">
+          <summary>説明と出典</summary>
           <p class="rotbook" id="rotBook"></p>
           <p class="rottip" id="rotTip" hidden></p>
-          <details class="fold">
-            <summary>出典と、本に書いていないこと</summary>
-            <p id="rotOwn"></p>
-            <p id="rotSrc"></p>
-          </details>
-        </div>
+          <p id="rotOwn"></p>
+          <p id="rotSrc"></p>
+        </details>
       </div>
 
       <div class="pane" id="pane1" hidden>
@@ -305,7 +301,9 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
 </div>
 
 <script src="js/fail.js"></script>
-<script type="module" src="js/boot.js"></script>
+<script>/* boot.js も更新日時を付けて読む（古い boot.js が残ると、新しく足したファイルを読まずに止まるため） */
+document.write('<script type="module" src="js/boot.js?v=' + (Date.parse(document.lastModified) || Date.now()) + '"><\/script>');</script>
+<noscript>JavaScript を有効にしてください</noscript>
 <script>
 // ES モジュールはファイルを直接開く（file://）と読み込めない。そのときは理由を出す
 addEventListener('load', function () {
