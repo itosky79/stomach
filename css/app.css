@@ -465,7 +465,7 @@ button.act.ms-item small{color:var(--muted, #8aa); font-size:.82em}
 }
 
 /* ---------- 色の切り替え（ライト）。ダークは :root の値。透視像（X 線像）は本物と同じく暗いまま ---------- */
-.themeSeg{margin-left:auto; background:var(--panel2)}
+.hbtn{margin-right:auto}   /* 使い方を見出しのすぐ右に（ダーク／ライトの切り替えはなくした） */
 :root[data-theme="light"]{
   color-scheme: light;
   --ink:#EEF2F5; --ink2:#F7F9FB; --panel:#FFFFFF; --panel2:#E6ECF1;

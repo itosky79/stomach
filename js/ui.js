@@ -80,7 +80,6 @@ function gotoStep(i) {
   // 1 つ先へ進むとき（次へ・順に再生）は、本に書いてある体位変換の経路をたどる（data.js の SEQ1_ROUTES・SEQ2_ROUTES）。番号で飛んだときはまっすぐその体位へ
   const R = (SEQ === SEQ2 ? SEQ2_ROUTES : SEQ === SEQ1 ? SEQ1_ROUTES : [])[seqIdx] || null, follow = R && seqIdx === prevIdx + 1;
   if (follow) seqPathStart(R); else goPose(S.tilt, S.roll);
-  document.getElementById('seqMove').textContent = R ? '前の撮影から：' + R.note : '';
   setComp(S.comp || '', S.comp ? 0.7 : 0);
   syncFree(); updateNotes();
 }
@@ -522,19 +521,6 @@ addEventListener('keydown', e => {
   if (rst.det) { rst.det = false; applyRail(); saveRail(); }
 });
 
-/* 画面の色（ダーク／ライト）の切り替え。選んだものは次に開いたときも使う（保存できないブラウザでは、そのときだけ） */
-{
-  const seg = document.getElementById('themeSeg');
-  const sync = () => [...seg.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.t === document.documentElement.dataset.theme));
-  seg.addEventListener('click', e => {
-    const b = e.target.closest('button[data-t]'); if (!b) return;
-    document.documentElement.dataset.theme = b.dataset.t;
-    try { localStorage.setItem('stomach.theme', b.dataset.t); } catch (err) {}
-    setTheme3D(b.dataset.t); sync();
-  });
-  sync();
-}
-
 /* ================= 学習：回転法（右回り回転変換法・左右交互変換法） =================
    台を水平にして、決まった順に体を回す。体の向き（rollT）を一定の速さで動かすだけで、
    バリウムの流れと壁への付き方は、いつもの流れの計算（sim.js）がそのまま決める。
@@ -609,38 +595,61 @@ document.getElementById('rotCount').addEventListener('click', e => {
 });
 document.getElementById('bRot').addEventListener('click', () => { if (ROT.plan) rotStop(); else rotStart(); });
 
+/* 回転の動かし方（回転法・手順の経路で共通）：経路の点を、同じ向きに続けて回る区間ごとにまとめ、
+   区間の中は余弦の速さ（回り始めと止まる前はゆっくり、真ん中で速い）で回す。
+   角度 ＝ 始め ＋ 回る量 × (1 − cos(π × 経過 ÷ 区間の時間)) ÷ 2。区間の時間は平均 72°/秒（ゆっくりは 36°/秒）で決める（真ん中の速さは平均の π/2 倍）。
+   向きが変わる所（左右交互の折り返し）や起倒角が変わる所で区間を分けるので、そこでは一度止まる。
+   wps：[{ tilt, roll（ぐるっと回る分も含めた角度）, slow }]。起倒は台の動き（main.js）にまかせ、区間の終わりで台が着くのを待つ */
+function motionBuild(wps, r0) {
+  const segs = []; let cur = r0, sg = null;
+  wps.forEach((w, i) => {
+    const dir = Math.sign(w.roll - cur);
+    if (sg && dir !== 0 && dir === sg.dir && w.tilt === sg.tilt && !!w.slow === sg.slow) { sg.r1 = w.roll; sg.last = i; }
+    else { sg = { tilt: w.tilt, r0: cur, r1: w.roll, dir, slow: !!w.slow, first: i, last: i }; segs.push(sg); }
+    cur = w.roll;
+  });
+  for (const g of segs) g.T = Math.abs(g.r1 - g.r0) / (ROT_SPEED * (g.slow ? 0.5 : 1));
+  return { wps, segs, si: 0, t: 0, wi: 0 };
+}
+// 1 コマ進める。終わったら false。M.wi は、いま向かっている経路の点
+function motionStep(M, dt) {
+  const g = M.segs[M.si]; if (!g) return false;
+  tiltT = g.tilt;
+  M.t += dt;
+  const s = g.T > 0 ? Math.min(1, M.t / g.T) : 1;
+  rollT = g.r0 + (g.r1 - g.r0) * (1 - Math.cos(Math.PI * s)) / 2;
+  rollDriven = true;                                     // main.js：体の向きを rollT にそのまま合わせる（余弦の速さを崩さない）
+  let wi = g.first;
+  while (wi < g.last && (M.wps[wi].roll - rollT) * g.dir <= 0.5) wi++;
+  M.wi = wi;
+  if (s >= 1 && Math.abs(tiltCur - tiltT) < 0.05) { M.si++; M.t = 0; M.wi = g.last + 1; }
+  return M.si < M.segs.length;
+}
 function rotStart() {
-  playing = false;
+  playing = false; seqPathStop();
   const M = ROT_METHODS[ROT.kind];
-  // まず水平・背臥位へ（台を倒しきってから回り始める）。そのあと、経路の点を順にたどる
-  const plan = [{ tilt: 0, back: true }];
+  // まず水平・背臥位へ（いちばん近い背臥位の向き）。そのあと、経路の点を順にたどる
+  ROT.base = Math.round(rollCur / 360) * 360;
+  const plan = [{ tilt: 0, roll: ROT.base, back: true }];
   for (let k = 0; k < ROT.n[ROT.kind]; k++)
-    M.route.forEach(([r], i) => { if (i) plan.push({ roll: r + (ROT.kind === 1 ? -360 * k : 0), lap: k, step: i,
+    M.route.forEach(([r], i) => { if (i) plan.push({ tilt: 0, roll: ROT.base + r + (ROT.kind === 1 ? -360 * k : 0), lap: k, step: i,
       slow: ROT.kind === 2 && ROT.n[2] > 1 && k >= ROT.n[2] / 2 }); });   // 右回りは 1 回ごとに 360° ずつ先へ。左右交互は後ろ半分をゆっくり
-  ROT.plan = plan; ROT.i = 0; ROT.lap = 0; ROT.step = 0; ROT.done = false;
+  ROT.plan = plan; ROT.mo = motionBuild(plan, rollCur); ROT.i = 0; ROT.lap = 0; ROT.step = 0; ROT.done = false;
   rotShow();
 }
 function rotStop() {
   if (!ROT.plan) return;
-  ROT.plan = null; rollT = rollCur; rotShow();
+  ROT.plan = null; ROT.mo = null; rollT = rollCur; rotShow();
 }
-// 1 コマごとに呼ぶ（main.js）。体の向きを一定の速さで目標へ動かす
+// 1 コマごとに呼ぶ（main.js）
 function rotStep(dt) {
+  rollDriven = false;
   seqPathStep(dt);                                // 手順タブの経路（下の seqPathStep）
   if (!ROT.plan) return;
-  const P = ROT.plan[ROT.i];
-  if (P.back) {
-    // 背臥位（回転角 0 の倍数）のいちばん近い向きへ。台を水平に倒す
-    if (!P.started) { P.started = true; ROT.base = Math.round(rollCur / 360) * 360; tiltT = 0; }
-    const d = ROT.base - rollT; rollT += Math.sign(d) * Math.min(Math.abs(d), ROT_SPEED * dt);
-    if (Math.abs(tiltCur) < 0.05 && Math.abs(rollCur - ROT.base) < 1) ROT.i++;
-  } else {
-    const goal = ROT.base + P.roll;
-    const d = goal - rollT; rollT += Math.sign(d) * Math.min(Math.abs(d), ROT_SPEED * (P.slow ? 0.5 : 1) * dt);
-    ROT.lap = P.lap; ROT.step = P.step;
-    if (Math.abs(goal - rollCur) < 6) ROT.i++;    // 次の点へ（少し手前で切り替えて、止まらずに回る）
-  }
-  if (ROT.i >= ROT.plan.length) { ROT.plan = null; ROT.done = true; }
+  const going = motionStep(ROT.mo, dt);
+  ROT.i = Math.min(ROT.mo.wi, ROT.plan.length - 1);
+  const P = ROT.plan[ROT.i]; if (!P.back) { ROT.lap = P.lap; ROT.step = P.step; }
+  if (!going) { ROT.plan = null; ROT.mo = null; ROT.done = true; }
   ROT.ui = (ROT.ui || 0) + dt;
   if (ROT.ui > 0.1 || !ROT.plan) { ROT.ui = 0; updateNotes(); }   // 体位の名前と角度の表示（0.1 秒ごと）
   rotShow();
@@ -663,21 +672,16 @@ setRotKind(1);
 
 /* ================= 手順タブ：前の撮影からの体位変換の経路をたどる =================
    経路の点（data.js の SEQ2_ROUTES）を順に、起倒は台の動き（main.js）、回転は回転法と同じ速さ（72°/秒、ゆっくりは半分）で動かす */
-const SP = { plan: null, i: 0, base: 0 };
+const SP = { mo: null };
 function seqPathStart(R) {
   rotStop();
-  const p0 = R.pts[0];
-  SP.base = Math.round((rollCur - p0[1]) / 360) * 360;   // 最初の点を、いまの向きに合わせる（360° の何周目か）
-  SP.plan = R.pts.slice(1); SP.i = 0;
+  const p0 = R.pts[0], base = Math.round((rollCur - p0[1]) / 360) * 360;   // 最初の点を、いまの向きに合わせる（360° の何周目か）
+  SP.mo = motionBuild(R.pts.slice(1).map(([t, r, sl]) => ({ tilt: t, roll: base + r, slow: !!sl })), rollCur);
 }
-function seqPathStop() { if (SP.plan) { SP.plan = null; rollT = rollCur; } }
+function seqPathStop() { if (SP.mo) { SP.mo = null; rollT = rollCur; } }
 function seqPathStep(dt) {
-  if (!SP.plan) return;
-  const P = SP.plan[SP.i], last = SP.i === SP.plan.length - 1, goal = SP.base + P[1];
-  tiltT = P[0];
-  const d = goal - rollT; rollT += Math.sign(d) * Math.min(Math.abs(d), ROT_SPEED * (P[2] ? 0.5 : 1) * dt);
-  if (Math.abs(tiltCur - tiltT) < 0.05 && Math.abs(goal - rollCur) < (last ? 1 : 6)) SP.i++;
-  if (SP.i >= SP.plan.length) SP.plan = null;
+  if (!SP.mo) return;
+  if (!motionStep(SP.mo, dt)) SP.mo = null;
   SP.ui = (SP.ui || 0) + dt;
-  if (SP.ui > 0.1 || !SP.plan) { SP.ui = 0; updateNotes(); }
+  if (SP.ui > 0.1 || !SP.mo) { SP.ui = 0; updateNotes(); }
 }

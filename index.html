@@ -9,19 +9,12 @@
 <script>/* 見た目の指定（CSS）も、ページの更新日時を付けて読む。更新のあと、古い CSS がブラウザに残って新しい画面と食い違うのを防ぐ（js は boot.js で同じことをしている） */
 document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(document.lastModified) || Date.now()) + '">');</script>
 <noscript><link rel="stylesheet" href="css/app.css"></noscript>
-<script>/* 色（ダーク／ライト）：保存した選択、なければ端末の設定。描き始める前に決めて、ちらつかないようにする */
-(function () { var t = null; try { t = localStorage.getItem('stomach.theme'); } catch (e) {}
-  if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  document.documentElement.dataset.theme = t; })();</script>
+<script>/* 画面の色はライトだけ */ document.documentElement.dataset.theme = 'light';</script>
 
 <div class="wrap">
 <header>
   <h1>胃バリウム透視シミュレーター</h1>
   <button class="hbtn" id="bGuide" type="button">使い方</button>
-  <div class="seg themeSeg" id="themeSeg" role="group" aria-label="画面の色">
-    <button type="button" data-t="dark">ダーク</button>
-    <button type="button" data-t="light">ライト</button>
-  </div>
 </header>
 
 <div class="work">
@@ -125,7 +118,6 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
           <button class="act" id="bPlay" type="button">順に再生</button>
           <button class="act" id="bNext" type="button">次へ</button>
         </div>
-        <p class="rotnow seqmove" id="seqMove" aria-live="polite"></p>
         <ol class="seq" id="seqList"></ol>
       </div>
 

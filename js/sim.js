@@ -7,6 +7,7 @@ let airLevel = 0.6, targetMl = 150 / Math.pow(BODY_SCALE, 3), administered = 0; 
 let gasMl = 250;   // 発泡剤のガス（実寸 mL）。添付文書の 100〜400 mL の真ん中。胃の大きさはバリウム＋ガスに合わせる（model.js の rebuild）
 let compRegion = '', compAmt = 0;
 let tiltCur = 90, rollCur = 0, tiltT = 90, rollT = 0;
+let rollDriven = false;   // 回転法・手順の経路が体の向きを動かしている間 true（ui.js の motionStep）
 let tiltV = 0;                              // 起倒の速さ（°/秒）
 const TILT_MAX = 20, TILT_ACC = 40;        // 起倒の最高速度（°/秒）と加速度（°/秒²）。仮の値（実機の値とは照らし合わせていない）
 let seqIdx = -1, playing = false, playT = 0;

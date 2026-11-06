@@ -32,8 +32,8 @@ function loop(now) {
 
   if (playing) {
     playT += dt;
-    if (typeof SP !== 'undefined' && SP.plan) playT = 0;   // 経路をたどっている間は数えない（着いてから 3.4 秒見せる）
-    if (playT > 3.4 && tiltCur === tiltT && !(typeof SP !== 'undefined' && SP.plan)) { playT = 0; if (seqIdx >= SEQ.length - 1) { playing = false; document.getElementById('bPlay').textContent = '順に再生'; } else gotoStep(seqIdx + 1); }
+    if (typeof SP !== 'undefined' && SP.mo) playT = 0;   // 経路をたどっている間は数えない（着いてから 3.4 秒見せる）
+    if (playT > 3.4 && tiltCur === tiltT && !(typeof SP !== 'undefined' && SP.mo)) { playT = 0; if (seqIdx >= SEQ.length - 1) { playing = false; document.getElementById('bPlay').textContent = '順に再生'; } else gotoStep(seqIdx + 1); }
   }
   if (renderer.xr.isPresenting) xrInput(dt);   // VR のスティックとレバー
   const k = 1 - Math.exp(-dt * 3.6);
@@ -48,7 +48,8 @@ function loop(now) {
     else tiltCur = next;
   }
   if (typeof rotStep === 'function') rotStep(dt);                                   // 回転法（学習）：体の向きを一定の速さで動かす
-  rollCur += (rollT - rollCur) * k;
+  if (rollDriven) rollCur = rollT;               // 回転法・手順の経路：余弦の速さのまま動かす（ui.js の motionStep）
+  else rollCur += (rollT - rollCur) * k;
   if (autoSpin) ctrl.az += dt * 0.28;
   applyPose(); applyCam();
   updateCompress();
