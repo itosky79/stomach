@@ -34,6 +34,23 @@ void main(){
   vVd = normalize(cameraPosition - wp.xyz);
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
+// 体表と骨の頂点：寝返りの途中、肩が先に回り腰が遅れてついてくる「ねじれ」を足す（sim.js の applyRollFeel が uTw を決める）。
+// メッシュの y（頭側）に沿って、胃の高さ（uTw.y）からの距離に比例して体軸のまわりに回す。vL（肺野の判定に使う）はもとの位置のまま
+const uTw = { value: new THREE.Vector2(0, 0) };
+const BODY_VERT = `
+uniform vec2 uTw;
+varying vec3 vN; varying vec3 vVd; varying vec3 vL;
+void main(){
+  vL = position;
+  float a = uTw.x * (position.y - uTw.y), c = cos(a), s = sin(a);
+  vec3 p = vec3(c*position.x + s*position.z, position.y, -s*position.x + c*position.z);
+  vec3 nn = vec3(c*normal.x + s*normal.z, normal.y, -s*normal.x + c*normal.z);
+  vec4 wp = modelMatrix * vec4(p,1.0);
+  vN = normalize(mat3(modelMatrix) * nn);
+  vVd = normalize(cameraPosition - wp.xyz);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+function bodyVert(m) { m.vertexShader = BODY_VERT; m.uniforms.uTw = uTw; return m; }
 function litMat(color, opacity, baseA, rimA) {
   return new THREE.ShaderMaterial({
     uniforms: { uC: { value: new THREE.Color(color) }, uO: { value: opacity },
@@ -289,7 +306,7 @@ function bp3dGeom(d) {
   g.computeVertexNormals();
   return g;
 }
-const matSkin = litMat(0xB8CBD8, 0.30, 0.07, 1.9), matSkinX = xrayMat(0.042, false, 3.2, BP3D.meta.dia);
+const matSkin = bodyVert(litMat(0xB8CBD8, 0.30, 0.07, 1.9)), matSkinX = bodyVert(xrayMat(0.042, false, 3.2, BP3D.meta.dia));
 matSkin.side = THREE.FrontSide;
 /* 体（体表・骨）は bodyFit に入れ、胃の型ごとに噴門が重なるよう動かす（sim.js の fitBodyToStomach） */
 const bodyFit = new THREE.Group(); bodyGroup.add(bodyFit);
@@ -338,7 +355,7 @@ bodyFit.add(meshSkin);
 
 /* ---- 骨格（胸郭・胸骨と脊椎だけ。目印として要るものに絞る）---- */
 const boneGroup = new THREE.Group(); bodyFit.add(boneGroup);
-const matBone = litMat(0xD6DEE6, 0.26, 0.07, 0.95), matBoneX = xrayMat(0.030, true, 1.8);   // BodyParts3D の骨は面が多いので薄めに
+const matBone = bodyVert(litMat(0xD6DEE6, 0.26, 0.07, 0.95)), matBoneX = bodyVert(xrayMat(0.030, true, 1.8));   // BodyParts3D の骨は面が多いので薄めに
 { const m = new THREE.Mesh(bp3dGeom(BP3D.bones), matBone); m.renderOrder = 0; boneGroup.add(m); }
 
 /* 体表が全身を覆うので、手足や頭を別に作る必要はなくなった（表示の切り替えのために箱だけ残す） */

@@ -29,10 +29,66 @@ function applyPose() {
   qB.setFromAxisAngle(Yax, rollCur * Math.PI / 180);    // 患者の体軸回転
   tiltGroup.quaternion.copy(qA);
   bodyGroup.quaternion.copy(qBase).multiply(qB);
+  rollSupport(rollCur, _sup); bodyGroup.position.set(0, _sup.y, _sup.z);   // 体を天板に載せる（下の rollSupport）
   qWorldBody.copy(qA).multiply(bodyGroup.quaternion);
   placeTable();
   applyTwist();
 }
+/* ---- 体を天板に載せる ----
+   体軸の回転は胃の中心のまわりに回しているので、そのままだと腹臥位で体が天板から浮き（胃は体の前寄りにある）、側臥位では天板にめり込む。
+   体の表面（腕を除いた胴体）の、天板に向かういちばん外の点がいつも天板に触れるよう、体を天板に垂直な向き（台の y）に動かす。
+   さらに、人が転がるときのように、天板に触れる点のまわりに転がった分だけ体を台の幅の向き（台の z）にずらす。
+   ただし台の上でどんどんずれていかないよう、1 回転の平均のずれは引いて、行ったり来たりする分だけを ROLL_SLIDE の割合で使う。
+   胃の流れの計算は向き（回転）だけを使うので、この平行な動きは流れに影響しない */
+const ROLL_SLIDE = 0.5;
+const _sup = { y: 0, z: 0 };
+let SUP = null;
+function buildSupport() {
+  // 体表の頂点を bodyGroup の座標へ。腕を除くため、胴体の幅（x −17〜13、y −30〜28。体表の形から読んだ値）に入る点だけ使う
+  const M = new THREE.Matrix4(), v = new THREE.Vector3(), P = [];
+  for (let o = meshSkin; o && o !== bodyGroup; o = o.parent) { o.updateMatrix(); M.premultiply(o.matrix); }
+  const a = meshSkin.geometry.attributes.position;
+  for (let i = 0; i < a.count; i += 2) {
+    v.fromBufferAttribute(a, i).applyMatrix4(M);
+    if (v.x > -17 && v.x < 13 && v.y > -30 && v.y < 28) P.push(v.x, v.y, v.z);
+  }
+  const N = 360, h = new Float32Array(N + 1), q = new THREE.Quaternion(), qr = new THREE.Quaternion(), w = new THREE.Vector3();
+  for (let k = 0; k <= N; k++) {
+    qr.setFromAxisAngle(Yax, k * Math.PI / 180); q.copy(qBase).multiply(qr);
+    let mn = 1e9;
+    for (let i = 0; i < P.length; i += 3) { w.set(P[i], P[i + 1], P[i + 2]).applyQuaternion(q); if (w.y < mn) mn = w.y; }
+    h[k] = -mn * BODY_SCALE;                     // 胃の中心から、天板に向かういちばん外の点までの距離（cm）
+  }
+  // 転がった分のずれ：台の x のまわりの回転は −（体軸の回転）なので、ずれ ＝ −∫ h dθ。1 回転の平均を引く
+  const d = new Float32Array(N + 1); for (let k = 1; k <= N; k++) d[k] = d[k - 1] - (h[k - 1] + h[k]) / 2 * Math.PI / 180;
+  const mean = d[N] / N; for (let k = 0; k <= N; k++) d[k] -= mean * k;
+  let avg = 0; for (let k = 0; k < N; k++) avg += d[k]; avg /= N;
+  for (let k = 0; k <= N; k++) d[k] -= avg;      // 背臥位のときのずれが小さくなるよう全体の平均を 0 に
+  SUP = { h, d, d0: d[0], key: meshSkin.parent && meshSkin.parent.position.toArray().join() };
+}
+function rollSupport(roll, out) {
+  const key = meshSkin.parent && meshSkin.parent.position.toArray().join();
+  if (!SUP || SUP.key !== key) buildSupport();
+  const r = ((roll % 360) + 360) % 360, k = Math.floor(r), f = r - k;
+  const hh = SUP.h[k] + (SUP.h[k + 1] - SUP.h[k]) * f, dd = SUP.d[k] + (SUP.d[k + 1] - SUP.d[k]) * f;
+  out.y = hh - SUP.h[0];                          // 背臥位を基準に、天板に触れるよう上下（外の点が近い向きでは天板へ下げる）
+  out.z = ROLL_SLIDE * (dd - SUP.d0);             // 背臥位で 0
+  return out;
+}
+/* 寝返りの途中のねじれ：回る速さに比例して、肩を先に、腰を遅らせて回す（scene.js の BODY_VERT）。
+   肩（胃から 30 cm 上）での先回りは 回る速さ × ROLL_LEAD 秒（80°/秒なら 8°）。値は見た目で決めた仮の値 */
+const ROLL_LEAD = 0.1;
+let rollPrev = null, rollVel = 0;
+function applyRollFeel(dt) {
+  if (rollPrev === null) rollPrev = rollCur;
+  const v = dt > 0 ? (rollCur - rollPrev) / dt : 0; rollPrev = rollCur;
+  rollVel += (Math.max(-200, Math.min(200, v)) - rollVel) * (1 - Math.exp(-dt * 6));   // 少しならして、急に変わらないように
+  const lead = rollVel * ROLL_LEAD * Math.PI / 180;                                   // 肩での先回り（ラジアン）
+  _tw.set(0, 0, 0); bodyGroup.localToWorld(_tw); meshSkin.worldToLocal(_tw);         // 胃の高さ（メッシュの座標の y）
+  uTw.value.set(lead / (30 / BODY_SCALE), _tw.y);
+}
+const _tw = new THREE.Vector3();
+
 /* ---- 体位による胃のねじれ（TYPES[型].twist）----
    胃は噴門部と幽門部が緩く固定されているだけで、体位によって腹の中でねじれ、振れる（胃X線検診 上部消化管検査必携テキスト
    pp.90-94）。動きは教科書に書いてある 2 つだけにする（TEXTBOOK_CHECK.md「ねじれ」）。

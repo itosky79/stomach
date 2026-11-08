@@ -51,6 +51,7 @@ function loop(now) {
   if (rollDriven) rollCur = rollT;               // 回転法・手順の経路：余弦の速さのまま動かす（ui.js の motionStep）
   else rollCur += (rollT - rollCur) * k;
   if (autoSpin) ctrl.az += dt * 0.28;
+  applyRollFeel(dt);                              // 寝返りの途中のねじれ（sim.js）
   applyPose(); applyCam();
   updateCompress();
 
