@@ -595,43 +595,19 @@ document.getElementById('rotCount').addEventListener('click', e => {
 });
 document.getElementById('bRot').addEventListener('click', () => { if (ROT.plan) rotStop(); else rotStart(); });
 
-/* 回転の動かし方（回転法・手順の経路で共通）：人が台の上で寝返りを打つような動きにする。
-   経路の点を、同じ向きに続けて回る区間にまとめ、区間を「背臥位・側臥位・腹臥位」の 90° ごとの区切りで小さな動きに分ける。
-   - 起き上がる動き（背臥位・腹臥位 → 側臥位。体を持ち上げる）：ゆっくり。余弦の速さ（動き始めと止まる前がゆっくり）
-   - 倒れる動き（側臥位 → 背臥位・腹臥位。重さで倒れる）：速い。動く前にわずかに反対へ構え、着いたところで少し行き過ぎて戻る
-   - 腹臥位から起き上がるときは、腕で体を押し上げるので、背臥位からより時間がかかる
-   - 側臥位・腹臥位・背臥位に着いたら、腕や体を置き直す間だけ少し止まる
-   - 1 つ 1 つの動きの時間は ±10 % ばらつかせる（毎回同じリズムにならないように）
-   時間の値は、一般的な寝返りの速さを想定して決めた仮の値（実測や動画から測ったものではない）。「ゆっくり」はどの時間も 2 倍。
-   向きが変わる所（左右交互の折り返し）や起倒角が変わる所で区間を分ける。
+/* 回転の動かし方（回転法・手順の経路で共通）：人が台の上で寝返りを打つような、つながった動きにする。
+   経路の点を、同じ向きに続けて回る区間にまとめ、区間の中は止まらずに回る（側臥位・腹臥位で止めない）。
+   - 速さは体の向きで滑らかに変える：起き上がる側（背臥位・腹臥位 → 側臥位）は遅く、倒れる側（側臥位 → 背臥位・腹臥位）は速い。
+     速さ ＝ 基本の速さ × (1 − ROLL_B × 向き × sin 2θ) × (1 − ROLL_P × (1 − cos θ) ÷ 2)（θ は回転角。後ろの項は腹臥位のあたりを少し遅くする：腕で押し上げる分）
+   - 動き出しは加速度 ROLL_ACC で少しずつ速くし、止まる前は同じ加速度で少しずつ遅くする（急に動いたり止まったりしない）
+   - 速さが変わるときも加速度の範囲で変える（速さが急に跳ばない）
+   値は一般的な寝返りの速さを想定した仮の値（実測や動画から測ったものではない）。「ゆっくり」は基本の速さが半分。
+   向きが変わる所（左右交互の折り返し）や起倒角が変わる所で区間を分けるので、そこでは滑らかに止まってから次へ。
    wps：[{ tilt, roll（ぐるっと回る分も含めた角度）, slow }]。起倒は台の動き（main.js）にまかせ、区間の終わりで台が着くのを待つ */
-const ROLL_T = { up: 1.3, upProne: 1.6, down: 0.9 };          // 90° あたりの秒数：背臥位から起き上がる・腹臥位から起き上がる・倒れる
-const ROLL_PAUSE = { lateral: 0.15, prone: 0.35, supine: 0.2 }; // 着いたあと止まる秒数
-const ROLL_BACK = 1.0;                                         // 倒れる動きの、構えと行き過ぎの大きさ（0 で無し。1.0 で 90° の動きに対しておよそ 4°）
-let rollSeed = 1;
-function rollJitter() { rollSeed = (rollSeed * 16807) % 2147483647; return 0.9 + 0.2 * (rollSeed / 2147483647); }
-function easeBack(x) {   // 構えて動き、少し行き過ぎて戻る（0→1）
-  const c = ROLL_BACK, c2 = c * 1.525;
-  return x < 0.5 ? (Math.pow(2 * x, 2) * ((c2 + 1) * 2 * x - c2)) / 2
-                 : (Math.pow(2 * x - 2, 2) * ((c2 + 1) * (x * 2 - 2) + c2) + 2) / 2;
-}
-function rollMoves(r0, r1, slow) {   // r0 → r1 を 90° の区切りで小さな動きに分ける
-  const mv = [], dir = Math.sign(r1 - r0), k = slow ? 2 : 1;
-  let a = r0;
-  while ((r1 - a) * dir > 1e-6) {
-    let nxt = dir > 0 ? Math.floor(a / 90 + 1e-6) * 90 + 90 : Math.ceil(a / 90 - 1e-6) * 90 - 90;   // 次の 90° の区切り
-    if ((nxt - r1) * dir > 0) nxt = r1;
-    const q = ((Math.round(nxt) % 360) + 360) % 360, q0 = ((Math.round(a / 90) * 90 % 360) + 360) % 360;
-    const toLat = Math.abs(Math.sin(nxt * Math.PI / 180)) > Math.abs(Math.sin(a * Math.PI / 180)) + 1e-6;   // 側臥位へ向かう（起き上がる）
-    const fromProne = Math.abs(((a % 360) + 360) % 360 - 180) < 45;
-    const per = toLat ? (fromProne ? ROLL_T.upProne : ROLL_T.up) : ROLL_T.down;
-    const T = per * Math.abs(nxt - a) / 90 * k * rollJitter();
-    const atKey = Math.abs(nxt / 90 - Math.round(nxt / 90)) < 1e-6;
-    const pause = !atKey || nxt === r1 ? 0 : (q === 90 || q === 270 ? ROLL_PAUSE.lateral : q === 180 ? ROLL_PAUSE.prone : ROLL_PAUSE.supine) * k;
-    mv.push({ a, b: nxt, T: Math.max(0.05, T), pause, up: toLat });
-    a = nxt;
-  }
-  return mv;
+const ROLL_V = 78, ROLL_B = 0.35, ROLL_P = 0.15, ROLL_ACC = 110;   // 基本の速さ °/秒、起き上がり／倒れの差、腹臥位で遅くする割合、加速度 °/秒²
+function rollSpeed(th, dir, slow) {
+  const r = th * Math.PI / 180;
+  return ROLL_V * (slow ? 0.5 : 1) * (1 - ROLL_B * dir * Math.sin(2 * r)) * (1 - ROLL_P * (1 - Math.cos(r)) / 2);
 }
 function motionBuild(wps, r0) {
   const segs = []; let cur = r0, sg = null;
@@ -641,25 +617,26 @@ function motionBuild(wps, r0) {
     else { sg = { tilt: w.tilt, r0: cur, r1: w.roll, dir, slow: !!w.slow, first: i, last: i }; segs.push(sg); }
     cur = w.roll;
   });
-  for (const g of segs) g.mv = rollMoves(g.r0, g.r1, g.slow);
-  return { wps, segs, si: 0, mi: 0, t: 0, wi: 0 };
+  return { wps, segs, si: 0, th: r0, v: 0, wi: 0 };
 }
 // 1 コマ進める。終わったら false。M.wi は、いま向かっている経路の点
 function motionStep(M, dt) {
   const g = M.segs[M.si]; if (!g) return false;
   tiltT = g.tilt;
   rollDriven = true;                                     // main.js：体の向きを rollT にそのまま合わせる
-  const m = g.mv[M.mi];
-  if (m) {
-    M.t += dt;
-    const s = Math.min(1, M.t / m.T);
-    rollT = m.a + (m.b - m.a) * (m.up ? (1 - Math.cos(Math.PI * s)) / 2 : easeBack(s));
-    if (M.t >= m.T + m.pause) { M.mi++; M.t = 0; }
-  } else rollT = g.r1;
+  if (M.segStart !== M.si) { M.segStart = M.si; M.th = g.r0; M.v = 0; }
+  const rem = (g.r1 - M.th) * g.dir;
+  if (rem > 0.02) {
+    const want = Math.min(rollSpeed(M.th, g.dir, g.slow), Math.sqrt(2 * ROLL_ACC * rem));   // 止まる前は滑らかに遅く
+    M.v += Math.max(-ROLL_ACC * dt, Math.min(ROLL_ACC * dt, want - M.v));
+    M.v = Math.max(M.v, Math.min(want, 2));             // ごく遅いまま止まりきらないのを防ぐ
+    M.th += g.dir * Math.min(M.v * dt, rem);
+  } else { M.th = g.r1; M.v = 0; }
+  rollT = M.th;
   let wi = g.first;
   while (wi < g.last && (M.wps[wi].roll - rollT) * g.dir <= 0.5) wi++;
   M.wi = wi;
-  if (M.mi >= g.mv.length && Math.abs(tiltCur - tiltT) < 0.05) { M.si++; M.mi = 0; M.t = 0; M.wi = g.last + 1; }
+  if (Math.abs(M.th - g.r1) < 1e-6 && Math.abs(tiltCur - tiltT) < 0.05) { M.si++; M.wi = g.last + 1; }
   return M.si < M.segs.length;
 }
 function rotStart() {
