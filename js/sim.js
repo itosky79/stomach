@@ -29,55 +29,84 @@ function applyPose() {
   qB.setFromAxisAngle(Yax, rollCur * Math.PI / 180);    // 患者の体軸回転
   tiltGroup.quaternion.copy(qA);
   bodyGroup.quaternion.copy(qBase).multiply(qB);
-  rollSupport(rollCur, _sup); bodyGroup.position.set(0, _sup.y, _sup.z);   // 体を天板に載せる（下の rollSupport）
+  rollSupport(rollCur, _sup); bodyGroup.position.set(0, _sup.y + twLift, _sup.z);   // 体を天板に載せる（下の rollSupport）
+  uArm.value.z = armAngle(tiltCur, rollCur);                                 // 腕を挙げる角度（scene.js の BODY_VERT）
   qWorldBody.copy(qA).multiply(bodyGroup.quaternion);
   placeTable();
   applyTwist();
 }
 /* ---- 体を天板に載せる ----
    体軸の回転は胃の中心のまわりに回しているので、そのままだと腹臥位で体が天板から浮き（胃は体の前寄りにある）、側臥位では天板にめり込む。
-   体の表面（腕を除いた胴体）の、天板に向かういちばん外の点がいつも天板に触れるよう、体を天板に垂直な向き（台の y）に動かす。
+   体の表面（挙げた腕も含む）の、天板に向かういちばん外の点がいつも天板に触れるよう、体を天板に垂直な向き（台の y）に動かす。
    さらに、人が転がるときのように、天板に触れる点のまわりに転がった分だけ体を台の幅の向き（台の z）にずらす。
    ただし台の上でどんどんずれていかないよう、1 回転の平均のずれは引いて、行ったり来たりする分だけを ROLL_SLIDE の割合で使う。
    胃の流れの計算は向き（回転）だけを使うので、この平行な動きは流れに影響しない */
 const ROLL_SLIDE = 0.5;
 const _sup = { y: 0, z: 0 };
 let SUP = null;
+// 腕を挙げる角度（ラジアン）：体の横（左右の向き）か前が天板へ向くほど挙げ、背臥位と立位では下ろしたまま。
+// 前（腹側）は天板の向き（台の −y）、横は台の ±y への傾き。立位〜半立位（起倒 35〜60°）では挙げない
+const ARM_MAX = Math.PI;                         // 頭の上まで（180°）
+function armAngle(tilt, roll) {
+  const r = roll * Math.PI / 180;
+  const side = Math.abs(Math.sin(r)), front = Math.max(0, -Math.cos(r));   // 横の傾き・前の下向き（背臥位で 0、側臥位で横 1、腹臥位で前 1）
+  const A = Math.max(side, front), sm = (e0, e1, t) => { const u = Math.max(0, Math.min(1, (t - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
+  return ARM_MAX * sm(0.12, 0.45, A) * sm(60, 35, tilt);
+}
+function armMove(v, g, out) {                     // 体表のメッシュの座標の点 v を、腕の角度 g で動かす（BODY_VERT と同じ式）
+  const w = armW(v.x, v.y); out.copy(v); if (w <= 0 || g === 0) return out;
+  const t = g * w, c = Math.cos(t), s = Math.sin(t), dy = v.y - ARM.py, dz = v.z - ARM.pz;
+  out.y = ARM.py + dy * c + dz * s; out.z = ARM.pz - dy * s + dz * c; return out;
+}
+const SUP_G = [0, 0.25, 0.5, 0.75, 1];           // 腕の角度（ARM_MAX に対する割合）の段
 function buildSupport() {
-  // 体表の頂点を bodyGroup の座標へ。腕を除くため、胴体の幅（x −17〜13、y −30〜28。体表の形から読んだ値）に入る点だけ使う
-  const M = new THREE.Matrix4(), v = new THREE.Vector3(), P = [];
-  for (let o = meshSkin; o && o !== bodyGroup; o = o.parent) { o.updateMatrix(); M.premultiply(o.matrix); }
-  const a = meshSkin.geometry.attributes.position;
-  for (let i = 0; i < a.count; i += 2) {
-    v.fromBufferAttribute(a, i).applyMatrix4(M);
-    if (v.x > -17 && v.x < 13 && v.y > -30 && v.y < 28) P.push(v.x, v.y, v.z);
+  // 体表の頂点（メッシュの座標）と、bodyGroup の座標へ移すずれ
+  const M = new THREE.Matrix4(); for (let o = meshSkin; o && o !== bodyGroup; o = o.parent) { o.updateMatrix(); M.premultiply(o.matrix); }
+  const a = meshSkin.geometry.attributes.position, loc = [], torso = [], v = new THREE.Vector3(), w = new THREE.Vector3();
+  for (let i = 0; i < a.count; i++) {
+    v.fromBufferAttribute(a, i); loc.push(v.x, v.y, v.z);
+    w.copy(v).applyMatrix4(M); if (w.x > -17 && w.x < 13 && w.y > -30 && w.y < 28) torso.push(w.x, w.y, w.z);
   }
-  const N = 360, h = new Float32Array(N + 1), q = new THREE.Quaternion(), qr = new THREE.Quaternion(), w = new THREE.Vector3();
-  for (let k = 0; k <= N; k++) {
-    qr.setFromAxisAngle(Yax, k * Math.PI / 180); q.copy(qBase).multiply(qr);
-    let mn = 1e9;
-    for (let i = 0; i < P.length; i += 3) { w.set(P[i], P[i + 1], P[i + 2]).applyQuaternion(q); if (w.y < mn) mn = w.y; }
-    h[k] = -mn * BODY_SCALE;                     // 胃の中心から、天板に向かういちばん外の点までの距離（cm）
+  const N = 180, q = new THREE.Quaternion(), qr = new THREE.Quaternion(), u = new THREE.Vector3();
+  // h[gi][k]：腕の角度の段 gi、回転角 2k° で、胃の中心から天板に向かういちばん外の点までの距離（cm）。腕も含む
+  const h = SUP_G.map(() => new Float32Array(N + 1)), ht = new Float32Array(N + 1);
+  SUP_G.forEach((gf, gi) => {
+    const pts = []; for (let i = 0; i < loc.length; i += 3) {
+      if (gf > 0) { const c = armCut(loc[i], loc[i + 1]); if (c > 0.02 && c < 0.98) continue; }   // 描かない境目の点は除く
+      armMove(v.set(loc[i], loc[i + 1], loc[i + 2]), gf * ARM_MAX, w); w.applyMatrix4(M); pts.push(w.x, w.y, w.z); }
+    for (let k = 0; k <= N; k++) {
+      qr.setFromAxisAngle(Yax, 2 * k * Math.PI / 180); q.copy(qBase).multiply(qr);
+      let mn = 1e9; for (let i = 0; i < pts.length; i += 3) { u.set(pts[i], pts[i + 1], pts[i + 2]).applyQuaternion(q); if (u.y < mn) mn = u.y; }
+      h[gi][k] = -mn * BODY_SCALE;
+    }
+  });
+  for (let k = 0; k <= N; k++) {                  // 胴だけの距離（転がった分の横のずれに使う）
+    qr.setFromAxisAngle(Yax, 2 * k * Math.PI / 180); q.copy(qBase).multiply(qr);
+    let mn = 1e9; for (let i = 0; i < torso.length; i += 3) { u.set(torso[i], torso[i + 1], torso[i + 2]).applyQuaternion(q); if (u.y < mn) mn = u.y; }
+    ht[k] = -mn * BODY_SCALE;
   }
   // 転がった分のずれ：台の x のまわりの回転は −（体軸の回転）なので、ずれ ＝ −∫ h dθ。1 回転の平均を引く
-  const d = new Float32Array(N + 1); for (let k = 1; k <= N; k++) d[k] = d[k - 1] - (h[k - 1] + h[k]) / 2 * Math.PI / 180;
+  const d = new Float32Array(N + 1); for (let k = 1; k <= N; k++) d[k] = d[k - 1] - (ht[k - 1] + ht[k]) / 2 * 2 * Math.PI / 180;
   const mean = d[N] / N; for (let k = 0; k <= N; k++) d[k] -= mean * k;
-  let avg = 0; for (let k = 0; k < N; k++) avg += d[k]; avg /= N;
-  for (let k = 0; k <= N; k++) d[k] -= avg;      // 背臥位のときのずれが小さくなるよう全体の平均を 0 に
-  SUP = { h, d, d0: d[0], key: meshSkin.parent && meshSkin.parent.position.toArray().join() };
+  let avg = 0; for (let k = 0; k < N; k++) avg += d[k]; avg /= N; for (let k = 0; k <= N; k++) d[k] -= avg;
+  SUP = { h, d, h0: h[0][0], key: meshSkin.parent && meshSkin.parent.position.toArray().join() };
 }
-function rollSupport(roll, out) {
+function rollSupport(roll, out, tilt) {
   const key = meshSkin.parent && meshSkin.parent.position.toArray().join();
   if (!SUP || SUP.key !== key) buildSupport();
-  const r = ((roll % 360) + 360) % 360, k = Math.floor(r), f = r - k;
-  const hh = SUP.h[k] + (SUP.h[k + 1] - SUP.h[k]) * f, dd = SUP.d[k] + (SUP.d[k + 1] - SUP.d[k]) * f;
-  out.y = hh - SUP.h[0];                          // 背臥位を基準に、天板に触れるよう上下（外の点が近い向きでは天板へ下げる）
-  out.z = ROLL_SLIDE * (dd - SUP.d0);             // 背臥位で 0
+  const r = ((roll % 360) + 360) % 360 / 2, k = Math.min(179, Math.floor(r)), f = r - k;
+  const g = armAngle(tilt === undefined ? tiltCur : tilt, roll) / ARM_MAX * (SUP_G.length - 1), gi = Math.min(SUP_G.length - 2, Math.floor(g)), gf = g - gi;
+  const H = i => SUP.h[i][k] + (SUP.h[i][k + 1] - SUP.h[i][k]) * f;
+  const hh = H(gi) + (H(gi + 1) - H(gi)) * gf, dd = SUP.d[k] + (SUP.d[k + 1] - SUP.d[k]) * f;
+  out.y = hh - SUP.h0;                            // 背臥位を基準に、天板に触れるよう上下（外の点が近い向きでは天板へ下げる）
+  out.z = ROLL_SLIDE * (dd - SUP.d[0]);           // 背臥位で 0
   return out;
 }
 /* 寝返りの途中のねじれ：回る速さに比例して、肩を先に、腰を遅らせて回す（scene.js の BODY_VERT）。
-   肩（胃から 30 cm 上）での先回りは 回る速さ × ROLL_LEAD 秒（80°/秒なら 8°）。値は見た目で決めた仮の値 */
-const ROLL_LEAD = 0.1;
+   肩・腰（胃から 30 cm）での先回りは 回る速さ × ROLL_LEAD 秒（80°/秒なら 6°）。それより頭側・足側は肩・腰と同じ角度。
+   ねじれた分だけ肩や腰が天板へ寄るので、ねじれている間は 体の半径 TW_R × ねじれの角度 だけ体を持ち上げる（めり込まないように）。値は見た目で決めた仮の値 */
+const ROLL_LEAD = 0.08, TW_R = 40;   // TW_R：足先まで含めた体軸からの遠さ（cm）
+let twLift = 0;
 let rollPrev = null, rollVel = 0;
 function applyRollFeel(dt) {
   if (rollPrev === null) rollPrev = rollCur;
@@ -85,7 +114,8 @@ function applyRollFeel(dt) {
   rollVel += (Math.max(-200, Math.min(200, v)) - rollVel) * (1 - Math.exp(-dt * 6));   // 少しならして、急に変わらないように
   const lead = rollVel * ROLL_LEAD * Math.PI / 180;                                   // 肩での先回り（ラジアン）
   _tw.set(0, 0, 0); bodyGroup.localToWorld(_tw); meshSkin.worldToLocal(_tw);         // 胃の高さ（メッシュの座標の y）
-  uTw.value.set(lead / (30 / BODY_SCALE), _tw.y);
+  uTw.value.set(lead / (30 / BODY_SCALE), _tw.y, 30 / BODY_SCALE);
+  twLift = TW_R * Math.abs(lead);
 }
 const _tw = new THREE.Vector3();
 
