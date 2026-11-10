@@ -594,6 +594,7 @@ function futonStep() {
   const d = Math.abs(((rollCur - 180) % 360 + 540) % 360 - 180), st = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
   const want = FUTON.amt * st((-5 - tiltCur) / 15) * (1 - st((d - 45) / 30));
   if (Math.abs(want - futonAmt) > 0.02 || (want !== futonAmt && (want === 0 || want === FUTON.amt))) { futonAmt = want; rebuildAll(); }
+  if (futonMesh) futonMesh.visible = futonAmt > 0.02;
 }
 const _tn = new THREE.Vector3(), _tp = new THREE.Vector3();
 function updateTblPlane() {   // 天板の面を世界の座標で（scene.js の uTbl）。腕のうち天板の面より下の所を描かないため

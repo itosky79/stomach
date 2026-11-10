@@ -554,6 +554,7 @@ function plane(w, h, mat, x, y, z, ry, rx) {   // 表（内側）だけ見える
   m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, 0, 'YXZ');
   roomProps.add(m); return m;
 }
+let futonMesh = null;
 function box(parent, w, h, d, mat, x, y, z) { return prop(parent, new THREE.BoxGeometry(w, h, d), mat, x, y, z); }
 {
   /* ---- 床に立つ 2 本の柱（回転軸を支える）---- */
@@ -622,6 +623,7 @@ function buildTable() {
   /* ---- X 線管（オーバーチューブ）。映像系は胃の位置に合わせて天板の上を動く ---- */
   const fpdY = TB.top - TB.thick - 3, fy = fpdY + TB.sid;         // 受像器の面、焦点
   box(tableProps, 47, 3, 47, matDark, 0, fpdY, 0);                 // 受像器（FPD 43 × 43 cm）
+  futonMesh = box(tableProps, 20, 4, 30, matPad, 0, TB.top + 2, 0); futonMesh.visible = false;   // 圧迫フトン（腹臥位の頭低位のときだけ出す。sim.js の futonStep。大きさは仮の値）
   const tube = fadePart(prop(tableProps, new THREE.CylinderGeometry(9, 9, 34, 20), fadeMat(0x6E7F8C), 0, fy + 10, 0, Math.PI / 2));   // 管球
   tube.rotation.set(Math.PI / 2, 0, 0);
   fadePart(box(tableProps, 22, 12, 22, fadeMat(0x4A5C6B), 0, fy - 6, 0));             // 絞り

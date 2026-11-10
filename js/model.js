@@ -111,7 +111,7 @@ function buildRings(pts, rads, N, off, taper, radMul) {
 //   body・bodyAt：胃体部だけを腹側へ出す量と山の位置（2026-11-10。背臥位の溜まりが胃体部へ広がらないように）
 //   pull：胃角より先を胃角のほうへ横に寄せる割合、ant・antZ：前庭部〜幽門前部を太くする量と、その分だけ中心を腹側へ出す量、
 //   bulb・bulbR：十二指腸球部を上へ向ける量と太くする量（2026-11-10。胃角部から十二指腸までを本の像に近づけるため）
-const JSHAPE = { stretch: 2, lift: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 0.6 };
+const JSHAPE = { stretch: 2, lift: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 1 };
 const FUNDUS = { r: 0.6, d: 4 };         // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 4（実寸およそ 4.8 cm）。2026-11-04 に 1.35 倍・1.5 から 2.6 へ、2026-11-10 に 4 へ深くした
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 // 圧迫フトン（2026-11-10）：腹臥位の頭低位で腹の下に入れる枕。胃体部の前の壁を背中側へ押す（applyCompression を腹側からの向きで使う）。
