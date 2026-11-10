@@ -295,7 +295,10 @@ function regionShares() {
 function cardiaSubmerged() {
   const A = vertexAreas(), m = targetMask(parseTarget('噴門部'), wallSectors());
   let all = 0, sub = 0;
-  for (let v = 0; v < NMAIN * CM; v++) if (m[v]) { all += A[v]; if (hArr[v] <= lvl[(v / CM) | 0]) sub += A[v]; }
+  // 沈んでいる：液面より 0.1 mm 以上深い所だけを数える（2026-11-10）。前は液面と同じ高さ（深さ 0）の点も数えていて、
+  // ほぼ空の断面のいちばん低い点が「沈んでいる」とされていた（腹臥位第1斜位で 15〜19% と出ていたのはこのため）
+  const EPS = 0.01 / BODY_SCALE;   // 0.1 mm（実寸）
+  for (let v = 0; v < NMAIN * CM; v++) if (m[v]) { all += A[v]; if (hArr[v] < lvl[(v / CM) | 0] - EPS) sub += A[v]; }
   return all > 0 ? sub / all * 100 : NaN;
 }
 /* 教科書の目印から回転角を求める（天板に垂直な X 線の投影で比べる。起倒角によらない）

@@ -106,8 +106,8 @@ function buildRings(pts, rads, N, off, taper, radMul) {
 // 胃の J 字の形（rebuild）：噴門より下を縦に 2 倍、胃角より先を 1.5（実寸およそ 1.8 cm）持ち上げる（2026-11-10）。
 // BodyParts3D の胃は寝た状態の横に長い形なので、虎の巻 pp.91-96 の X 線像（縦に長い J 字）に近づけた。値は、教科書の 10 項目と
 // 像の見比べで選んだ仮の値（伸び 1〜2、持ち上げ 0〜3 を試した。TEXTBOOK_CHECK.md の最後）
-const JSHAPE = { stretch: 2, lift: 1.5 };
-const FUNDUS = { r: 0.6, d: 2.6 };       // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 2.6（実寸およそ 3.1 cm）。2026-11-04 に 1.35 倍・1.5 から深くした
+const JSHAPE = { stretch: 2, lift: 1.5, fwd: 0, body: 1, bodyAt: 0.6 };   // fwd：噴門より下へ 1 下がるごとに腹側へ fwd だけ出す（試しただけで 0 のまま）。body：胃体部だけを腹側へ出す量（1 = 実寸およそ 1.2 cm）、bodyAt：その山の位置（2026-11-10。背臥位の溜まりが胃体部へ広がらないように。見た目と教科書の 10 項目で決めた値）
+const FUNDUS = { r: 0.6, d: 4 };         // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 4（実寸およそ 4.8 cm）。2026-11-04 に 1.35 倍・1.5 から 2.6 へ、2026-11-10 に 4 へ深くした
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標）。sim.js の setCompAxis が体位から決める
 function ringArea(i) {   // 断面 i の輪の多角形の面積（断面の平面 U・V で測る）
@@ -208,12 +208,16 @@ function rebuild() {
   const fMul = c => 1 + FUNDUS.r * fW(c);
   const pts = S.pts.map((p, k) => [p[0], p[1], p[2] - FUNDUS.d * fW(k)]);   // z は腹側が +、背中側へ下げる
   // 胃の J 字の形（JSHAPE。試験中）：噴門より下を縦に JSHAPE.stretch 倍に伸ばし、胃角より先（前庭部〜幽門）を JSHAPE.lift だけ持ち上げる
-  if (JSHAPE.stretch !== 1 || JSHAPE.lift !== 0) {
+  if (JSHAPE.stretch !== 1 || JSHAPE.lift !== 0 || JSHAPE.fwd || JSHAPE.body) {
     const yc = pts[Math.min(pts.length - 1, Math.round(S.cardia))][1], ca = (ang[2] + ang[3]) / 2, cp = reg('pylorus')[2];
     for (let k = 0; k < pts.length; k++) {
-      const dy = pts[k][1] - yc; if (dy < 0) pts[k][1] = yc + dy * JSHAPE.stretch;
+      const dy = pts[k][1] - yc; if (dy < 0) { pts[k][1] = yc + dy * JSHAPE.stretch; pts[k][2] += JSHAPE.fwd * (-dy) * JSHAPE.stretch; }
       if (k > ca) pts[k][1] += JSHAPE.lift * Math.min(1, (k - ca) / Math.max(0.5, cp - ca));
     }
+  }
+  if (JSHAPE.body) {   // 胃体部だけを腹側へ出す（胃底部の端 0 → 胃体部の中ほどで最大 → 胃角部の始まり 0）。背臥位で胃底部の溜まりが胃体部へ広がらないように
+    const b0 = fEnd * 0.6, b1 = ang[2], bm = b0 + (b1 - b0) * JSHAPE.bodyAt;
+    for (let k = 0; k < pts.length; k++) { const t = k <= bm ? (k - b0) / (bm - b0) : (b1 - k) / (b1 - bm); if (t > 0) pts[k][2] += JSHAPE.body * Math.sin(Math.PI / 2 * Math.min(1, t)) ** 2; }
   }
   buildRings(pts, R0, NMAIN, 0, 0.06, fMul);
   let P1 = 0, D1 = 0;   // 倍率 1 のときの近位・遠位の容量（実寸 mL。胃角部は半分ずつ）
