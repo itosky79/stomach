@@ -359,9 +359,9 @@ function twistKeys(rl) {
     { tilt: 0, roll: 0, items: '2・5a', ok: () => { const r = sh(); const big = Object.keys(r).filter(k => k !== 'antPyl').sort((a, b) => r[b] - r[a])[0]; return big === 'fundus' && r.antPyl <= 5; } },
     { tilt: 0, roll: 35, items: '5b', ok: () => sh().antPyl <= 5 },
     { tilt: -30, roll: 307, items: '5c', ok: () => sh().antPyl <= 5 },
-    { tilt: -30, roll: 180, items: '4', ok: () => { const r = sh(); const t = TYPES[curType].twist, save = t.slice(); TYPES[curType].twist = t.filter(k => !(k.tilt === -30 && k.roll === 180));
-        evalPrepare(0, 180); const r0 = sh(); TYPES[curType].twist = save; twistCur = [NaN, 0]; evalPrepare(-30, 180); return r.antPyl < r0.antPyl && r.fundus + r.body > 50; } },
-    { tilt: -30, roll: 155, items: '5d', ok: () => sh().antPyl <= 5 },
+    { tilt: -45, roll: 180, items: '4', ok: () => { const r = sh(); const t = TYPES[curType].twist, save = t.slice(); TYPES[curType].twist = t.filter(k => !(k.tilt === -45 && k.roll === 180));
+        evalPrepare(0, 180); const r0 = sh(); TYPES[curType].twist = save; twistCur = [NaN, 0]; evalPrepare(-45, 180); return r.antPyl < r0.antPyl && r.fundus + r.body > 50; } },
+    { tilt: -45, roll: 155, items: '5d', ok: () => sh().antPyl <= 5 },
     { tilt: 25, roll: 225, items: '8', ok: () => cardiaSubmerged() <= 5 },
     { tilt: 0, roll: rl, items: '6', ok: () => cardiaSubmerged() <= 5 },
     { tilt: 25, roll: 307, items: '7', ok: () => sh().fundus <= 5 },
@@ -464,13 +464,13 @@ function textbookCheck(opt = {}) {   // opt.skipDrain：項目 1（台を起こ�
           '胃底部と幽門前庭部が 10% 以上、胃体部がその両方より少ない', r.fundus >= 10 && r.antPyl >= 10 && r.body < r.fundus && r.body < r.antPyl);
       // 項目 4：腹臥位頭低位で胃下部から上部へ流れ去る
       evalPrepare(0, 180); const r0 = regionShares().sh;
-      evalPrepare(-30, 180); r = regionShares().sh;
-      add('4', type, '腹臥位正面位 水平→頭低位', '0→−30', 180, '幽門前庭部の割合 水平→頭低位（%）／頭低位の胃底部＋胃体部（%）',
+      evalPrepare(-45, 180); r = regionShares().sh;   // 強い頭低位（虎の巻 p.93「最大 −45 度」）
+      add('4', type, '腹臥位正面位 水平→頭低位', '0→−45', 180, '幽門前庭部の割合 水平→頭低位（%）／頭低位の胃底部＋胃体部（%）',
           f1(r0.antPyl) + '→' + f1(r.antPyl) + '／' + f1(r.fundus + r.body), '頭低位で幽門前庭部が減り、胃底部＋胃体部が 50% 超',
           r.antPyl < r0.antPyl && r.fundus + r.body > 50);
       // 項目 5b〜5d：幽門前庭部に残らない
       const r2 = rollCardiaRightEdge();
-      for (const [no, pose, t, ro] of [['5b', '背臥位第1斜位', 0, 35], ['5c', '背臥位第2斜位（頭低位）', -30, r2], ['5d', '腹臥位第2斜位（頭低位）', -30, 155]]) {
+      for (const [no, pose, t, ro] of [['5b', '背臥位第1斜位', 0, 35], ['5c', '背臥位第2斜位（頭低位）', -30, r2], ['5d', '腹臥位第2斜位（強い頭低位）', -45, 155]]) {
         evalPrepare(t, ro); r = regionShares().sh;
         add(no, type, pose, t, ro, '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
       }
@@ -529,13 +529,13 @@ function textbookPath(dwell) {
       // ⑤ 背臥位に戻し、右回転で腹臥位、半臥位 25°（フトンを入れる）、頭低位 −30°
       pathMove([[0, 360 + r2], [0, 360], [0, 180]], dwell); rollCur = rollT = 180; pathShoot();
       const r0 = anal();
-      pathMove([[25, 180], [-30, 180]], dwell); pathShoot();
+      pathMove([[25, 180], [-45, 180]], dwell); pathShoot();
       r = anal();
       add('4', type, '⑤ 腹臥位正面位 水平→頭低位', '幽門前庭部の割合 水平→頭低位（%）／頭低位の胃底部＋胃体部（%）',
           f1(r0.antPyl) + '→' + f1(r.antPyl) + '／' + f1(r.fundus + r.body), '頭低位で幽門前庭部が減り、胃底部＋胃体部が 50% 超',
           r.antPyl < r0.antPyl && r.fundus + r.body > 50);
       // ⑥ 台を水平に戻して第2斜位 25°、再び頭低位
-      pathMove([[0, 180], [0, 155], [-30, 155]], dwell); pathShoot();
+      pathMove([[0, 180], [0, 155], [-45, 155]], dwell); pathShoot();
       r = anal(); add('5d', type, '⑥ 腹臥位第2斜位（頭低位）', '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
       // ⑦ 台を水平に戻し、右回りに 360° 回転して第1斜位 45°、半臥位 25°
       pathMove([[0, 155], [0, -205], [0, -135], [25, -135]], dwell); rollCur = rollT = 225; pathShoot();
@@ -570,8 +570,8 @@ function depictionPath(dwell) {
   pathMove([[0, -360], [0, -325]], dwell); rollCur = rollT = 35; shoot(rows[1].name);
   pathMove([[0, 0], [0, -360], [0, -360 + r2], [-30, -360 + r2]], dwell); rollCur = rollT = 360 + r2; shoot(rows[2].name);
   pathMove([[0, 360 + r2], [0, 360], [0, 180]], dwell); rollCur = rollT = 180;
-  pathMove([[25, 180], [-30, 180]], dwell); shoot(rows[3].name);
-  pathMove([[0, 180], [0, 155], [-30, 155]], dwell); shoot(rows[4].name);
+  pathMove([[25, 180], [-45, 180]], dwell); shoot(rows[3].name);
+  pathMove([[0, 180], [0, 155], [-45, 155]], dwell); shoot(rows[4].name);
   pathMove([[0, 155], [0, -205], [0, -135], [25, -135]], dwell); rollCur = rollT = 225; shoot(rows[5].name);
   const rl = (() => { const t = tiltCur, ro = rollCur; const v = rightLateralRoll(); tiltCur = tiltT = t; rollCur = rollT = ro; return v; })();
   pathMove([[0, 225], [0, 180], [0, 90], [0, 0], [0, rl - 360]], dwell); rollCur = rollT = rl; shoot(rows[6].name);
