@@ -111,7 +111,7 @@ function buildRings(pts, rads, N, off, taper, radMul) {
 //   body・bodyAt：胃体部だけを腹側へ出す量と山の位置（2026-11-10。背臥位の溜まりが胃体部へ広がらないように）
 //   pull：胃角より先を胃角のほうへ横に寄せる割合、ant・antZ：前庭部〜幽門前部を太くする量と、その分だけ中心を腹側へ出す量、
 //   bulb・bulbR：十二指腸球部を上へ向ける量と太くする量（2026-11-10。胃角部から十二指腸までを本の像に近づけるため）
-const JSHAPE = { stretch: 2, lift: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 1 };
+const JSHAPE = { stretch: 2, lift: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 1, antEnd: 0.7 };
 const FUNDUS = { r: 0.6, d: 4 };         // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 4（実寸およそ 4.8 cm）。2026-11-04 に 1.35 倍・1.5 から 2.6 へ、2026-11-10 に 4 へ深くした
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 // 圧迫フトン（2026-11-10）：腹臥位の頭低位で腹の下に入れる枕。胃体部の前の壁を背中側へ押す（applyCompression を腹側からの向きで使う）。
@@ -217,7 +217,7 @@ function rebuild() {
   // 前庭部〜幽門前部の太さ（JSHAPE.ant）：元の形は幽門へ向かって早くから細くなる（空腹で縮んだ形）ので、前庭部の始まりから太くしていき、
   // 幽門の輪の手前まで保って、輪で元の太さへ戻す（本の像の、太い前庭部と短い幽門管の形）。近位：遠位の容積の比（DISTEND）はこのあと合わせるので変わらない
   const an0 = reg('antrum')[2], an1 = reg('pylorus')[2], an2 = reg('duode')[2], sm01 = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
-  const antMul = c => !JSHAPE.ant || c <= an0 || c >= an2 ? 1 : 1 + JSHAPE.ant * sm01((c - an0) / (an1 - an0)) * sm01((an2 - c) / (0.35 * (an2 - an1)));
+  const antMul = c => !JSHAPE.ant || c <= an0 || c >= an2 ? 1 : 1 + JSHAPE.ant * sm01((c - an0) / (an1 - an0)) * sm01((an2 - c) / (JSHAPE.antEnd * (an2 - an1)));
   const fMul = c => (1 + FUNDUS.r * fW(c)) * antMul(c);
   const pts = S.pts.map((p, k) => [p[0], p[1], p[2] - FUNDUS.d * fW(k)]);   // z は腹側が +、背中側へ下げる
   if (JSHAPE.ant && JSHAPE.antZ) for (let k = 0; k < pts.length; k++) pts[k][2] += JSHAPE.antZ * (antMul(k) - 1) / JSHAPE.ant;   // 太くした分、中心を腹側へ（背中側の壁を下げない。背臥位でここに溜まらないように）
@@ -303,7 +303,7 @@ function rebuild() {
   edges = [];
   for (let i = 0; i < NMAIN - 1; i++) {
     let k = 1, k2 = 1;
-    if (regionList[regionOf[i]][0] === 'pylorus' || regionList[regionOf[i + 1]][0] === 'pylorus') { k = k2 = pylorusOpen ? 0.85 : 0.10; }
+    if (regionList[regionOf[i]][0] === 'pylorus' || regionList[regionOf[i + 1]][0] === 'pylorus') { k = k2 = pylorusOpen ? 0.2 : 0.01; }   // 幽門の開き具合（流れが通る断面積に掛ける。sim.js の flowStep）。閉じているときも少しもれる。値は仮（流れを物理の式にした 2026-11-10 に 0.85・0.10 から小さくした）
     edges.push({ i: i, j: i + 1, k: k, k2: k2 });
   }
   for (let i = NMAIN; i < NN - 1; i++) edges.push({ i: i, j: i + 1, k: 1, k2: 0 });   // 食道の中も口の側へは戻さない（蠕動で胃へ送る。sim.js の dose）

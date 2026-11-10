@@ -296,9 +296,10 @@ function regionShares() {
 function cardiaSubmerged() {
   const A = vertexAreas(), m = targetMask(parseTarget('噴門部'), wallSectors());
   let all = 0, sub = 0;
-  // 沈んでいる：液面より 0.1 mm 以上深い所だけを数える（2026-11-10）。前は液面と同じ高さ（深さ 0）の点も数えていて、
+  // 沈んでいる：液面より 1 mm 以上深い所だけを数える（2026-11-10）。前は液面と同じ高さ（深さ 0）の点も数えていて、
   // ほぼ空の断面のいちばん低い点が「沈んでいる」とされていた（腹臥位第1斜位で 15〜19% と出ていたのはこのため）
-  const EPS = 0.01 / BODY_SCALE;   // 0.1 mm（実寸）
+  // 2026-11-10：流れを物理の式にしてから、降伏値で壁に残る薄い層（深さ 0.1〜0.3 mm）が溜まりとして数えられたので、1 mm 以上にした
+  const EPS = 0.1 / BODY_SCALE;   // 1 mm（実寸）
   for (let v = 0; v < NMAIN * CM; v++) if (m[v]) { all += A[v]; if (hArr[v] < lvl[(v / CM) | 0] - EPS) sub += A[v]; }
   return all > 0 ? sub / all * 100 : NaN;
 }
@@ -362,7 +363,7 @@ function twistKeys(rl) {
   return [
     { tilt: 0, roll: 0, items: '2・5a', ok: () => { const r = sh(); const big = Object.keys(r).filter(k => k !== 'antPyl').sort((a, b) => r[b] - r[a])[0]; return big === 'fundus' && r.antPyl <= 5; } },
     { tilt: 0, roll: 35, items: '5b', ok: () => sh().antPyl <= 5 },
-    { tilt: -20, roll: 307, items: '5c', ok: () => sh().antPyl <= 5 },
+    { tilt: -25, roll: 307, items: '5c', ok: () => sh().antPyl <= 5 },
     { tilt: -30, roll: 180, items: '4', ok: () => { const r = sh(); const t = TYPES[curType].twist, save = t.slice(); TYPES[curType].twist = t.filter(k => !(k.tilt === -30 && k.roll === 180));
         evalPrepare(0, 180); const r0 = sh(); TYPES[curType].twist = save; twistCur = [NaN, 0]; evalPrepare(-30, 180); return r.antPyl < r0.antPyl && r.fundus + r.body > 50; } },
     { tilt: -30, roll: 155, items: '5d', ok: () => sh().antPyl <= 5 },
@@ -474,7 +475,7 @@ function textbookCheck(opt = {}) {   // opt.skipDrain：項目 1（台を起こ�
           r.antPyl < r0.antPyl && r.fundus + r.body > 50);
       // 項目 5b〜5d：幽門前庭部に残らない
       const r2 = rollCardiaRightEdge();
-      for (const [no, pose, t, ro] of [['5b', '背臥位第1斜位', 0, 35], ['5c', '背臥位第2斜位（頭低位）', -20, r2], ['5d', '腹臥位第2斜位（強い頭低位）', -30, 155]]) {
+      for (const [no, pose, t, ro] of [['5b', '背臥位第1斜位', 0, 35], ['5c', '背臥位第2斜位（頭低位）', -25, r2], ['5d', '腹臥位第2斜位（強い頭低位）', -30, 155]]) {
         evalPrepare(t, ro); r = regionShares().sh;
         add(no, type, pose, t, ro, '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
       }
@@ -527,8 +528,8 @@ function textbookPath(dwell) {
       // ③ 右方向に 360° 回転し、第1斜位 35°
       pathMove([[0, -360], [0, -325]], dwell); rollCur = rollT = 35; pathShoot();
       r = anal(); add('5b', type, '③ 背臥位第1斜位', '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
-      // ④ 背臥位に戻し、右方向に 360° 回転して第2斜位、頭低位 −30°
-      pathMove([[0, 0], [0, -360], [0, -360 + r2], [-20, -360 + r2]], dwell); rollCur = rollT = 360 + r2; pathShoot();
+      // ④ 背臥位に戻し、右方向に 360° 回転し、弱い頭低位 −25° にしてから、ゆっくり第2斜位（虎の巻 p.92 の順。2026-11-10 に、先に第2斜位にしていたのを本の順に直した）
+      pathMove([[0, 0], [0, -360], [-25, -360], [-25, -360 + r2]], dwell); rollCur = rollT = 360 + r2; pathShoot();
       r = anal(); add('5c', type, '④ 背臥位第2斜位（頭低位）', '幽門前庭部の割合（%）', f1(r.antPyl), '5% 以下', r.antPyl <= 5);
       // ⑤ 背臥位に戻し、右回転で腹臥位、半臥位 25°（フトンを入れる）、頭低位 −30°
       pathMove([[0, 360 + r2], [0, 360], [0, 180]], dwell); rollCur = rollT = 180; pathShoot();
@@ -572,7 +573,7 @@ function depictionPath(dwell) {
   evalPrepare(90, 45); rollCur = rollT = 45; tiltCur = tiltT = 90;
   pathMove([[0, 45], [0, 0], [0, -1080]], dwell); rollCur = rollT = 0; shoot(rows[0].name);
   pathMove([[0, -360], [0, -325]], dwell); rollCur = rollT = 35; shoot(rows[1].name);
-  pathMove([[0, 0], [0, -360], [0, -360 + r2], [-20, -360 + r2]], dwell); rollCur = rollT = 360 + r2; shoot(rows[2].name);
+  pathMove([[0, 0], [0, -360], [-25, -360], [-25, -360 + r2]], dwell); rollCur = rollT = 360 + r2; shoot(rows[2].name);
   pathMove([[0, 360 + r2], [0, 360], [0, 180]], dwell); rollCur = rollT = 180;
   pathMove([[25, 180], [-45, 180], [-30, 180]], dwell); shoot(rows[3].name);
   pathMove([[0, 180], [-45, 180], [-30, 180], [-30, 155]], dwell); shoot(rows[4].name);

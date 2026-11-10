@@ -281,7 +281,7 @@ function poseName(tilt, roll) {
   // 台の角度の呼び方：立位 60〜90°、半立位 30〜60°、半臥位 1〜30°（必携テキスト p.76、高橋伸之「胃癌死をなくすために」の基準撮影法の定義）。
   // 0° 前後は水平（背臥位・腹臥位）、マイナスは頭低位（逆傾斜）
   // 頭低位は −37.5° を境に弱い頭低位（−30° のボタン）と強い頭低位（−45° のボタン）に分ける（2026-11-10。境は 2 つのボタンの真ん中）
-  const tl = tilt >= 60 ? '立位' : tilt >= 30 ? '半立位' : tilt >= 0.5 ? '半臥位' : tilt > -0.5 ? '水平' : tilt > -25 ? '弱い頭低位' : '強い頭低位';
+  const tl = tilt >= 60 ? '立位' : tilt >= 30 ? '半立位' : tilt >= 0.5 ? '半臥位' : tilt > -0.5 ? '水平' : tilt > -27.5 ? '弱い頭低位' : '強い頭低位';
   if (best[1] === '正面位' || best[1] === '第1斜位' || best[1] === '第2斜位')
     return (tl === '水平' ? '背臥位' : tl) + best[1];
   return (tl === '水平' ? '' : tl + '・') + best[1];
@@ -308,26 +308,51 @@ function levelOf(n) {
   if (f >= 1) return hmax[n];
   return hmin[n] + invFrac(f) * (hmax[n] - hmin[n]);
 }
+/* ---- バリウムの流れ（2026-11-10 に物理の式へ書き直した）----
+   胃を輪切りの断面の列とみて、隣り合う断面の間の流量 q（模型の体積/秒）を、浅い流れの運動方程式（サンブナン方程式）の
+   「局所慣性」の形（移流の項を省いたもの。Bates, Horritt & Fewtrell, J. Hydrology 387:33-45, 2010）で進める：
+       dq/dt = − g A ∂η/∂s − (τ_b P) / ρ
+     η：液面の高さ（重力の向きに測る）、A：境目で流れが通る断面積、P：ぬれている幅、ρ：バリウムの密度（baRho。200 w/v% で約 2560 kg/m³）
+     τ_b：壁のまさつ ＝ 降伏値 τ_y ＋ 粘性 3 μ u / h（浅い層流の式。Nusselt の膜流れと同じ）＋ 乱れ ρ c_f u|u|
+   粘度 μ・降伏値 τ_y は BA（BASICS.md 6.6 の資料の範囲から選んだ値）。c_f は滑らかな壁の乱流の目安 0.01（ひだのある胃の壁での実測はない。仮の値）。
+   境目の断面は円の一部（弓形）とみて、幅 W ＝ 2√(h(2r−h))、面積 A ≈ 2/3 W h。h は、境目の敷居（2 つの断面の底の高いほう）から上流側の液面まで。
+   液面の波の速さ √(g h) で 1 刻みに断面 1 つ分より進まないように、刻みを細かく分ける（CFL 条件）。
+   幽門は開き具合（edges の k。閉じているとき 0.10）を通る断面積に掛ける。食道は胃の向きにしか流さない（k2 ＝ 0）。
+   この式だと、傾けたときの流れの先端は √(g h) の数倍（毎秒 数十 cm）で進み、数秒で落ち着く。胃の中での流れの速さの実測とは照合していない */
+const FLOW = { cf: 0.01, cfl: 0.4, maxSub: 80 };
+const flowQ = new Float32Array(NN);            // 境目ごとの流量（edges の順。＋は i → j）
 function flowStep(dt) {
-  const K = 6.5, ds = dt / SUB;
-  for (let s = 0; s < SUB; s++) {
+  const g = G0 / UNIT_M, nu = (BA.mu * 1e-3 / baRho()) / (UNIT_M * UNIT_M), ty = (BA.ty / baRho()) / (UNIT_M * UNIT_M);   // 模型の長さ・秒の単位
+  // 刻みの数：いちばん深い所の波の速さと、いちばん短い断面の間隔から
+  let cmax = 0, dmin = 1e9;
+  for (let n = 0; n < NMAIN; n++) { if (wVol[n] > 1e-7) { const h = levelOf(n) - hmin[n]; if (h > cmax) cmax = h; } if (dl[n] < dmin) dmin = dl[n]; }
+  const nsub = Math.max(1, Math.min(FLOW.maxSub, Math.ceil(dt * Math.sqrt(g * Math.max(cmax, 0.05)) / (FLOW.cfl * Math.max(dmin, 0.02))))), ds = dt / nsub;
+  for (let s = 0; s < nsub; s++) {
+    for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
     const rev = (s & 1) === 1;
-    for (let e = 0; e < edges.length; e++) {
-      const E = edges[rev ? edges.length - 1 - e : e];
-      const i = E.i, j = E.j;
-      const B = Math.max(hmin[i], hmin[j]);
-      const si = levelOf(i), sj = levelOf(j);
-      let a, b, kk, head;
-      const hi2 = si - Math.max(sj, B), hj2 = sj - Math.max(si, B);
-      if (hi2 > 1e-5) { a = i; b = j; kk = E.k; head = hi2; }
-      else if (hj2 > 1e-5) { a = j; b = i; kk = E.k2; head = hj2; }
-      else continue;
-      const Ae = Math.min(area[i], area[j]);
-      let amt = K * kk * head * Ae * ds;
-      const lim = Math.min(wVol[a] * 0.5, cap[b] - wVol[b], 0.30 * Math.min(cap[i], cap[j]));
-      if (amt > lim) amt = lim;
-      if (amt <= 0) continue;
-      wVol[a] -= amt; wVol[b] += amt;
+    for (let e0 = 0; e0 < edges.length; e0++) {
+      const e = rev ? edges.length - 1 - e0 : e0, E = edges[e], i = E.i, j = E.j;
+      const B = Math.max(hmin[i], hmin[j]), si = Math.max(lvl[i], B), sj = Math.max(lvl[j], B);
+      const h = Math.max(si, sj) - B;                              // 敷居の上の深さ（上流側）
+      let q = flowQ[e];
+      if (h <= 1e-5) { flowQ[e] = 0; continue; }
+      const r = Math.max(0.05, Math.min(radius[i], radius[j])), hh = Math.min(h, 2 * r);
+      const W = 2 * Math.sqrt(Math.max(1e-8, hh * (2 * r - hh))), open = si > sj ? E.k : E.k2;
+      const A = Math.min(2 / 3 * W * hh, Math.min(area[i], area[j])) * (si === sj ? Math.max(E.k, E.k2) : open);
+      if (A <= 1e-9) { flowQ[e] = 0; continue; }
+      const dS = Math.max(0.02, (dl[i] + dl[j]) / 2);
+      q += ds * (-g * A * (sj - si) / dS);                           // 重力（液面の傾き）
+      const dy = ds * ty * W;                                       // 降伏値：これより弱い力では動かない
+      q = Math.abs(q) <= dy ? 0 : q - Math.sign(q) * dy;
+      const u = Math.abs(q) / A;
+      q /= 1 + ds * (3 * nu / (hh * hh) + FLOW.cf * u / hh);        // 粘性と乱れのまさつ（陰的に）
+      if ((q > 0 && E.k <= 0) || (q < 0 && E.k2 <= 0)) q = 0;
+      // 動かす量：上流の、敷居より上にある分と、下流の空きまで
+      let amt = q * ds; const a = amt > 0 ? i : j, b = amt > 0 ? j : i;
+      const lim = Math.min(wVol[a] * 0.5, Math.max(0, cap[b] - wVol[b]));
+      if (Math.abs(amt) > lim) { amt = Math.sign(amt) * lim; q = amt / ds; }
+      if (amt !== 0) { wVol[a] -= Math.abs(amt); wVol[b] += Math.abs(amt); }
+      flowQ[e] = q;
     }
   }
 }
