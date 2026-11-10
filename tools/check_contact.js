@@ -13,7 +13,7 @@ const res=await p.evaluate(()=>{
     part.push(v.y>28?'頭・首・肩':v.y<-30?(Math.abs(v.x+2)>12&&v.y>-60?'腕':'腰・脚'):(v.x>-17&&v.x<13?'胴':'腕'));}
   const q=new THREE.Quaternion(), w=new THREE.Vector3();
   function pen(lead){ // いちばん深いめり込み（cm、正がめり込み）と部位
-    twLift=TW_R*Math.abs(lead||0); applyPose(); q.copy(bodyGroup.quaternion); const S=BODY_SCALE, P=bodyGroup.position; const g=armAngle(tiltCur,rollCur); const lv=new THREE.Vector3(), mv=new THREE.Vector3(); const y0=(new THREE.Vector3(0,0,0)).applyMatrix4(new THREE.Matrix4().copy(L).invert()).y, kk=(lead||0)/(30/BODY_SCALE);
+    twLift=TW_R*Math.abs(lead||0); armEff=armAngle(tiltCur,rollCur); applyPose(); q.copy(bodyGroup.quaternion); const S=BODY_SCALE, P=bodyGroup.position; const g=armAngle(tiltCur,rollCur); const lv=new THREE.Vector3(), mv=new THREE.Vector3(); const y0=(new THREE.Vector3(0,0,0)).applyMatrix4(new THREE.Matrix4().copy(L).invert()).y, kk=(lead||0)/(30/BODY_SCALE);
     let worst=-1e9, wp='';
     for(let i=0;i<V.length;i+=3){if(g>0.03*Math.PI/Math.PI&&g>0.03){const c=armCut(LOC[i],LOC[i+1]);if(c>0.02&&c<0.98)continue;}armMove(lv.set(LOC[i],LOC[i+1],LOC[i+2]),g,mv);{const an=kk*Math.max(-30/BODY_SCALE,Math.min(30/BODY_SCALE,mv.y-y0)),c=Math.cos(an),sn=Math.sin(an),x=mv.x,z=mv.z;mv.x=c*x+sn*z;mv.z=-sn*x+c*z;}mv.applyMatrix4(L);w.copy(mv).applyQuaternion(q).multiplyScalar(S).add(P);
       if(w.x<TB.x0||w.x>TB.x1||Math.abs(w.z)>TB.w/2) continue;

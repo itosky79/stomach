@@ -30,7 +30,7 @@ function applyPose() {
   tiltGroup.quaternion.copy(qA);
   bodyGroup.quaternion.copy(qBase).multiply(qB);
   rollSupport(rollCur, _sup); bodyGroup.position.set(0, _sup.y + twLift, _sup.z);   // 体を天板に載せる（下の rollSupport）
-  uArm.value.z = armAngle(tiltCur, rollCur);                                 // 腕を挙げる角度（scene.js の BODY_VERT）
+  uArm.value.z = armEff;                                                     // 腕を挙げる角度（scene.js の BODY_VERT。下の updateArms）
   qWorldBody.copy(qA).multiply(bodyGroup.quaternion);
   placeTable();
   applyTwist();
@@ -52,6 +52,27 @@ function armAngle(tilt, roll) {
   const side = Math.abs(Math.sin(r)), front = Math.max(0, -Math.cos(r));   // 横の傾き・前の下向き（背臥位で 0、側臥位で横 1、腹臥位で前 1）
   const A = Math.max(side, front), sm = (e0, e1, t) => { const u = Math.max(0, Math.min(1, (t - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
   return ARM_MAX * sm(0.12, 0.45, A) * sm(60, 35, tilt);
+}
+/* 腕の動きをゆっくりにする（2026-11-10）：体の向きだけで角度を決めると、回転法で背臥位を通るたびに腕が下りて上がり、あわただしかった。
+   - 体を回している間（回転法・手順の経路）と、横や腹臥位の向きのあいだは、腕を挙げたままにする
+   - 背臥位・立位に落ち着いて 0.8 秒たってから下ろす
+   - 挙げ下ろしは 1 秒あたり ARM_RATE までの速さで、動き始めと止まる前はゆっくり
+   ただし、体の向きから決まる角度（armAngle）より下げることはしない（腕が天板にめり込まないように） */
+const ARM_RATE = 2.2;                           // ラジアン/秒（180° を約 1.5 秒）
+let armCur = 0, armVel = 0, armRest = 0, armEff = 0;
+function updateArms(dt) {
+  const need = armAngle(tiltCur, rollCur);
+  const flat = Math.max(0, Math.min(1, (60 - tiltCur) / 25));        // 立位・半立位では挙げない（armAngle と同じ）
+  const turning = rollDriven || Math.abs(rollVel) > 5;
+  let target;
+  if (need > 0.05 || (turning && flat > 0)) { target = ARM_MAX * Math.max(flat, need / ARM_MAX); armRest = 0; }
+  else { armRest += dt; target = armRest > 0.8 ? 0 : armCur; }
+  // 速さは目標との差に比例させ、最大 ARM_RATE、加速度も抑える（急に動き出さない）
+  const want = Math.max(-ARM_RATE, Math.min(ARM_RATE, (target - armCur) * 3));
+  armVel += Math.max(-6 * dt, Math.min(6 * dt, want - armVel));
+  armCur = Math.max(0, Math.min(ARM_MAX, armCur + armVel * dt));
+  if ((target - armCur) * armVel < 0 && Math.abs(target - armCur) < 0.01) armVel = 0;
+  armEff = Math.max(armCur, need);
 }
 function armMove(v, g, out) {                     // 体表のメッシュの座標の点 v を、腕の角度 g で動かす（BODY_VERT と同じ式）
   const w = armW(v.x, v.y); out.copy(v); if (w <= 0 || g === 0) return out;
@@ -95,7 +116,7 @@ function rollSupport(roll, out, tilt) {
   const key = meshSkin.parent && meshSkin.parent.position.toArray().join();
   if (!SUP || SUP.key !== key) buildSupport();
   const r = ((roll % 360) + 360) % 360 / 2, k = Math.min(179, Math.floor(r)), f = r - k;
-  const g = armAngle(tilt === undefined ? tiltCur : tilt, roll) / ARM_MAX * (SUP_G.length - 1), gi = Math.min(SUP_G.length - 2, Math.floor(g)), gf = g - gi;
+  const g = (tilt === undefined && roll === rollCur ? armEff : armAngle(tilt === undefined ? tiltCur : tilt, roll)) / ARM_MAX * (SUP_G.length - 1), gi = Math.min(SUP_G.length - 2, Math.floor(g)), gf = g - gi;
   const H = i => SUP.h[i][k] + (SUP.h[i][k + 1] - SUP.h[i][k]) * f;
   const hh = H(gi) + (H(gi + 1) - H(gi)) * gf, dd = SUP.d[k] + (SUP.d[k + 1] - SUP.d[k]) * f;
   out.y = hh - SUP.h0;                            // 背臥位を基準に、天板に触れるよう上下（外の点が近い向きでは天板へ下げる）

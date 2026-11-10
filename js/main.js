@@ -52,6 +52,7 @@ function loop(now) {
   else rollCur += (rollT - rollCur) * k;
   if (autoSpin) ctrl.az += dt * 0.28;
   applyRollFeel(dt);                              // 寝返りの途中のねじれ（sim.js）
+  updateArms(dt);                                 // 腕の挙げ下ろし（sim.js）
   applyPose(); applyCam();
   updateCompress();
 

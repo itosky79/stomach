@@ -59,6 +59,10 @@ v2 の患者の体表と骨（胸郭・胸骨・胸椎・腰椎）は BodyParts3
 - 入手先：https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html（`partof_BP3D_4.0_obj_99.zip`、`partof_element_parts.txt`）
 - ライセンス：CC BY 4.0（データベースのライセンスのページ、2025-02-27 更新）。出典を表示すれば、改変・再配布・派生物の公開ができる。継承（SA）の条件はない
   - 配布されている OBJ ファイルの先頭には、以前のライセンス（CC 表示-継承 2.1 日本）の文言が残っている。データベースとしては 2025 年に CC BY 4.0 に変わっているので、v2 では CC BY 4.0 として扱い、出典の文言も新しいものにした
-- 加工：`tools/build_anatomy.py` で、部品を選び、三角形を減らし（体表 16,000、骨 24,000）、v2 の座標（胃の中心が原点、cm）に変換して `v2/js/anatomy-data.js` に書き出した
-- 加工（胃）：`tools/fit_stomach.py` で、BodyParts3D の胃と十二指腸を輪切りにして中心の線と太さを求め、胃の型「解剖モデル」（`v2/js/data.js` の `TYPES.bp3d`）にした
+- 加工：`tools/build_anatomy.py` で、部品を選び、三角形を減らし（体表 16,000、骨 24,000）、v2 の座標（胃の中心が原点、cm）に変換して `js/anatomy-data.js` に書き出した
+- 加工（胃）：`tools/fit_stomach.py` で、BodyParts3D の胃と十二指腸を輪切りにして中心の線と太さを求め、胃の型「解剖モデル」（`js/data.js` の `TYPES.bp3d`）にした。さらに次のように改変している（BodyParts3D の胃の形そのままではない）
+  - 太さ：検査中の胃の中身（バリウム 150 mL ＋ 発泡剤のガス 250 mL）に容積が合うよう変え、胃角より口側ほどよく膨らむ割合は MRI の実測（Min ほか, PLoS ONE 2015）に合わせた（`js/model.js` の DISTEND）
+  - 穹窿部：太くし、背中側へ深くした（2026-11-04。`js/model.js` の FUNDUS）
+  - J 字の形：噴門より下を縦に 2 倍に伸ばし、胃角より先を持ち上げた（2026-11-10。`js/model.js` の JSHAPE）。教科書（虎の巻 pp.91-96）の X 線像と、教科書の記載との一致で選んだ値
+  - 体位による向き：体位ごとに、噴門のまわりのねじれと振れを加える（`js/data.js` の `TYPES.bp3d.twist`）
 - 表示：アプリの最初の案内に出典を 1 行出している

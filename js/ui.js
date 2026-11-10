@@ -617,6 +617,8 @@ function motionBuild(wps, r0) {
     else { sg = { tilt: w.tilt, r0: cur, r1: w.roll, dir, slow: !!w.slow, first: i, last: i }; segs.push(sg); }
     cur = w.roll;
   });
+  // 横や腹臥位を通る区間は、回り始める前に腕を挙げきる（腕が急に跳ね上がらないように。sim.js の updateArms）
+  for (const g of segs) { g.arms = 0; for (let i = g.first; i <= g.last; i++) g.arms = Math.max(g.arms, armAngle(wps[i].tilt, wps[i].roll)); }
   return { wps, segs, si: 0, th: r0, v: 0, wi: 0 };
 }
 // 1 コマ進める。終わったら false。M.wi は、いま向かっている経路の点
@@ -626,12 +628,13 @@ function motionStep(M, dt) {
   rollDriven = true;                                     // main.js：体の向きを rollT にそのまま合わせる
   if (M.segStart !== M.si) { M.segStart = M.si; M.th = g.r0; M.v = 0; }
   const rem = (g.r1 - M.th) * g.dir;
-  if (rem > 0.02) {
+  const waitArms = M.v === 0 && g.arms > 0.05 && armCur < 0.9 * g.arms;   // 腕を挙げている途中は、まだ回り始めない
+  if (rem > 0.02 && !waitArms) {
     const want = Math.min(rollSpeed(M.th, g.dir, g.slow), Math.sqrt(2 * ROLL_ACC * rem));   // 止まる前は滑らかに遅く
     M.v += Math.max(-ROLL_ACC * dt, Math.min(ROLL_ACC * dt, want - M.v));
     M.v = Math.max(M.v, Math.min(want, 2));             // ごく遅いまま止まりきらないのを防ぐ
     M.th += g.dir * Math.min(M.v * dt, rem);
-  } else { M.th = g.r1; M.v = 0; }
+  } else if (!waitArms) { M.th = g.r1; M.v = 0; }   // 着いた（腕を待っている間は、その場で止まったまま）
   rollT = M.th;
   let wi = g.first;
   while (wi < g.last && (M.wps[wi].roll - rollT) * g.dir <= 0.5) wi++;
