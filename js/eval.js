@@ -49,7 +49,7 @@
    30 回測った平均。シミュレーションの計算時間は別の列に出す。
    平均 fps：その体位のまま、通常の描画ループを 10 秒動かしたときの 1 秒あたりの描画回数。 */
 
-const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), gas: 250, air: 0.6, pylorus: false, twistMax: [30, 30], dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
+const EVAL = { type: 'bp3d', ml: 150 / Math.pow(BODY_SCALE, 3), gas: 400, air: 0.6, pylorus: false, twistMax: [30, 30], dt: 1 / 60, simSec: 10, repeat: 10, fpsSec: 10, timeReps: 30 };
 const EVAL_KEY = 'stomach.v2.eval';
 /* ---- 状態の控えと復元（評価のあとは元の画面に戻す）---- */
 function evalSave() {

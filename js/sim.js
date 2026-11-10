@@ -4,7 +4,8 @@ let curType = 'bp3d', curMode = 0, curPose = 'stand';   // 既定は解剖モデ
 let pylorusOpen = false, labelMode = 1, showBone = true;
 let autoSpin = false, viewMode = 1, skinOpacity = 0.30;
 let airLevel = 0.6, targetMl = 150 / Math.pow(BODY_SCALE, 3), administered = 0;   // バリウム 150 mL（実寸。学会マニュアル）。targetMl は模型の単位
-let gasMl = 250;   // 発泡剤のガス（実寸 mL）。添付文書の 100〜400 mL の真ん中。胃の大きさはバリウム＋ガスに合わせる（model.js の rebuild）
+let gasMl = 400;   // 発泡剤のガス（実寸 mL）。添付文書の 100〜400 mL の上の端（2026-11-10 に 250 から変えた：J 字に伸ばした胃を、教科書・国試の像に近い太さにするため。
+                   // バリウムと合わせて 550 mL。発泡剤で膨らませた胃の CT の実測 438 ± 163 mL（Kim ほか, 2020）の範囲）。胃の大きさはバリウム＋ガスに合わせる（model.js の rebuild）
 let compRegion = '', compAmt = 0;
 let tiltCur = 90, rollCur = 0, tiltT = 90, rollT = 0;
 let rollDriven = false;   // 回転法・手順の経路が体の向きを動かしている間 true（ui.js の motionStep）
