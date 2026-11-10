@@ -103,7 +103,7 @@ function buildRings(pts, rads, N, off, taper, radMul) {
    押し込む深さは強さ amt（0〜1）で決め、amt = 1 で前後の壁の隙間が COMP_GAP（実寸およそ 3 mm）まで薄くなる。
    円のふちでは押し込みを滑らかに弱める（壁が裂けないように）。
    つぶれた断面は、輪の多角形の面積から断面積と容量を求め直す。入りきらなくなったバリウムは rebuild の最後で隣の断面へあふれさせる */
-const SHAPE = { stretch: 1, lift: 0 };   // 胃の J 字の形（rebuild）。試験中：既定は元の形のまま
+const JSHAPE = { stretch: 1, lift: 0 };   // 胃の J 字の形（rebuild）。試験中：既定は元の形のまま
 const FUNDUS = { r: 0.6, d: 2.6 };       // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 2.6（実寸およそ 3.1 cm）。2026-11-04 に 1.35 倍・1.5 から深くした
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標）。sim.js の setCompAxis が体位から決める
@@ -204,12 +204,12 @@ function rebuild() {
   const fEnd = reg('fundus')[3], fW = c => { const t = Math.max(0, Math.min(1, c / fEnd)); return 1 - t * t * (3 - 2 * t); };   // 胃底部の先端 1 → 胃体部との境 0
   const fMul = c => 1 + FUNDUS.r * fW(c);
   const pts = S.pts.map((p, k) => [p[0], p[1], p[2] - FUNDUS.d * fW(k)]);   // z は腹側が +、背中側へ下げる
-  // 胃の J 字の形（SHAPE。試験中）：噴門より下を縦に SHAPE.stretch 倍に伸ばし、胃角より先（前庭部〜幽門）を SHAPE.lift だけ持ち上げる
-  if (SHAPE.stretch !== 1 || SHAPE.lift !== 0) {
+  // 胃の J 字の形（JSHAPE。試験中）：噴門より下を縦に JSHAPE.stretch 倍に伸ばし、胃角より先（前庭部〜幽門）を JSHAPE.lift だけ持ち上げる
+  if (JSHAPE.stretch !== 1 || JSHAPE.lift !== 0) {
     const yc = pts[Math.min(pts.length - 1, Math.round(S.cardia))][1], ca = (ang[2] + ang[3]) / 2, cp = reg('pylorus')[2];
     for (let k = 0; k < pts.length; k++) {
-      const dy = pts[k][1] - yc; if (dy < 0) pts[k][1] = yc + dy * SHAPE.stretch;
-      if (k > ca) pts[k][1] += SHAPE.lift * Math.min(1, (k - ca) / Math.max(0.5, cp - ca));
+      const dy = pts[k][1] - yc; if (dy < 0) pts[k][1] = yc + dy * JSHAPE.stretch;
+      if (k > ca) pts[k][1] += JSHAPE.lift * Math.min(1, (k - ca) / Math.max(0.5, cp - ca));
     }
   }
   buildRings(pts, R0, NMAIN, 0, 0.06, fMul);
