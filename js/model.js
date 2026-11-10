@@ -303,7 +303,8 @@ function rebuild() {
   edges = [];
   for (let i = 0; i < NMAIN - 1; i++) {
     let k = 1, k2 = 1;
-    if (regionList[regionOf[i]][0] === 'pylorus' || regionList[regionOf[i + 1]][0] === 'pylorus') { k = k2 = pylorusOpen ? 0.2 : 0.01; }   // 幽門の開き具合（流れが通る断面積に掛ける。sim.js の flowStep）。閉じているときも少しもれる。値は仮（流れを物理の式にした 2026-11-10 に 0.85・0.10 から小さくした）
+    // 幽門の輪（幽門部と十二指腸球部の境目）だけを絞る。2026-11-10：前は幽門部の区間の境目すべてを絞っていて、幽門部の中のバリウムが動けずに残っていた
+    if (regionList[regionOf[i]][0] === 'pylorus' && regionList[regionOf[i + 1]][0] === 'duode') { k = k2 = pylorusOpen ? 0.2 : 0.01; }   // 幽門の開き具合（流れが通る断面積に掛ける。sim.js の flowStep）。閉じているときも少しもれる。値は仮（流れを物理の式にした 2026-11-10 に 0.85・0.10 から小さくした）
     edges.push({ i: i, j: i + 1, k: k, k2: k2 });
   }
   for (let i = NMAIN; i < NN - 1; i++) edges.push({ i: i, j: i + 1, k: 1, k2: 0 });   // 食道の中も口の側へは戻さない（蠕動で胃へ送る。sim.js の dose）

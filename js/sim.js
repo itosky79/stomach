@@ -313,7 +313,8 @@ function levelOf(n) {
    「局所慣性」の形（移流の項を省いたもの。Bates, Horritt & Fewtrell, J. Hydrology 387:33-45, 2010）で進める：
        dq/dt = − g A ∂η/∂s − (τ_b P) / ρ
      η：液面の高さ（重力の向きに測る）、A：境目で流れが通る断面積、P：ぬれている幅、ρ：バリウムの密度（baRho。200 w/v% で約 2560 kg/m³）
-     τ_b：壁のまさつ ＝ 降伏値 τ_y ＋ 粘性 3 μ u / h（浅い層流の式。Nusselt の膜流れと同じ）＋ 乱れ ρ c_f u|u|
+     τ_b：壁のまさつ ＝ ビンガム流体（降伏値 τ_y・粘度 μ）の浅い層流の式から求めたずり応力（下の flowStep の中の説明）＋ 乱れ ρ c_f u|u|
+     バリウムのずり流動化（速く動くほど粘度が下がる）とチキソトロピーは、流動曲線の資料がないので入れていない（粘度は一定）
    粘度 μ・降伏値 τ_y は BA（BASICS.md 6.6 の資料の範囲から選んだ値）。c_f は滑らかな壁の乱流の目安 0.01（ひだのある胃の壁での実測はない。仮の値）。
    境目の断面は円の一部（弓形）とみて、幅 W ＝ 2√(h(2r−h))、面積 A ≈ 2/3 W h。h は、境目の敷居（2 つの断面の底の高いほう）から上流側の液面まで。
    液面の波の速さ √(g h) で 1 刻みに断面 1 つ分より進まないように、刻みを細かく分ける（CFL 条件）。
@@ -342,10 +343,15 @@ function flowStep(dt) {
       if (A <= 1e-9) { flowQ[e] = 0; continue; }
       const dS = Math.max(0.02, (dl[i] + dl[j]) / 2);
       q += ds * (-g * A * (sj - si) / dS);                           // 重力（液面の傾き）
-      const dy = ds * ty * W;                                       // 降伏値：これより弱い力では動かない
-      q = Math.abs(q) <= dy ? 0 : q - Math.sign(q) * dy;
-      const u = Math.abs(q) / A;
-      q /= 1 + ds * (3 * nu / (hh * hh) + FLOW.cf * u / hh);        // 粘性と乱れのまさつ（陰的に）
+      if (Math.abs(q) <= ds * ty * W) q = 0;                         // 降伏値：壁のずり応力が τ_y に届かない力では動かない
+      else {
+        // ビンガム流体の浅い層の流れ：平均の速さ u と壁のずり応力 τ_b の関係は u = τ_b h /(3μ) × (1 − 1.5 r + 0.5 r³)、r = τ_y / τ_b
+        // （底だけがずれ、上は固まりのまま滑る流れ。壁の膜の流れ落ち updateWet と同じ式）。u から τ_b をニュートン法で解く。
+        // 速いときは τ_b ≈ 1.5 τ_y ＋ 3μu/h に近づく。T ＝ τ_b / ρ
+        const u = Math.abs(q) / A, c3 = hh / (3 * nu); let T = 1.5 * ty + u / c3;
+        if (ty > 0) for (let it = 0; it < 3; it++) { const f = c3 * (T - 1.5 * ty + 0.5 * ty * ty * ty / (T * T)) - u, df = c3 * (1 - ty * ty * ty / (T * T * T)); if (df > 1e-9) T = Math.max(ty * 1.0001, T - f / df); }
+        q /= 1 + ds * (T * W / Math.abs(q) + FLOW.cf * u / hh);       // ビンガムのまさつと乱れのまさつ（陰的に。向きは変えない）
+      }
       if ((q > 0 && E.k <= 0) || (q < 0 && E.k2 <= 0)) q = 0;
       // 動かす量：上流の、敷居より上にある分と、下流の空きまで
       let amt = q * ds; const a = amt > 0 ? i : j, b = amt > 0 ? j : i;
