@@ -129,7 +129,7 @@ function pipSave() { try { localStorage.setItem('stomach.pip', JSON.stringify(PI
 /* 透視の視野。field：縦の長さ（cm、台の座標は実寸 cm）。以前は胃の全体が入る広さ（縦およそ 29 cm）だったが、
    透視像はひだなどを見るためのもので、胃の全体は 3D で見るので、既定を 17 cm にした。
    視野の真ん中は胃の容積の重心。圧迫しているときは圧迫した場所。pan は「X線像」だけの表示でドラッグして動かした量（cm） */
-const XFOV = { field: 17, auto: true, panX: 0, panY: 0 };   // auto：バリウムの無い所（二重造影の所）が全部入るように視野を自動で決める（既定）
+const XFOV = { field: 17, auto: true, panX: 0, panY: 0 };   // auto：胃の全体が入るように視野を自動で決める（既定）
 const _xc = new THREE.Vector3(), _xx = new THREE.Vector3();
 function setXcam(aspect) {
   // 管球も受像器も台に固定されているので、向きは体位によらず一定
@@ -146,11 +146,13 @@ function setXcam(aspect) {
     _xc.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xc);
     cx = _xc.dot(_xx); cy = _xc.dot(AY);
   }
-  xcam.position.copy(AZ).multiplyScalar(br * 3.2).addScaledVector(_xx, cx + XFOV.panX).addScaledVector(AY, cy + XFOV.panY);
+  // 遠近法（2026-11-10）：カメラを X 線管の焦点（受像器から TB.sid 上）に置く。映像系は胃の位置に合わせて天板の上を動くので、焦点は視野の真ん中の真上。
+  // 視野の大きさ（field）は胃の中心の高さでの縦の長さ。焦点に近い側の壁は大きく、遠い側は小さく写る
+  const fy = TB.top - TB.thick - 3 + TB.sid, sod = Math.max(30, fy - bodyGroup.position.y);
+  xcam.position.copy(AZ).multiplyScalar(fy).addScaledVector(_xx, cx + XFOV.panX).addScaledVector(AY, cy + XFOV.panY);
   xcam.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(_xx.clone(), AY.clone(), AZ.clone()));
-  const hh = field / 2, hw = hh * aspect;
-  xcam.left = -hw; xcam.right = hw; xcam.top = hh; xcam.bottom = -hh;
-  xcam.near = 1; xcam.far = br * 9;
+  xcam.fov = 2 * Math.atan(field / 2 / sod) * 180 / Math.PI; xcam.aspect = aspect;
+  xcam.near = 5; xcam.far = fy + br * 4 + 60;
   xcam.updateProjectionMatrix();
   xcam.updateMatrixWorld();
 }
@@ -433,7 +435,6 @@ function xfovAuto(aspect) {
     const pts = [];
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (let i = 0; i < NMAIN; i++) {
-      if (regionList[regionOf[i]][0] === 'duode') continue;
       for (let j = 0; j < CM; j++) {
         const v = i * CM + j;
         _xa.set(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]).applyMatrix4(_xm);
@@ -442,38 +443,11 @@ function xfovAuto(aspect) {
         if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
       }
     }
-    const C = XG_CELL, gx = Math.max(1, Math.ceil((x1 - x0) / C) + 1), gy = Math.max(1, Math.ceil((y1 - y0) / C) + 1);
-    const pool = new Uint8Array(gx * gy), wall = new Uint8Array(gx * gy);
-    for (let k = 0; k < pts.length; k += 3) {
-      const c = Math.floor((pts[k] - x0) / C) + Math.floor((pts[k + 1] - y0) / C) * gx;
-      if (pts[k + 2]) pool[c] = 1; else wall[c] = 1;
-    }
-    // 溜まったバリウムの升目は、隣の升目も白くなるので 1 升ふくらませる。残った「二重造影だけ」の升目の範囲（端の 5 % ずつを除く）を視野にする
-    const cxs = [], cys = [];
-    for (let y = 0; y < gy; y++) for (let x = 0; x < gx; x++) {
-      if (!wall[x + y * gx]) continue;
-      let p = 0;
-      for (let dy = -1; dy <= 1 && !p; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const xx = x + dx, yy = y + dy;
-        if (xx >= 0 && yy >= 0 && xx < gx && yy < gy && pool[xx + yy * gx]) { p = 1; break; }
-      }
-      if (!p) { cxs.push(x0 + (x + 0.5) * C); cys.push(y0 + (y + 0.5) * C); }
-    }
-    let best = null, bs = cxs.length;
-    if (bs) {
-      cxs.sort((a, b) => a - b); cys.sort((a, b) => a - b);
-      const q = (A, f) => A[Math.min(A.length - 1, Math.floor(A.length * f))];
-      const ax0 = q(cxs, 0.05), ax1 = q(cxs, 0.95), ay0 = q(cys, 0.05), ay1 = q(cys, 0.95);
-      const h = Math.max(ay1 - ay0, (ax1 - ax0) / Math.max(0.3, aspect)) * 1.15 + C;
-      best = { cx: (ax0 + ax1) / 2, cy: (ay0 + ay1) / 2, field: Math.max(7, Math.min(20, h)) };
-    }
-    if (best && bs >= 15) {
-      XAUTO.goal = best;
-      XAIM.text = 'バリウムの無い所（二重造影）';
-    } else {
-      _xa.copy(xfovCenter()); bodyGroup.updateMatrixWorld(true); _xa.applyMatrix4(bodyGroup.matrixWorld); tiltGroup.worldToLocal(_xa);
-      XAUTO.goal = { cx: _xa.dot(ax), cy: _xa.dot(AY), field: 17 };
-    }
+    // 胃の全体（十二指腸球部まで）が入るように、ふちに余白を付けて視野を決める（2026-11-10。本物の透視像のように胃の全体を写す。
+    // 前は二重造影の所だけに寄っていて、胃の全体が見えないことがあった）。遠近法で手前の壁が大きく写る分も余白に入れる
+    const h = Math.max(y1 - y0, (x1 - x0) / Math.max(0.3, aspect)) * 1.3;
+    XAUTO.goal = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, field: Math.max(16, Math.min(40, h)) };
+    XAIM.text = '';
   }
   const dt = Math.min(0.1, (now - (XAUTO.last || now)) / 1000); XAUTO.last = now;
   if (!XAUTO.cur) XAUTO.cur = { ...XAUTO.goal };

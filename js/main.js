@@ -55,6 +55,7 @@ function loop(now) {
   updateArms(dt);                                 // 腕の挙げ下ろし（sim.js）
   futonStep();                                    // 腹臥位の頭低位で圧迫フトンを入れる（sim.js）
   applyPose(); applyCam();
+  updateTblPlane();
   updateCompress();
 
   tiltGroup.updateMatrixWorld(true);

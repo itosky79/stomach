@@ -40,11 +40,12 @@ void main(){
 // 腕の頂点（aArm ＝ 腕らしさ 0〜1）を、肩の高さ・奥行き（uArm.x, uArm.y）を通る左右の軸のまわりに前から上へ回す
 const uTw = { value: new THREE.Vector3(0, 0, 25) };   // x：長さあたりのねじれ、y：胃の高さ、z：ねじれが増えるのはここまで（肩・腰。メッシュの長さ）
 const uArm = { value: new THREE.Vector3(0, 0, 0) };
+const uTbl = { value: new THREE.Vector4(0, 1, 0, -1e6) };   // 天板の面（世界の座標。法線と距離）。腕のうち天板より下になる所は描かない（sim.js の updateTblPlane）
 const uArm2 = { value: new THREE.Vector3(0, 17, 0.3) };   // x：胴の真ん中、y：肩の関節までの横の距離、z：挙げきったときに内へ寄せる角度（ARM から入れる）
 const BODY_VERT = `
 uniform vec3 uTw; uniform vec3 uArm; uniform vec3 uArm2;
 attribute float aArm; attribute float aArmC;
-varying vec3 vN; varying vec3 vVd; varying vec3 vL; varying float vArmC;
+varying vec3 vN; varying vec3 vVd; varying vec3 vL; varying float vArmC; varying vec3 vWp;
 void main(){
   vL = position; vArmC = aArmC;
   vec3 q = position, qn = normal;
@@ -61,15 +62,15 @@ void main(){
   float a = uTw.x * clamp(q.y - uTw.y, -uTw.z, uTw.z), c = cos(a), s = sin(a);   // 肩より上・腰より下は肩・腰と同じだけ回る
   vec3 p = vec3(c*q.x + s*q.z, q.y, -s*q.x + c*q.z);
   vec3 nn = vec3(c*qn.x + s*qn.z, qn.y, -s*qn.x + c*qn.z);
-  vec4 wp = modelMatrix * vec4(p,1.0);
+  vec4 wp = modelMatrix * vec4(p,1.0); vWp = wp.xyz;
   vN = normalize(mat3(modelMatrix) * nn);
   vVd = normalize(cameraPosition - wp.xyz);
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 // 腕を挙げている間は、腕と腰をつなぐ三角形（境目の値が 0〜1 の間）を描かない（引き伸ばされた膜になるため）
 function bodyVert(m) {
-  m.vertexShader = BODY_VERT; m.uniforms.uTw = uTw; m.uniforms.uArm = uArm; m.uniforms.uArm2 = uArm2;
-  m.fragmentShader = m.fragmentShader.replace('void main(){', 'varying float vArmC; uniform vec3 uArm;\n      void main(){\n        if (uArm.z > 0.03 && vArmC > 0.02 && vArmC < 0.98) discard;');
+  m.vertexShader = BODY_VERT; m.uniforms.uTw = uTw; m.uniforms.uArm = uArm; m.uniforms.uArm2 = uArm2; m.uniforms.uTbl = uTbl;
+  m.fragmentShader = m.fragmentShader.replace('void main(){', 'varying float vArmC; varying vec3 vWp; uniform vec3 uArm; uniform vec4 uTbl;\n      void main(){\n        if (uArm.z > 0.03 && vArmC > 0.02 && vArmC < 0.98) discard;\n        if (vArmC > 0.5 && dot(vWp, uTbl.xyz) < uTbl.w) discard;');
   return m;
 }
 function litMat(color, opacity, baseA, rimA) {
@@ -143,7 +144,7 @@ renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // r128 と同じく�
 renderer.autoClear = false;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 2000);
-const xcam = new THREE.OrthographicCamera(-12, 12, 16, -16, 1, 500);
+const xcam = new THREE.PerspectiveCamera(10, 1, 1, 500);   // 透視像のカメラ：X 線管の焦点に置く（遠近法。2026-11-10。前は平行な投影だった）
 const tiltGroup = new THREE.Group(); scene.add(tiltGroup);       // 撮影台（起倒する）
 const bodyGroup = new THREE.Group(); tiltGroup.add(bodyGroup);   // 台の上の患者（体軸回転する）
 const anatGroup = new THREE.Group(); bodyGroup.add(anatGroup);   // 体表・骨格（解剖座標）

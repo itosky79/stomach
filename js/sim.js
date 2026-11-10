@@ -47,8 +47,10 @@ const _sup = { y: 0, z: 0 };
 let SUP = null;
 // 腕を挙げる角度（ラジアン）：体の横（左右の向き）か前が天板へ向くほど挙げ、背臥位と立位では下ろしたまま。
 // 前（腹側）は天板の向き（台の −y）、横は台の ±y への傾き。立位〜半立位（起倒 35〜60°）では挙げない
+const ARMS_UP = false;                           // 腕を挙げるか。2026-11-10：挙げ下ろしが落ち着かないので、初めの姿勢（解剖学的正面。腕は体の横）のままにした
 const ARM_MAX = Math.PI;                         // 頭の上まで（180°）
 function armAngle(tilt, roll) {
+  if (!ARMS_UP) return 0;
   const r = roll * Math.PI / 180;
   const side = Math.abs(Math.sin(r)), front = Math.max(0, -Math.cos(r));   // 横の傾き・前の下向き（背臥位で 0、側臥位で横 1、腹臥位で前 1）
   const A = Math.max(side, front), sm = (e0, e1, t) => { const u = Math.max(0, Math.min(1, (t - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
@@ -62,6 +64,7 @@ function armAngle(tilt, roll) {
 const ARM_RATE = 2.2;                           // ラジアン/秒（180° を約 1.5 秒）
 let armCur = 0, armVel = 0, armRest = 0, armEff = 0;
 function updateArms(dt) {
+  if (!ARMS_UP) { armCur = armVel = armEff = 0; return; }
   const need = armAngle(tiltCur, rollCur);
   const flat = Math.max(0, Math.min(1, (60 - tiltCur) / 25));        // 立位・半立位では挙げない（armAngle と同じ）
   const turning = rollDriven || Math.abs(rollVel) > 5;
@@ -96,6 +99,7 @@ function buildSupport() {
   const h = SUP_G.map(() => new Float32Array(N + 1)), ht = new Float32Array(N + 1);
   SUP_G.forEach((gf, gi) => {
     const pts = []; for (let i = 0; i < loc.length; i += 3) {
+      if (!ARMS_UP && armCut(loc[i], loc[i + 1]) > 0.02) continue;   // 腕を体の横に置いたままのときは、腕では支えない（胴・頭・脚で天板に触れる。天板より下になる腕は描かない）
       if (gf > 0) { const c = armCut(loc[i], loc[i + 1]); if (c > 0.02 && c < 0.98) continue; }   // 描かない境目の点は除く
       armMove(v.set(loc[i], loc[i + 1], loc[i + 2]), gf * ARM_MAX, w); w.applyMatrix4(M); pts.push(w.x, w.y, w.z); }
     for (let k = 0; k <= N; k++) {
@@ -590,6 +594,12 @@ function futonStep() {
   const d = Math.abs(((rollCur - 180) % 360 + 540) % 360 - 180), st = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
   const want = FUTON.amt * st((-5 - tiltCur) / 15) * (1 - st((d - 45) / 30));
   if (Math.abs(want - futonAmt) > 0.02 || (want !== futonAmt && (want === 0 || want === FUTON.amt))) { futonAmt = want; rebuildAll(); }
+}
+const _tn = new THREE.Vector3(), _tp = new THREE.Vector3();
+function updateTblPlane() {   // 天板の面を世界の座標で（scene.js の uTbl）。腕のうち天板の面より下の所を描かないため
+  tiltGroup.updateMatrixWorld(true);
+  _tn.set(0, 1, 0).transformDirection(tiltGroup.matrixWorld); _tp.set(0, TB.top, 0).applyMatrix4(tiltGroup.matrixWorld);
+  uTbl.value.set(_tn.x, _tn.y, _tn.z, _tn.dot(_tp));
 }
 function rebuildAll() {
   rebuild();
