@@ -106,9 +106,18 @@ function buildRings(pts, rads, N, off, taper, radMul) {
 // 胃の J 字の形（rebuild）：噴門より下を縦に 2 倍、胃角より先を 1.5（実寸およそ 1.8 cm）持ち上げる（2026-11-10）。
 // BodyParts3D の胃は寝た状態の横に長い形なので、虎の巻 pp.91-96 の X 線像（縦に長い J 字）に近づけた。値は、教科書の 10 項目と
 // 像の見比べで選んだ仮の値（伸び 1〜2、持ち上げ 0〜3 を試した。TEXTBOOK_CHECK.md の最後）
-const JSHAPE = { stretch: 2, lift: 1.5, fwd: 0, body: 1, bodyAt: 0.6 };   // fwd：噴門より下へ 1 下がるごとに腹側へ fwd だけ出す（試しただけで 0 のまま）。body：胃体部だけを腹側へ出す量（1 = 実寸およそ 1.2 cm）、bodyAt：その山の位置（2026-11-10。背臥位の溜まりが胃体部へ広がらないように。見た目と教科書の 10 項目で決めた値）
+// 胃の形の改変（BodyParts3D の胃から。値はどれも本の像の見た目と教科書の 10 項目で選んだもので、実測ではない）
+//   stretch：噴門より下を縦に伸ばす倍率、lift：胃角より先（前庭部〜幽門）を持ち上げる量、fwd：試しただけ（0 のまま）
+//   body・bodyAt：胃体部だけを腹側へ出す量と山の位置（2026-11-10。背臥位の溜まりが胃体部へ広がらないように）
+//   pull：胃角より先を胃角のほうへ横に寄せる割合、ant・antZ：前庭部〜幽門前部を太くする量と、その分だけ中心を腹側へ出す量、
+//   bulb・bulbR：十二指腸球部を上へ向ける量と太くする量（2026-11-10。胃角部から十二指腸までを本の像に近づけるため）
+const JSHAPE = { stretch: 2, lift: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 0.6 };
 const FUNDUS = { r: 0.6, d: 4 };         // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 4（実寸およそ 4.8 cm）。2026-11-04 に 1.35 倍・1.5 から 2.6 へ、2026-11-10 に 4 へ深くした
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
+// 圧迫フトン（2026-11-10）：腹臥位の頭低位で腹の下に入れる枕。胃体部の前の壁を背中側へ押す（applyCompression を腹側からの向きで使う）。
+// futonAmt は今の強さ（0〜FUTON.amt。sim.js の futonStep が体位から決める）。FUTON.amt は見た目と教科書の 10 項目で選んだ値（実測ではない）
+const FUTON = { amt: 0.45 };
+let futonAmt = 0;
 let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標）。sim.js の setCompAxis が体位から決める
 function ringArea(i) {   // 断面 i の輪の多角形の面積（断面の平面 U・V で測る）
   const c = i * 3, ux = frameU[c], uy = frameU[c + 1], uz = frameU[c + 2], vx = frameV[c], vy = frameV[c + 1], vz = frameV[c + 2];
@@ -205,15 +214,25 @@ function rebuild() {
   // 背臥位や頭低位で、胃底部により多くのバリウムが溜まるようにするため。胃全体の容積はこのあとバリウム＋ガスに合わせるので変わらない。
   // 値は見た目と溜まり方で決めた仮の値（実測と照らし合わせていない）
   const fEnd = reg('fundus')[3], fW = c => { const t = Math.max(0, Math.min(1, c / fEnd)); return 1 - t * t * (3 - 2 * t); };   // 胃底部の先端 1 → 胃体部との境 0
-  const fMul = c => 1 + FUNDUS.r * fW(c);
+  // 前庭部〜幽門前部の太さ（JSHAPE.ant）：元の形は幽門へ向かって早くから細くなる（空腹で縮んだ形）ので、前庭部の始まりから太くしていき、
+  // 幽門の輪の手前まで保って、輪で元の太さへ戻す（本の像の、太い前庭部と短い幽門管の形）。近位：遠位の容積の比（DISTEND）はこのあと合わせるので変わらない
+  const an0 = reg('antrum')[2], an1 = reg('pylorus')[2], an2 = reg('duode')[2], sm01 = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+  const antMul = c => !JSHAPE.ant || c <= an0 || c >= an2 ? 1 : 1 + JSHAPE.ant * sm01((c - an0) / (an1 - an0)) * sm01((an2 - c) / (0.35 * (an2 - an1)));
+  const fMul = c => (1 + FUNDUS.r * fW(c)) * antMul(c);
   const pts = S.pts.map((p, k) => [p[0], p[1], p[2] - FUNDUS.d * fW(k)]);   // z は腹側が +、背中側へ下げる
+  if (JSHAPE.ant && JSHAPE.antZ) for (let k = 0; k < pts.length; k++) pts[k][2] += JSHAPE.antZ * (antMul(k) - 1) / JSHAPE.ant;   // 太くした分、中心を腹側へ（背中側の壁を下げない。背臥位でここに溜まらないように）
   // 胃の J 字の形（JSHAPE。試験中）：噴門より下を縦に JSHAPE.stretch 倍に伸ばし、胃角より先（前庭部〜幽門）を JSHAPE.lift だけ持ち上げる
-  if (JSHAPE.stretch !== 1 || JSHAPE.lift !== 0 || JSHAPE.fwd || JSHAPE.body) {
+  if (JSHAPE.stretch !== 1 || JSHAPE.lift !== 0 || JSHAPE.fwd || JSHAPE.body || JSHAPE.pull !== 1 || JSHAPE.bulb) {
     const yc = pts[Math.min(pts.length - 1, Math.round(S.cardia))][1], ca = (ang[2] + ang[3]) / 2, cp = reg('pylorus')[2];
     for (let k = 0; k < pts.length; k++) {
       const dy = pts[k][1] - yc; if (dy < 0) { pts[k][1] = yc + dy * JSHAPE.stretch; pts[k][2] += JSHAPE.fwd * (-dy) * JSHAPE.stretch; }
       if (k > ca) pts[k][1] += JSHAPE.lift * Math.min(1, (k - ca) / Math.max(0.5, cp - ca));
     }
+    if (JSHAPE.pull !== 1) {   // 胃角より先を、胃角のほうへ横に寄せる（幽門が右へ行きすぎないように）
+      const k0 = Math.floor(ca), xa = pts[k0][0] + (pts[Math.min(pts.length - 1, k0 + 1)][0] - pts[k0][0]) * (ca - k0);
+      for (let k = k0 + 1; k < pts.length; k++) pts[k][0] = xa + (pts[k][0] - xa) * JSHAPE.pull;
+    }
+    if (JSHAPE.bulb) for (let k = Math.ceil(cp); k < pts.length; k++) pts[k][1] += JSHAPE.bulb * (k - cp);   // 幽門より先（十二指腸球部）を上へ向ける
   }
   if (JSHAPE.body) {   // 胃体部だけを腹側へ出す（胃底部の端 0 → 胃体部の中ほどで最大 → 胃角部の始まり 0）。背臥位で胃底部の溜まりが胃体部へ広がらないように
     const b0 = fEnd * 0.6, b1 = ang[2], bm = b0 + (b1 - b0) * JSHAPE.bodyAt;
@@ -227,7 +246,9 @@ function rebuild() {
   distK = [Math.sqrt(want * ratio / (1 + ratio) / P1), Math.sqrt(want / (1 + ratio) / D1)];
   lumenK = Math.sqrt(want / (P1 + D1));
   const mulD = x => { const c = x, w = wDist(c); return distK[0] * (1 - w) + distK[1] * w; };
-  buildRings(pts, R0, NMAIN, 0, 0.06, x => (x >= pc ? lumenK : mulD(x)) * fMul(x));
+  // 十二指腸球部の太さ（JSHAPE.bulbR）：幽門のすぐ先でいちばん太く（1 + bulbR 倍）、先へ行くほど細くする（球部の形。本の像に合わせた見た目の値）
+  const nEnd = pts.length - 1, bulbMul = x => { if (!JSHAPE.bulbR || x < pc) return 1; const t = (x - pc) / Math.max(0.5, nEnd - pc), up = Math.min(1, t / 0.3); return 1 + JSHAPE.bulbR * up * up * (3 - 2 * up) * (1 - 0.6 * Math.max(0, (t - 0.3) / 0.7)); };
+  buildRings(pts, R0, NMAIN, 0, 0.06, x => (x >= pc ? lumenK * bulbMul(x) : mulD(x)) * fMul(x));
 
   cardiaIdx = Math.round(S.cardia / nCtl * (NMAIN - 1));
   pylIdx = Math.round((pylStart + 0.5) / nCtl * (NMAIN - 1));
@@ -258,6 +279,7 @@ function rebuild() {
 
   compMid = -1;
   applyCompression(compRegion, compAmt);
+  if (futonAmt > 0.01) { const ax = compAxis, cm = compMid; compAxis = [0, 0, 1]; applyCompression('body', futonAmt); compAxis = ax; compMid = cm; }
 
   // 中心合わせ
   let mnx = 1e9, mny = 1e9, mnz = 1e9, mxx = -1e9, mxy = -1e9, mxz = -1e9;

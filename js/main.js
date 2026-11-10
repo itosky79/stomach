@@ -53,6 +53,7 @@ function loop(now) {
   if (autoSpin) ctrl.az += dt * 0.28;
   applyRollFeel(dt);                              // 寝返りの途中のねじれ（sim.js）
   updateArms(dt);                                 // 腕の挙げ下ろし（sim.js）
+  futonStep();                                    // 腹臥位の頭低位で圧迫フトンを入れる（sim.js）
   applyPose(); applyCam();
   updateCompress();
 

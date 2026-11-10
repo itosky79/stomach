@@ -40,8 +40,9 @@ void main(){
 // 腕の頂点（aArm ＝ 腕らしさ 0〜1）を、肩の高さ・奥行き（uArm.x, uArm.y）を通る左右の軸のまわりに前から上へ回す
 const uTw = { value: new THREE.Vector3(0, 0, 25) };   // x：長さあたりのねじれ、y：胃の高さ、z：ねじれが増えるのはここまで（肩・腰。メッシュの長さ）
 const uArm = { value: new THREE.Vector3(0, 0, 0) };
+const uArm2 = { value: new THREE.Vector3(0, 17, 0.3) };   // x：胴の真ん中、y：肩の関節までの横の距離、z：挙げきったときに内へ寄せる角度（ARM から入れる）
 const BODY_VERT = `
-uniform vec3 uTw; uniform vec3 uArm;
+uniform vec3 uTw; uniform vec3 uArm; uniform vec3 uArm2;
 attribute float aArm; attribute float aArmC;
 varying vec3 vN; varying vec3 vVd; varying vec3 vL; varying float vArmC;
 void main(){
@@ -51,6 +52,11 @@ void main(){
     float g = uArm.z * aArm, cg = cos(g), sg = sin(g), dy = q.y - uArm.x, dz = q.z - uArm.y;
     q.y = uArm.x + dy*cg + dz*sg; q.z = uArm.y - dy*sg + dz*cg;
     qn = vec3(qn.x, qn.y*cg + qn.z*sg, -qn.y*sg + qn.z*cg);
+    // 挙げるにつれて腕を体の軸へ寄せる（肩の関節を通る前後の軸のまわり。挙げた腕が外へ開いて天板に当たらないように）
+    float sd = position.x < uArm2.x ? -1.0 : 1.0, ad = uArm2.z * g / 3.14159265, ca = cos(ad), sa = sin(ad);
+    float ex = q.x - (uArm2.x + sd*uArm2.y), ey = q.y - uArm.x;
+    q.x = uArm2.x + sd*uArm2.y + ex*ca - sd*ey*sa; q.y = uArm.x + sd*ex*sa + ey*ca;
+    qn = vec3(qn.x*ca - sd*qn.y*sa, sd*qn.x*sa + qn.y*ca, qn.z);
   }
   float a = uTw.x * clamp(q.y - uTw.y, -uTw.z, uTw.z), c = cos(a), s = sin(a);   // 肩より上・腰より下は肩・腰と同じだけ回る
   vec3 p = vec3(c*q.x + s*q.z, q.y, -s*q.x + c*q.z);
@@ -62,7 +68,7 @@ void main(){
 }`;
 // 腕を挙げている間は、腕と腰をつなぐ三角形（境目の値が 0〜1 の間）を描かない（引き伸ばされた膜になるため）
 function bodyVert(m) {
-  m.vertexShader = BODY_VERT; m.uniforms.uTw = uTw; m.uniforms.uArm = uArm;
+  m.vertexShader = BODY_VERT; m.uniforms.uTw = uTw; m.uniforms.uArm = uArm; m.uniforms.uArm2 = uArm2;
   m.fragmentShader = m.fragmentShader.replace('void main(){', 'varying float vArmC; uniform vec3 uArm;\n      void main(){\n        if (uArm.z > 0.03 && vArmC > 0.02 && vArmC < 0.98) discard;');
   return m;
 }
@@ -388,7 +394,7 @@ const meshSkin = new THREE.Mesh(smoothGroin(bp3dGeom(BP3D.skin)), matSkin); mesh
 bodyFit.add(meshSkin);
 /* 腕らしさ（体表のメッシュの座標で決める。体の形から読んだ値）：胴の真ん中 x = −3 から 13.5〜15.5 より外で、肩（y = 15〜21）より下、
    指先（y = −38 あたり）より上を腕とする（それより下は脚。太ももの外側を腕とまちがえないように）。肩の回す軸は y = 18、z = −2（仮の値） */
-const ARM = { cx: -3, r0: 13.5, r1: 15.5, y0: 15, y1: 21, yl0: -42, yl1: -39, py: 18, pz: -2 };
+const ARM = { cx: -3, r0: 13.5, r1: 15.5, y0: 15, y1: 21, yl0: -42, yl1: -39, py: 18, pz: -2, sx: 17, add: 0.3 };   // sx：肩の関節の横の位置（胴の真ん中から）、add：挙げきったときに腕を内へ寄せる角度（ラジアン。体の形から読んだ値）
 const armSm = (e0, e1, t) => { const u = Math.max(0, Math.min(1, (t - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
 const armCut = (x, y) => armSm(ARM.r0, ARM.r1, Math.abs(x - ARM.cx)) * armSm(ARM.yl0, ARM.yl1, y);   // 腕と胴・脚の境目（ここが 0〜1 の間の三角形は、腕と腰をつなぐ面）
 const armW = (x, y) => armCut(x, y) * armSm(ARM.y1, ARM.y0, y);
@@ -396,7 +402,7 @@ const armW = (x, y) => armCut(x, y) * armSm(ARM.y1, ARM.y0, y);
   for (let i = 0; i < a.count; i++) { w[i] = armW(a.getX(i), a.getY(i)); wc[i] = armCut(a.getX(i), a.getY(i)); }
   meshSkin.geometry.setAttribute('aArm', new THREE.BufferAttribute(w, 1));
   meshSkin.geometry.setAttribute('aArmC', new THREE.BufferAttribute(wc, 1));
-  uArm.value.set(ARM.py, ARM.pz, 0); }
+  uArm.value.set(ARM.py, ARM.pz, 0); uArm2.value.set(ARM.cx, ARM.sx, ARM.add); }
 
 /* ---- 骨格（胸郭・胸骨と脊椎だけ。目印として要るものに絞る）---- */
 const boneGroup = new THREE.Group(); bodyFit.add(boneGroup);

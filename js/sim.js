@@ -78,7 +78,9 @@ function updateArms(dt) {
 function armMove(v, g, out) {                     // 体表のメッシュの座標の点 v を、腕の角度 g で動かす（BODY_VERT と同じ式）
   const w = armW(v.x, v.y); out.copy(v); if (w <= 0 || g === 0) return out;
   const t = g * w, c = Math.cos(t), s = Math.sin(t), dy = v.y - ARM.py, dz = v.z - ARM.pz;
-  out.y = ARM.py + dy * c + dz * s; out.z = ARM.pz - dy * s + dz * c; return out;
+  out.y = ARM.py + dy * c + dz * s; out.z = ARM.pz - dy * s + dz * c;
+  const sd = v.x < ARM.cx ? -1 : 1, ad = ARM.add * t / Math.PI, ca = Math.cos(ad), sa = Math.sin(ad), jx = ARM.cx + sd * ARM.sx, ex = out.x - jx, ey = out.y - ARM.py;
+  out.x = jx + ex * ca - sd * ey * sa; out.y = ARM.py + sd * ex * sa + ey * ca; return out;
 }
 const SUP_G = [0, 0.25, 0.5, 0.75, 1];           // 腕の角度（ARM_MAX に対する割合）の段
 function buildSupport() {
@@ -275,7 +277,7 @@ function poseName(tilt, roll) {
   // 台の角度の呼び方：立位 60〜90°、半立位 30〜60°、半臥位 1〜30°（必携テキスト p.76、高橋伸之「胃癌死をなくすために」の基準撮影法の定義）。
   // 0° 前後は水平（背臥位・腹臥位）、マイナスは頭低位（逆傾斜）
   // 頭低位は −37.5° を境に弱い頭低位（−30° のボタン）と強い頭低位（−45° のボタン）に分ける（2026-11-10。境は 2 つのボタンの真ん中）
-  const tl = tilt >= 60 ? '立位' : tilt >= 30 ? '半立位' : tilt >= 0.5 ? '半臥位' : tilt > -0.5 ? '水平' : tilt > -37.5 ? '弱い頭低位' : '強い頭低位';
+  const tl = tilt >= 60 ? '立位' : tilt >= 30 ? '半立位' : tilt >= 0.5 ? '半臥位' : tilt > -0.5 ? '水平' : tilt > -25 ? '弱い頭低位' : '強い頭低位';
   if (best[1] === '正面位' || best[1] === '第1斜位' || best[1] === '第2斜位')
     return (tl === '水平' ? '背臥位' : tl) + best[1];
   return (tl === '水平' ? '' : tl + '・') + best[1];
@@ -581,6 +583,13 @@ function fitBodyToStomach() {
   _fit.set(escBase.c[e] - c[0], escBase.c[e + 1] - c[1], escBase.c[e + 2] - c[2]);
   bodyFit.position.copy(_fit);
   setTableToBody(_fit);
+}
+/* 圧迫フトン：腹臥位（回転角 180° の前後 45° まで。75° で 0）で、頭低位（−5° から効き始め −20° で最大）のときに入る。
+   強さが変わったら胃の形を作り直す（model.js の rebuild が futonAmt で胃体部の前の壁を押す） */
+function futonStep() {
+  const d = Math.abs(((rollCur - 180) % 360 + 540) % 360 - 180), st = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  const want = FUTON.amt * st((-5 - tiltCur) / 15) * (1 - st((d - 45) / 30));
+  if (Math.abs(want - futonAmt) > 0.02 || (want !== futonAmt && (want === 0 || want === FUTON.amt))) { futonAmt = want; rebuildAll(); }
 }
 function rebuildAll() {
   rebuild();
