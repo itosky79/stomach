@@ -174,6 +174,7 @@ function updateFilmLabels() {
 function setXray(on) {
   meshBack.visible = !on;
   meshFront.material = on ? matXray : matFront;
+  meshGas.visible = on;                       // 胃の中のガスで暗くする（scene.js の FRAG_GASX）
   meshSurf.material = on ? matSurfX : matSurf;
   pourMesh.material = on ? matPourX : matPour;
   meshSkin.material = on ? matSkinX : matSkin;

@@ -171,8 +171,9 @@ const RUGAE = `
 // ひだ（皺襞）の間の溝：1 ＝ 溝の真ん中（バリウムがたまる）。r.x ＝ 胃の長さ方向（0〜1）、r.y ＝ 周り方向（0〜1）。
 // ひだは胃の長さ方向に、ほぼ平行に少し波打って走る（虎の巻 pp.91-96 の二重造影像を見て合わせた。本数・幅は目で合わせた仮の値）
 float foldGroove(vec3 r){
-  float a = r.y*18.0 + 0.35*sin(r.x*6.2831*4.0 + r.y*12.0) + 0.15*sin(r.x*6.2831*11.0 + r.y*31.0);
-  return pow(0.5 + 0.5*cos(6.2831*a), 6.0);
+  // 2026-11-10：教科書・国試の像に合わせ、ひだを細く・多く（周りに 28 本）・まっすぐ（波打ちを小さく）した
+  float a = r.y*28.0 + 0.10*sin(r.x*6.2831*3.0 + r.y*12.0) + 0.05*sin(r.x*6.2831*7.0 + r.y*31.0);
+  return pow(0.5 + 0.5*cos(6.2831*a), 10.0);
 }
 // 胃小区（粘膜の細かい網目）：網目の溝にバリウムが入り、二重造影で細かい網目に写る（同じ本の背臥位・腹臥位第一斜位の像を見て合わせた）。
 // 大きさは目で合わせた仮の値（長さ方向 90 個 × 周り 120 個）
@@ -234,7 +235,7 @@ void main(){
   // バリウムは陽性造影剤なので、溜まった所は後ろ（骨など）が透けないほど白く写る。表と裏の面を足すと 1 を超えて真っ白になるよう 1 面 0.62。
   // 厚みは 1 − exp(−厚み/0.9) で効かせる：実寸 1 cm ほどでほぼ白く、圧迫で数 mm まで薄くなった層だけが透けて粘膜のひだが見える
   float th = 1.0 - exp(-max(vThick, 0.0) / 0.9);
-  float pool = 0.62 * th * mix(rugae(vR, 1.0), 1.0, th);
+  float pool = 0.62 * th * mix(mix(1.0, rugae(vR, 1.0), 0.4), 1.0, th);   // 薄い溜まりにひだが少し透ける（強すぎると太い縞になるので 0.4 だけ）
   // 液面より上の壁：付いたバリウムの膜（vFilm ＝ 膜 1 枚の光学的な厚み。sim.js の updateWet が流れの式から求める）。
   // ひだ（皺襞）の間の溝には、膜より多くバリウムがたまる（uGroove ＝ 溝にたまる分の光学的な厚み）。膜が無ければ溝にもたまっていない。
   // X 線が膜を斜めに通るほど道のりが長く白い（edge）。
@@ -248,7 +249,19 @@ void main(){
 
 const uUp = { value: new THREE.Vector3(0, 1, 0) };
 const uRug = { value: 1 };
-const uGroove = { value: 0.5 }, uArea = { value: 0.05 };   // ひだの間の溝にたまるバリウムの光学的な厚み（sim.js の updateWet で毎回決める）
+const uGroove = { value: 0.5 }, uArea = { value: 0.05 };   // ひだの間の溝・胃小区の網目にたまるバリウムの光学的な厚み（sim.js の updateWet で毎回決める）
+/* 胃の中のガス：ガスはまわりの組織より X 線を通すので、二重造影の胃は腹部より暗く写り、ふちと粘膜の膜だけが白い
+   （虎の巻・国試の像で、胃の中 89、胃の外 157 ほどの明るさ。2026-11-10 に測った）。
+   液面より上の壁（ガスに面した壁）の面ごとに、明るさを uGas だけ引く（加えた明るさから引く描き方。表と裏の壁で 2 回引かれる）。
+   本来は通り道のガスの厚みに比例するが、面ごとの一定の量で近づけた（仮の値） */
+const uGas = { value: 0.07 };   // 体の濃さ 0.09 と合わせて、二重造影の胃の中がおよそ 86、胃の外が 139（半臥位第2斜位で測った）
+const FRAG_GASX = `
+uniform float uGas;
+varying float vH; varying float vLevel;
+void main(){
+  float gas = 1.0 - step(vH, vLevel);
+  gl_FragColor = vec4(vec3(uGas * gas), 0.0);   // 不透明度は引かない（引くと画面が透けて白く見える）
+}`;
 const uRimS = { value: new THREE.Color(0.34, 0.46, 0.56) }, uMucA = { value: 0.17 };   // 胃のふちの光の色と、粘膜の不透明度（ライトでは変える。setTheme3D）
 function solidMat(side, flip) {
   return new THREE.ShaderMaterial({
@@ -264,8 +277,14 @@ const matXray = new THREE.ShaderMaterial({
   blending: THREE.AdditiveBlending, side: THREE.DoubleSide
 });
 const meshBack = new THREE.Mesh(geom, matBack); meshBack.renderOrder = 1;
+const matGasX = new THREE.ShaderMaterial({
+  vertexShader: VERT, fragmentShader: FRAG_GASX, uniforms: { uUp: uUp, uGas: uGas },
+  transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
+  blending: THREE.CustomBlending, blendEquation: THREE.ReverseSubtractEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor
+});
+const meshGas = new THREE.Mesh(geom, matGasX); meshGas.renderOrder = 30; meshGas.visible = false;   // 透視像のときだけ（xray.js の setXray）。ほかを描いたあとに引く
 const meshFront = new THREE.Mesh(geom, matFront); meshFront.renderOrder = 3;
-bodyGroup.add(meshBack, meshFront);
+bodyGroup.add(meshBack, meshFront, meshGas);
 
 /* ---- バリウム液面（ニボー）---- */
 const surfPos = new Float32Array(NN * 18);
@@ -321,7 +340,7 @@ function bp3dGeom(d) {
   g.computeVertexNormals();
   return g;
 }
-const matSkin = bodyVert(litMat(0xB8CBD8, 0.30, 0.07, 1.9)), matSkinX = bodyVert(xrayMat(0.042, false, 3.2, BP3D.meta.dia));
+const matSkin = bodyVert(litMat(0xB8CBD8, 0.30, 0.07, 1.9)), matSkinX = bodyVert(xrayMat(0.09, false, 3.2, BP3D.meta.dia));   // 体（軟部組織）の濃さ。2026-11-10 に 0.042 から上げた（本・国試の像の腹部の明るさに合わせる）
 matSkin.side = THREE.FrontSide;
 /* 体（体表・骨）は bodyFit に入れ、胃の型ごとに噴門が重なるよう動かす（sim.js の fitBodyToStomach） */
 const bodyFit = new THREE.Group(); bodyGroup.add(bodyFit);
