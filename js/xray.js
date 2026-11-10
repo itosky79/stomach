@@ -434,7 +434,10 @@ function xfovAuto(aspect) {
     // 液面より上の壁でも、同じ X 線の通り道に溜まったバリウムがあれば真っ白で見えないので、二重造影には数えない。
     const pts = [];
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    // 本の像に合わせる：今の体位（手順、または近い基準撮影法Ⅱの体位）の frame が 'upper' なら胃底部と胃体部だけを囲む（下は見切れる）
+    const stf = xaimTarget(), upper = !!(stf && stf.frame === 'upper');
     for (let i = 0; i < NMAIN; i++) {
+      if (upper) { const rk = regionList[regionOf[i]][0]; if (rk !== 'fundus' && rk !== 'body') continue; }
       for (let j = 0; j < CM; j++) {
         const v = i * CM + j;
         _xa.set(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]).applyMatrix4(_xm);
@@ -443,10 +446,10 @@ function xfovAuto(aspect) {
         if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
       }
     }
-    // 胃の全体（十二指腸球部まで）が入るように、ふちに余白を付けて視野を決める（2026-11-10。本物の透視像のように胃の全体を写す。
+    // 本の像と同じ範囲が写るように視野を決める：ふつうは胃の全体（十二指腸球部まで）にふちの余白を付ける（2026-11-10。本物の透視像のように胃の全体を写す。
     // 前は二重造影の所だけに寄っていて、胃の全体が見えないことがあった）。遠近法で手前の壁が大きく写る分も余白に入れる
-    const h = Math.max(y1 - y0, (x1 - x0) / Math.max(0.3, aspect)) * 1.3;
-    XAUTO.goal = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, field: Math.max(16, Math.min(40, h)) };
+    const h = Math.max(y1 - y0, (x1 - x0) / Math.max(0.3, aspect)) * (upper ? 1.1 : 1.3);
+    XAUTO.goal = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, field: Math.max(upper ? 12 : 16, Math.min(40, h)) };
     XAIM.text = '';
   }
   const dt = Math.min(0.1, (now - (XAUTO.last || now)) / 1000); XAUTO.last = now;
