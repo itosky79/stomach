@@ -43,7 +43,9 @@ function msDrawList() {
 }
 function msSync() {
   const r = ((rollT % 360) + 360) % 360;
-  [...msTilt.children].forEach(b => b.setAttribute('aria-pressed', Math.abs(+b.dataset.v - tiltT) < 8));
+  { // 起倒角のボタン：いちばん近いボタンだけを押した状態にする（8° 以内）。弱い頭低位 −25° と強い頭低位 −30° のように近いボタンが両方光らないように（2026-11-11）
+    let near = null, nd = 8; for (const b of msTilt.children) { const d = Math.abs(+b.dataset.v - tiltT); if (d < nd) { nd = d; near = b; } }
+    [...msTilt.children].forEach(b => b.setAttribute('aria-pressed', b === near)); }
   [...msRoll.children].forEach(b => b.setAttribute('aria-pressed', dAng(+b.dataset.v, r) < 8));
   $m('msPose').textContent = poseLabel(tiltT, rollT);
 }
