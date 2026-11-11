@@ -607,6 +607,7 @@ document.getElementById('bRot').addEventListener('click', () => { if (ROT.plan) 
    値は一般的な寝返りの速さを想定した仮の値（実測や動画から測ったものではない）。「ゆっくり」は基本の速さが半分。
    向きが変わる所（左右交互の折り返し）や起倒角が変わる所で区間を分けるので、そこでは滑らかに止まってから次へ。
    wps：[{ tilt, roll（ぐるっと回る分も含めた角度）, slow }]。起倒は台の動き（main.js）にまかせ、区間の終わりで台が着くのを待つ */
+// 基本の速さ 78°/秒は、平井 2001（BASICS.md［P］）の 200 w/v% のローリングの角速度 70〜110°/秒の範囲（2026-11-11 に確かめた）
 const ROLL_V = 78, ROLL_B = 0.35, ROLL_P = 0.15, ROLL_ACC = 110;   // 基本の速さ °/秒、起き上がり／倒れの差、腹臥位で遅くする割合、加速度 °/秒²
 function rollSpeed(th, dir, slow) {
   const r = th * Math.PI / 180;
