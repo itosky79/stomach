@@ -362,7 +362,26 @@ function flowStep(dt) {
       if (amt !== 0) { wVol[a] -= Math.abs(amt); wVol[b] += Math.abs(amt); }
       flowQ[e] = q;
     }
+    if (TYPES[curType].duoEnd) duoOutflow(ds, g, nu, ty);
   }
+}
+/* 十二指腸の端（下行部の先）から、その先の腸へ流れ出る（2026-11-16）。管の先に、同じ傾きで続く空の断面があるとみなし、
+   上の境目と同じ式（重力・ビンガム流体のまさつ・乱れ）で流量を求めて、流れ出た分を drained に足す。
+   先が上り坂（頭低位など）なら、液面が先の断面の底を越えるまで流れ出ない */
+let duoQ = 0;
+function duoOutflow(ds, g, nu, ty) {
+  const n = NMAIN - 1, m = NMAIN - 2;
+  if (wVol[n] <= 1e-9) { duoQ = 0; return; }
+  const Bs = hmin[n] + (hmin[n] - hmin[m]), si = lvl[n], h = Math.min(si - Math.min(Bs, hmin[n]), 2 * radius[n]);
+  if (si <= Bs || h <= 1e-5) { duoQ = 0; return; }
+  const r = Math.max(0.05, radius[n]), hh = Math.min(h, 2 * r), W = 2 * Math.sqrt(Math.max(1e-8, hh * (2 * r - hh)));
+  const A = Math.min(2 / 3 * W * hh, area[n]), dS = Math.max(0.02, dl[n]);
+  let q = duoQ + ds * g * A * (si - Bs) / dS;
+  if (q <= ds * ty * W) { duoQ = 0; return; }
+  q -= ds * ty * W;
+  const u = q / A; q /= 1 + ds * (3 * nu / (hh * hh) + FLOW.cf * u / hh);
+  const amt = Math.min(q * ds, wVol[n] * 0.5);
+  wVol[n] -= amt; drained += amt; duoQ = amt / ds;
 }
 /* 噴門から胃へ入るバリウム（飲んでいる間だけ）：食道の出口から、胃の壁（管の網目の点）をいちばん急な下り坂に沿ってたどり、
    液面（すでに溜まったバリウム）か、それ以上下れない点に着いたら止まる。着いた断面にバリウムを入れる（pourInto）。
@@ -481,7 +500,7 @@ function dose(dt) {
     const d = Math.min(wVol[n] * ESO_PUSH * dt, Math.max(0, cap[n + 1] - wVol[n + 1]));
     if (d > 0) { wVol[n] -= d; wVol[n + 1] += d; }
   }
-  if (pylorusOpen) {
+  if (pylorusOpen && !TYPES[curType].duoEnd) {   // 十二指腸の端を閉じている型（手で作った型）だけ。解剖モデルは flowStep の duoOutflow で流れ出る
     const n = NMAIN - 1, d = Math.min(wVol[n], wVol[n] * 1.3 * dt);
     wVol[n] -= d; drained += d;
   }

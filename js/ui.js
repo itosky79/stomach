@@ -392,7 +392,7 @@ bind('tPyl', v => { pylorusOpen = v; rebuildAll(); });
 { // バリウムの性質：濃度（w/v%）・粘度・降伏値。壁に残る膜の厚さと流れ落ち方が変わる（sim.js の updateWet）
   const B = [['rBaC', 'oBaC', 'C', v => v + ' w/v%'], ['rBaMu', 'oBaMu', 'mu', v => v + ' mPa·s'], ['rBaTy', 'oBaTy', 'ty', v => (+v).toFixed(2) + ' Pa']];
   for (const [r, o, k, f] of B) {
-    const el = document.getElementById(r);
+    const el = document.getElementById(r); if (!el) continue;   // 2026-11-16：画面のつまみは消した（値は BA の既定のまま）
     el.addEventListener('input', () => { BA[k] = +el.value; document.getElementById(o).textContent = f(el.value); });
   }
 }
@@ -578,11 +578,7 @@ rotSeg.addEventListener('click', e => { const b = e.target.closest('button[data-
 function rotBuild() {
   const M = ROT_METHODS[ROT.kind];
   document.getElementById('rotLead').textContent = M.lead;
-  document.getElementById('rotBook').textContent = M.book;
-  const tip = document.getElementById('rotTip'); tip.hidden = !M.tip;
-  tip.innerHTML = M.tip ? M.tip + '<span class="rotsrc">出典：' + M.tipSrc + '</span>' : '';
-  document.getElementById('rotOwn').textContent = M.own;
-  document.getElementById('rotSrc').textContent = '出典：' + ROT_SRC_O + '／' + ROT_SRC_G + (M.tipSrc ? '／' + M.tipSrc : '');
+  // 説明と出典の欄は 2026-11-16 に画面から消した（出典は ROT_METHODS と BASICS.md に残してある）
   const ol = document.getElementById('rotRoute'); ol.innerHTML = '';
   M.route.forEach(([, nm], i) => {
     if (i) { const a = document.createElement('li'); a.className = 'arw'; a.textContent = '→'; a.setAttribute('aria-hidden', 'true'); ol.appendChild(a); }
