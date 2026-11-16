@@ -264,7 +264,7 @@ select.sel:focus-visible{outline:2px solid var(--teal); outline-offset:2px}
 
 
 /* ---------- 4タブ・セグメント ---------- */
-.tabs{grid-template-columns:repeat(5,1fr)}
+.tabs{grid-template-columns:repeat(4,1fr)}   /* 学習・手順・フリー・問題の 4 つ（2026-11-16 にミッションを消した） */
 .tabs button{font-size:11px; padding:7px 1px}
 .seg.wide{display:grid; grid-template-columns:repeat(3,1fr); background:var(--ink2)}
 .seg.wide button{padding:6px 2px; text-align:center; font-size:10px}

@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 定数 ================= */
 const CM = 28;                 // 断面あたりの頂点数
-const NMAIN = 170, NESO = 26;  // 断面数（胃＋十二指腸 / 食道）
+const NMAIN = 231, NESO = 26;  // 断面数（胃＋十二指腸 / 食道）。2026-11-16 に十二指腸の下行部を足したので 170 から増やした（胃の断面の細かさは同じ）
 const NN = NMAIN + NESO, NV = NN * CM;
 const FLAT = 0.78;             // 前後方向の扁平率
 const SUB = 8;                 // 流体ソルバのサブステップ
@@ -232,13 +232,14 @@ function rebuild() {
       const k0 = Math.floor(ca), xa = pts[k0][0] + (pts[Math.min(pts.length - 1, k0 + 1)][0] - pts[k0][0]) * (ca - k0);
       for (let k = k0 + 1; k < pts.length; k++) pts[k][0] = xa + (pts[k][0] - xa) * JSHAPE.pull;
     }
-    if (JSHAPE.bulb) for (let k = Math.ceil(cp); k < pts.length; k++) pts[k][1] += JSHAPE.bulb * (k - cp);   // 幽門より先（十二指腸球部）を上へ向ける
+    if (JSHAPE.bulb) for (let k = Math.ceil(cp); k < pts.length; k++) pts[k][1] += JSHAPE.bulb * (Math.min(k, S.duoEnd || k) - cp);   // 幽門より先（十二指腸球部）を上へ向ける。下行部は球部の終わりと同じだけずらす
   }
   if (JSHAPE.body) {   // 胃体部だけを腹側へ出す（胃底部の端 0 → 胃体部の中ほどで最大 → 胃角部の始まり 0）。背臥位で胃底部の溜まりが胃体部へ広がらないように
     const b0 = fEnd * 0.6, b1 = ang[2], bm = b0 + (b1 - b0) * JSHAPE.bodyAt;
     for (let k = 0; k < pts.length; k++) { const t = k <= bm ? (k - b0) / (bm - b0) : (b1 - k) / (b1 - bm); if (t > 0) pts[k][2] += JSHAPE.body * Math.sin(Math.PI / 2 * Math.min(1, t)) ** 2; }
   }
-  buildRings(pts, R0, NMAIN, 0, 0.06, fMul);
+  const tpr = 0.06 * (S.duoEnd || nC) / nC;   // 管の両端の丸め（全体に対する割合）。十二指腸の下行部を足した型でも、胃底部の先の丸めの長さを変えない
+  buildRings(pts, R0, NMAIN, 0, tpr, fMul);
   let P1 = 0, D1 = 0;   // 倍率 1 のときの近位・遠位の容量（実寸 mL。胃角部は半分ずつ）
   for (let i = 0; i < NMAIN; i++) { const c = i / (NMAIN - 1) * nC; if (c >= pc) continue; const w = wDist(c); P1 += cap[i] * (1 - w) * S3; D1 += cap[i] * w * S3; }
   const ratio = DISTEND.ratio(want);
@@ -247,8 +248,8 @@ function rebuild() {
   lumenK = Math.sqrt(want / (P1 + D1));
   const mulD = x => { const c = x, w = wDist(c); return distK[0] * (1 - w) + distK[1] * w; };
   // 十二指腸球部の太さ（JSHAPE.bulbR）：幽門のすぐ先でいちばん太く（1 + bulbR 倍）、先へ行くほど細くする（球部の形。本の像に合わせた見た目の値）
-  const nEnd = pts.length - 1, bulbMul = x => { if (!JSHAPE.bulbR || x < pc) return 1; const t = (x - pc) / Math.max(0.5, nEnd - pc), up = Math.min(1, t / 0.3); return 1 + JSHAPE.bulbR * up * up * (3 - 2 * up) * (1 - 0.6 * Math.max(0, (t - 0.3) / 0.7)); };
-  buildRings(pts, R0, NMAIN, 0, 0.06, x => (x >= pc ? lumenK * bulbMul(x) : mulD(x)) * fMul(x));
+  const nEnd = S.duoEnd || pts.length - 1, bulbMul = x => { if (!JSHAPE.bulbR || x < pc) return 1; const t = (x - pc) / Math.max(0.5, nEnd - pc), up = Math.min(1, t / 0.3); return t > 1 ? 1 + 0.4 * JSHAPE.bulbR * Math.max(0, 1 - (t - 1) * 3) : 1 + JSHAPE.bulbR * up * up * (3 - 2 * up) * (1 - 0.6 * Math.max(0, (t - 0.3) / 0.7)); };   // 球部の先は元の太さへなめらかに戻す
+  buildRings(pts, R0, NMAIN, 0, tpr, x => (x >= pc ? lumenK * bulbMul(x) : mulD(x)) * fMul(x));
 
   cardiaIdx = Math.round(S.cardia / nCtl * (NMAIN - 1));
   pylIdx = Math.round((pylStart + 0.5) / nCtl * (NMAIN - 1));
@@ -256,10 +257,21 @@ function rebuild() {
   // 噴門位置から食道を生やす
   const ci = cardiaIdx * 3, rr = radius[cardiaIdx];
   const dir = new THREE.Vector3(-0.85, 0.5, -0.12).normalize().multiplyScalar(rr * 0.9);
-  const J = [centers[ci] + dir.x, centers[ci + 1] + dir.y, centers[ci + 2] + dir.z];
-  const eso = [[J[0] - 1.0, J[1] + 7.2, J[2] - 1.0], [J[0] - 0.8, J[1] + 4.6, J[2] - 0.8],
-               [J[0] - 0.45, J[1] + 2.2, J[2] - 0.45], J];
-  buildRings(eso, [1.0, 0.95, 0.92, 1.05], NESO, NMAIN, 0, null);
+  const J0 = [centers[ci] + dir.x, centers[ci + 1] + dir.y, centers[ci + 2] + dir.z];
+  // 食道の下端を胃の壁の少し内側へ入れ、下端を漏斗のように広げて、胃とつながって見えるようにする（2026-11-16。前は下端が胃の壁の外に
+  // 浮いて見えていた）：J0 にいちばん近い胃の壁の点 W から、その断面の中心へ向かって 0.4（実寸およそ 5 mm）入った所を下端にする
+  let wv = -1, wd = 1e9;
+  for (let i = 0; i < Math.min(NMAIN, cardiaIdx + 20); i++) for (let j = 0; j < CM; j++) {
+    const k = (i * CM + j) * 3, d = (pos[k] - J0[0]) ** 2 + (pos[k + 1] - J0[1]) ** 2 + (pos[k + 2] - J0[2]) ** 2;
+    if (d < wd) { wd = d; wv = i * CM + j; }
+  }
+  const wi = (wv / CM) | 0, W = [pos[wv * 3], pos[wv * 3 + 1], pos[wv * 3 + 2]], wc = [centers[wi * 3] - W[0], centers[wi * 3 + 1] - W[1], centers[wi * 3 + 2] - W[2]];
+  const wl = Math.hypot(wc[0], wc[1], wc[2]) || 1, J = [W[0] + wc[0] / wl * 0.4, W[1] + wc[1] / wl * 0.4, W[2] + wc[2] / wl * 0.4];
+  // 食道は上から下りてきて、最後は胃の壁に向かって（断面の中心の向き n に）入る。壁の外 1.0・上 0.8 の点を通す
+  const n = [wc[0] / wl, wc[1] / wl, wc[2] / wl], P3 = [W[0] - n[0] * 1.0, W[1] - n[1] * 1.0 + 0.8, W[2] - n[2] * 1.0];
+  const eso = [[P3[0] - 0.75, P3[1] + 6.6, P3[2] - 0.8], [P3[0] - 0.4, P3[1] + 3.4, P3[2] - 0.4],
+               P3, J];
+  buildRings(eso, [1.0, 0.95, 0.95, 1.15], NESO, NMAIN, 0, null);
 
   // 部位の割り当て
   for (let i = 0; i < NMAIN; i++) {
