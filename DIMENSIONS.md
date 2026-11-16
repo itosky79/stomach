@@ -75,21 +75,35 @@ v1.0 の患者は身長がおよそ 106 cm 相当で、胃（cm）に比べて�
 
 注意：MRI の値は液体の食事のあとのもので、発泡剤のガスで膨らませたときの値ではない。ガスで膨らませた胃の近位と遠位の比を測った報告は見つからなかったので、近い条件の値として使った。
 
-## 食道・胃・十二指腸のつながり方を解剖学の記載と比べる（2026-11-16）
+## 食道・胃・十二指腸のつながり方を解剖学の文献と比べる（2026-11-16）
 
-解剖モデル（BodyParts3D の胃を J 字に改変）の、背臥位・立位の形で測った（椎体の高さと左右の位置は、同じ BodyParts3D の椎骨 FMA10037 などから求めた）。
+解剖モデルの背臥位の形で測った。椎体の高さは、同じ BodyParts3D の椎骨（T10 FMA10037、T11 FMA10059、T12 FMA10081、L1〜L4 FMA13072〜13075）の椎体（前の 3 cm）の上下の縁から求めた。
 
-| 場所 | 解剖学の記載 | シミュレーター | 判定 |
+### 文献（原典の要旨で確かめたもの）
+
+| 記号 | 文献 | 対象 | 書かれていること |
 |---|---|---|---|
-| 噴門（食道と胃の境目） | T11 の高さ（TeachMeAnatomy「The Stomach」）。食道裂孔は T10 | T10 の高さ（T10 の中心からわずか下）、正中より左 1.6 cm。BodyParts3D の噴門の位置と 0.1 cm で一致 | BodyParts3D そのままの位置。記載より 1 椎体高い |
-| 胃底部 | 噴門より上・左（同上） | 噴門より上へ 1.9 cm、左へ 2.9 cm | 合う |
-| 食道の入り方 | 食道と胃底部の間に鋭い角（His 角。Wikipedia「Angle of His」） | 食道は後ろ上から前下へ下り、少し左へ向かって入る（BodyParts3D の食道の中心線に合わせた）。胃底部は噴門より上にあり、間に角ができる | 合う（角度の数値は比べていない） |
-| 幽門 | L1 の高さ（transpyloric plane）、胃と十二指腸の第 1 部をつなぐ（TeachMeAnatomy） | L2 の高さ、正中より右 1.1 cm | 1 椎体低い。透視像に合わせて胃を縦に伸ばした（JSHAPE）ため。記載は解剖体の値で、発泡剤で膨らませた立位の胃とは違う可能性がある（未確認） |
-| 十二指腸 第 1 部（球部） | 幽門から上へ向かう、L1（TeachMeAnatomy「The Small Intestine」） | 幽門から右へ 2.6 cm・上へ 1.9 cm・背中側へ 4.6 cm 進み、L1 の高さ・正中より右 3.7 cm で終わる | 合う |
-| 十二指腸 第 2 部（下行部） | 膵頭のまわりを下へ、L1〜L3、右腎の前（同上） | L1〜L3、正中より右 4〜5 cm（椎体の右縁より外）、右腎の前（右腎の前の面より腹側、左右は右腎の内側の部分に重なる） | 合う |
-| 十二指腸の先 | 第 3 部（L3 で左へ）・第 4 部へ続き、空腸へ。全長 約 25 cm（同上） | 下行部の終わり（L3）で切れていて、そこから先へ流れ出る | 第 3 部より先はない |
+| a | Mirjalili SA, et al. A reappraisal of adult thoracic surface anatomy. Clin Anat 2012;25(7):827-34. doi:10.1002/ca.22091 | 生体、背臥位 CT | 下大静脈と食道が横隔膜を通る高さは多くが T11 |
+| b | Wang Y-Q, et al.（筆頭著者は要旨で未確認）A reappraisal of adult thoracic and abdominal surface anatomy via CT scan in Chinese population. Clin Anat 2016;29(2):165-74. doi:10.1002/ca.22556 | 生体（中国）、CT | 下大静脈と食道が横隔膜を通る高さは T10 と T11 |
+| c | The thoracic surface anatomy of adult black South Africans: A reappraisal from CT scans. Clin Anat 2016;29(8):1018-24. doi:10.1002/ca.22776 | 生体（南アフリカ）、背臥位 CT | 食道が横隔膜を通る高さは T9 |
+| d | Mirjalili SA, et al. Anatomical planes: are we teaching accurate surface anatomy? Clin Anat 2012;25(7):819-26. doi:10.1002/ca.22104 | 生体 52 人、背臥位 CT | transpyloric plane は L1 の下部〜L2 の上部（75 %） |
+| e | Karnul AM, Murthy CK. A Study of Variations of the Stomach in Adults and Growth of the Fetal Stomach. Cureus 2022;14(8):e28517. doi:10.7759/cureus.28517 | 解剖体 50 体 | 噴門は正中より左（第 7 肋軟骨の後ろ、66 %）。幽門は正中より右 1.2 cm、76 % で transpyloric plane 上 |
+| f | Koch C, et al. Redefining the projectional and clinical anatomy of the duodenojejunal flexure in children. Clin Anat 2016;29(2):175-82. doi:10.1002/ca.22625 | 小児 CT | 十二指腸空腸曲の高さは L1 を中心に T11〜L3 とばらつく |
+| g | Kenhub「Duodenum」（Prometheus 解剖学アトラスなどを引用する教育用サイト） | 教科書の要約 | 十二指腸は長さ 25〜30 cm、L1〜L3 の高さ。第 1 部は腹膜内で始まりが膨らむ（球部）、第 2 部は後腹膜 |
+| h | TeachMeAnatomy「The Stomach」「The Small Intestine」（教育用サイト） | 教科書の要約 | 噴門 T11、幽門 L1、第 1 部は幽門から上へ・L1、第 2 部は L1〜L3・右腎の前 |
 
-- 前は下行部が胃と一緒に縦 2 倍に伸び、L1〜L4 の下まで長くなっていた。下行部は伸ばさず BodyParts3D の形のまま付けるように直した（`js/model.js`）
-- 前は食道が右から横向きに胃へ入っていた。BodyParts3D の食道の中心線（噴門から 1・3・5 cm 上）に合わせて直した
-- 出典：TeachMeAnatomy「The Stomach」https://teachmeanatomy.info/abdomen/gi-tract/stomach/ 、「The Small Intestine」https://teachmeanatomy.info/abdomen/gi-tract/small-intestine/ （どちらも教育用サイト。解剖学の教科書の原典では確認していない）、Wikipedia「Angle of His」
+- a〜d・f は生体の背臥位 CT（息を吸ったところ）で、立位や発泡剤で膨らませた胃での高さは分からない。a は「姿勢・呼吸・体格・人種の影響」に注意するよう書いている
+- 立位で胃や十二指腸がどれだけ下がるかを測った文献は見つけられなかった
+
+### 比べた結果
+
+| 場所 | 文献 | シミュレーター（背臥位） | 判定 |
+|---|---|---|---|
+| 噴門（食道の下端） | 噴門は正中より左（e）。食道が横隔膜を通るのは T11（a・b）、T9（c）。噴門はそれより少し下 | T10 の下 1/3（T10/T11 の境目のあたり）、正中より左 1.6 cm。BodyParts3D の噴門の位置と 0.1 cm で一致 | 左右は合う。高さは a・b より 1 椎体ほど高いが、c の範囲（T9）を考えると人による違いの中。BodyParts3D そのままの位置 |
+| 胃底部 | 噴門より上・左（h） | 噴門より上へ 1.9 cm、左へ 2.9 cm | 合う（h は教育用サイト） |
+| 食道の入り方 | 食道と胃底部の間に鋭い角（His 角。Wikipedia「Angle of His」） | 後ろ上から前下へ下り、少し左へ向かって入る（BodyParts3D の食道の中心線に合わせた）。胃底部は噴門より上にある | 形は合う。角度は比べていない |
+| 幽門 | 正中より右 1.2 cm（e）。transpyloric plane 上（e）で、その高さは生体では L1 の下部〜L2 の上部（d） | L2 の下 1/3、正中より右 1.1 cm | 左右は合う。高さは d の範囲より 0.5〜1 椎体低い。透視像に合わせて胃を縦に伸ばした（JSHAPE）ため |
+| 十二指腸 第 1 部（球部） | 幽門から上へ（h）、始まりが膨らむ（g） | 幽門から右へ 2.6 cm・上へ 1.9 cm・背中側へ 4.6 cm 進み、L2 の上 1/3 で終わる | 向きは合う。高さは h の L1 より低い（幽門が低いため） |
+| 十二指腸 第 2 部（下行部） | L1〜L3（g・h）、右腎の前（h） | L2 の上部〜L3 の下 1/3、正中より右 4〜5 cm、右腎の前 | 範囲は合う（右腎の前は h のみ） |
+| その先 | 第 3 部は大動脈の前を右から左へ、第 4 部は脊柱の左を上へ（g）。全長 25〜30 cm（g） | 下行部の終わり（L3）で切れていて、そこから流れ出る | 第 3 部より先はない |
 
