@@ -381,6 +381,7 @@ function duoOutflow(ds, g, nu, ty) {
   q -= ds * ty * W;
   const u = q / A; q /= 1 + ds * (3 * nu / (hh * hh) + FLOW.cf * u / hh);
   const amt = Math.min(q * ds, wVol[n] * 0.5);
+  if (!(amt > 0) || !Number.isFinite(amt)) { duoQ = 0; return; }   // 2026-11-16：数値が壊れた（NaN）ときに流量を入れない（画面のループで右側臥位などのとき胃の中身が NaN になっていた）
   wVol[n] -= amt; drained += amt; duoQ = amt / ds;
 }
 /* 噴門から胃へ入るバリウム（飲んでいる間だけ）：食道の出口から、胃の壁（管の網目の点）をいちばん急な下り坂に沿ってたどり、
@@ -642,6 +643,12 @@ function fitBodyToStomach() {
 }
 /* 圧迫フトン：腹臥位（回転角 180° の前後 45° まで。75° で 0）で、頭低位（−5° から効き始め −20° で最大）のときに入る。
    強さが変わったら胃の形を作り直す（model.js の rebuild が futonAmt で胃体部の前の壁を押す） */
+/* 姿勢による胃の縦の伸び（model.js の JSHAPE の説明）。0.03 以上変わったら（または端に着いたら）胃の形を作り直す */
+function postureStretch(tilt) { const g = Math.max(0, Math.min(1, Math.sin(tilt * Math.PI / 180))); return JSHAPE.stretchLie + (JSHAPE.stretchStand - JSHAPE.stretchLie) * g; }
+function postureStep() {
+  const want = postureStretch(tiltCur);
+  if (Math.abs(want - JSHAPE.stretch) > 0.03 || (want !== JSHAPE.stretch && (want === JSHAPE.stretchLie || want === JSHAPE.stretchStand))) { JSHAPE.stretch = want; rebuildAll(); }
+}
 function futonStep() {
   const d = Math.abs(((rollCur - 180) % 360 + 540) % 360 - 180), st = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
   const want = FUTON.amt * st((-5 - tiltCur) / 15) * (1 - st((d - 45) / 30));

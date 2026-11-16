@@ -68,6 +68,7 @@ function evalRestore(s) {
 
 /* ---- 手順 1〜3 ---- */
 function evalStep(dt) {   // main.js の loop と同じ順（カメラ・ラベル・画面表示は除く）
+  postureStep();
   futonStep();
   applyPose();
   tiltGroup.updateMatrixWorld(true);
@@ -85,6 +86,7 @@ function evalPrepare(tilt, roll) {
   curType = EVAL.type; targetMl = EVAL.ml; gasMl = EVAL.gas; airLevel = EVAL.air; compRegion = ''; compAmt = 0; pylorusOpen = EVAL.pylorus;   // 幽門は既定で閉じる
   if (changed) { rebuildAll(); buildLabels(); }
   tiltCur = tiltT = tilt; rollCur = rollT = roll;
+  postureStep();   // 姿勢による胃の伸びを、流す前に合わせる
   sagS.fill(0);   // たわみは毎回まっすぐの形から始める（前の体位の形を持ち越さない）
   settle();
   const vRef = wVol.reduce((a, b) => a + b, 0);
