@@ -84,8 +84,8 @@ v1.0 の患者は身長がおよそ 106 cm 相当で、胃（cm）に比べて�
 | 記号 | 文献 | 対象 | 書かれていること |
 |---|---|---|---|
 | a | Mirjalili SA, et al. A reappraisal of adult thoracic surface anatomy. Clin Anat 2012;25(7):827-34. doi:10.1002/ca.22091 | 生体、背臥位 CT | 下大静脈と食道が横隔膜を通る高さは多くが T11 |
-| b | Wang Y-Q, et al.（筆頭著者は要旨で未確認）A reappraisal of adult thoracic and abdominal surface anatomy via CT scan in Chinese population. Clin Anat 2016;29(2):165-74. doi:10.1002/ca.22556 | 生体（中国）、CT | 下大静脈と食道が横隔膜を通る高さは T10 と T11 |
-| c | The thoracic surface anatomy of adult black South Africans: A reappraisal from CT scans. Clin Anat 2016;29(8):1018-24. doi:10.1002/ca.22776 | 生体（南アフリカ）、背臥位 CT | 食道が横隔膜を通る高さは T9 |
+| b | Shen XH, et al. A reappraisal of adult thoracic and abdominal surface anatomy via CT scan in Chinese population. Clin Anat 2016;29(2):165-74. doi:10.1002/ca.22556 | 生体（中国）、CT | 下大静脈と食道が横隔膜を通る高さは T10 と T11 |
+| c | Keough N, et al. The thoracic surface anatomy of adult black South Africans: A reappraisal from CT scans. Clin Anat 2016;29(8):1018-24. doi:10.1002/ca.22776 | 生体（南アフリカ）、背臥位 CT | 食道が横隔膜を通る高さは T9 |
 | d | Mirjalili SA, et al. Anatomical planes: are we teaching accurate surface anatomy? Clin Anat 2012;25(7):819-26. doi:10.1002/ca.22104 | 生体 52 人、背臥位 CT | transpyloric plane は L1 の下部〜L2 の上部（75 %） |
 | e | Karnul AM, Murthy CK. A Study of Variations of the Stomach in Adults and Growth of the Fetal Stomach. Cureus 2022;14(8):e28517. doi:10.7759/cureus.28517 | 解剖体 50 体 | 噴門は正中より左（第 7 肋軟骨の後ろ、66 %）。幽門は正中より右 1.2 cm、76 % で transpyloric plane 上 |
 | f | Koch C, et al. Redefining the projectional and clinical anatomy of the duodenojejunal flexure in children. Clin Anat 2016;29(2):175-82. doi:10.1002/ca.22625 | 小児 CT | 十二指腸空腸曲の高さは L1 を中心に T11〜L3 とばらつく |
