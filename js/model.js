@@ -236,6 +236,10 @@ function rebuild() {
     }
     if (JSHAPE.bulb) for (let k = Math.ceil(cp); k < pts.length; k++) pts[k][1] += JSHAPE.bulb * (Math.min(k, S.duoEnd || k) - cp);   // 幽門より先（十二指腸球部）を上へ向ける。下行部は球部の終わりと同じだけずらす
   }
+  // 十二指腸の下行部（duoEnd より先）は、縦に伸ばすなどの改変をせず、BodyParts3D の形のまま球部の終わりに付ける（2026-11-16。
+  // 前は胃と一緒に縦 2 倍に伸びて、下行部が L1〜L4 の下まで長くなっていた。解剖学の教科書の下行部は L1〜L3）
+  if (S.duoEnd) { const e = S.duoEnd, d = [pts[e][0] - S.pts[e][0], pts[e][1] - S.pts[e][1], pts[e][2] - (S.pts[e][2] - FUNDUS.d * fW(e))];
+    for (let k = e + 1; k < pts.length; k++) for (let q = 0; q < 3; q++) pts[k][q] = S.pts[k][q] + d[q]; }
   if (JSHAPE.body) {   // 胃体部だけを腹側へ出す（胃底部の端 0 → 胃体部の中ほどで最大 → 胃角部の始まり 0）。背臥位で胃底部の溜まりが胃体部へ広がらないように
     const b0 = fEnd * 0.6, b1 = ang[2], bm = b0 + (b1 - b0) * JSHAPE.bodyAt;
     for (let k = 0; k < pts.length; k++) { const t = k <= bm ? (k - b0) / (bm - b0) : (b1 - k) / (b1 - bm); if (t > 0) pts[k][2] += JSHAPE.body * Math.sin(Math.PI / 2 * Math.min(1, t)) ** 2; }
@@ -270,11 +274,12 @@ function rebuild() {
   }
   const wi = (wv / CM) | 0, W = [pos[wv * 3], pos[wv * 3 + 1], pos[wv * 3 + 2]], wc = [centers[wi * 3] - W[0], centers[wi * 3 + 1] - W[1], centers[wi * 3 + 2] - W[2]];
   const wl = Math.hypot(wc[0], wc[1], wc[2]) || 1, J = [W[0] + wc[0] / wl * 0.4, W[1] + wc[1] / wl * 0.4, W[2] + wc[2] / wl * 0.4];
-  // 食道は上から下りてきて、最後は胃の壁に向かって（断面の中心の向き n に）入る。壁の外 1.0・上 0.8 の点を通す
-  const n = [wc[0] / wl, wc[1] / wl, wc[2] / wl], P3 = [W[0] - n[0] * 1.0, W[1] - n[1] * 1.0 + 0.8, W[2] - n[2] * 1.0];
-  const eso = [[P3[0] - 0.75, P3[1] + 6.6, P3[2] - 0.8], [P3[0] - 0.4, P3[1] + 3.4, P3[2] - 0.4],
-               P3, J];
-  buildRings(eso, [1.0, 0.95, 0.95, 1.15], NESO, NMAIN, 0, null);
+  // 食道の通り道は BodyParts3D の食道（FMA7131）の中心線に合わせる（2026-11-16）：噴門から 1・3・5 cm 上の中心は、噴門に対して
+  // （右へ, 上へ, 背中側へ）＝（0.8, 0.9, 0.6）（0.6, 2.5, 1.7）（0.7, 4.3, 2.6）（模型の長さ）。食道は後ろ上から前下へ下りて、少し左へ向かって噴門に入る。
+  // その上は同じ向きで 7 まで伸ばす。前は右から横向きに入っていた
+  const eso = [[W[0] - 0.75, W[1] + 7.0, W[2] - 3.6], [W[0] - 0.70, W[1] + 4.29, W[2] - 2.6],
+               [W[0] - 0.61, W[1] + 2.47, W[2] - 1.65], [W[0] - 0.80, W[1] + 0.9, W[2] - 0.56], J];
+  buildRings(eso, [1.0, 0.95, 0.95, 1.0, 1.15], NESO, NMAIN, 0, null);
 
   // 部位の割り当て
   for (let i = 0; i < NMAIN; i++) {
