@@ -43,6 +43,7 @@ const wVol = new Float32Array(NN), hmin = new Float32Array(NN), hmax = new Float
 const regionOf = new Int8Array(NN);
 let edges = [], regionList = [], cardiaIdx = 0, pylIdx = 0, bsRadius = 12, boxHalf = [8, 10, 6];
 let anatOff = [0, 0, 0], lumenK = 1, distK = [1, 1];
+let keepCardia = false, cardiaKeep = null;   // 作り直しで噴門の位置を保つか（rebuild の中心合わせ）
 /* 胃の拡張の実測値（2026-11-01）
    ・健康な成人の MRI：胃の容積（内容物＋空気）は空腹時 151.9 mL、液体 400 mL を飲んだ 15 分後 521.6 mL。胃角から引いた線で分けた
      近位と遠位の容積の比は、空腹時 2.33、15 分後 3.59（偽薬群。Min YW ほか, PLoS ONE 2015;10(9):e0138927）。
@@ -230,7 +231,10 @@ function rebuild() {
   if (JSHAPE.ant && JSHAPE.antZ) for (let k = 0; k < pts.length; k++) pts[k][2] += JSHAPE.antZ * (antMul(k) - 1) / JSHAPE.ant;   // 太くした分、中心を腹側へ（背中側の壁を下げない。背臥位でここに溜まらないように）
   // 胃の J 字の形（JSHAPE。試験中）：噴門より下を縦に JSHAPE.stretch 倍に伸ばし、胃角より先（前庭部〜幽門）を JSHAPE.lift だけ持ち上げる
   if (JSHAPE.stretch !== 1 || JSHAPE.lift !== 0 || JSHAPE.fwd || JSHAPE.body || JSHAPE.pull !== 1 || JSHAPE.bulb) {
-    const yc = pts[Math.min(pts.length - 1, Math.round(S.cardia))][1], ca = (ang[2] + ang[3]) / 2, cp = reg('pylorus')[2];
+    // 伸ばす基準の高さ：噴門（S.cardia の位置。制御点の間を直線でつないだ高さ）。2026-11-18：前は噴門にいちばん近い制御点の高さで、
+    // 伸ばし方を変えると噴門も動き、体の位置合わせ（sim.js の fitBodyToStomach）がずれて、台を起こす間に体と骨がカクカク跳んでいた
+    const c0 = Math.floor(S.cardia), cf0 = S.cardia - c0, c1 = Math.min(pts.length - 1, c0 + 1);
+    const yc = pts[c0][1] + (pts[c1][1] - pts[c0][1]) * cf0, ca = (ang[2] + ang[3]) / 2, cp = reg('pylorus')[2];
     for (let k = 0; k < pts.length; k++) {
       const dy = pts[k][1] - yc; if (dy < 0) { pts[k][1] = yc + dy * JSHAPE.stretch; pts[k][2] += JSHAPE.fwd * (-dy) * JSHAPE.stretch; }
       if (k > ca) pts[k][1] += JSHAPE.lift * Math.min(1, (k - ca) / Math.max(0.5, cp - ca));
@@ -314,11 +318,16 @@ function rebuild() {
     mny = Math.min(mny, centers[k + 1] - r); mxy = Math.max(mxy, centers[k + 1] + r);
     mnz = Math.min(mnz, centers[k + 2] - r); mxz = Math.max(mxz, centers[k + 2] + r);
   }
-  const ox = (mnx + mxx) / 2, oy = (mny + mxy) / 2, oz = (mnz + mxz) / 2;
+  let ox = (mnx + mxx) / 2, oy = (mny + mxy) / 2, oz = (mnz + mxz) / 2;
+  // 姿勢やフトンで形を作り直すときは（sim.js の postureStep・futonStep が keepCardia を立てる）、外接箱の真ん中ではなく、噴門の断面の中心が
+  // 前と同じ所に来るようにずらす。外接箱で合わせると、胃が伸びるたびに全体がずれ、体と台の位置合わせが動いてカクカク跳んでいた（2026-11-18）
+  const ck = cardiaIdx * 3;
+  if (keepCardia && cardiaKeep) { ox = centers[ck] - cardiaKeep[0]; oy = centers[ck + 1] - cardiaKeep[1]; oz = centers[ck + 2] - cardiaKeep[2]; }
   anatOff = [ox, oy, oz];
   for (let i = 0; i < NV * 3; i += 3) { pos[i] -= ox; pos[i + 1] -= oy; pos[i + 2] -= oz; }
   for (let i = 0; i < NN * 3; i += 3) { centers[i] -= ox; centers[i + 1] -= oy; centers[i + 2] -= oz; }
   boxHalf = [(mxx - mnx) / 2, (mxy - mny) / 2, (mxz - mnz) / 2];
+  cardiaKeep = [centers[ck], centers[ck + 1], centers[ck + 2]];
 
   let rs = 0;
   for (let i = 0; i < NV * 3; i += 3) rs = Math.max(rs, pos[i] * pos[i] + pos[i + 1] * pos[i + 1] + pos[i + 2] * pos[i + 2]);

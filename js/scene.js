@@ -347,7 +347,7 @@ function bp3dGeom(d) {
   g.computeVertexNormals();
   return g;
 }
-const matSkin = bodyVert(litMat(0xB8CBD8, 0.30, 0.07, 1.9)), matSkinX = bodyVert(xrayMat(0.09, false, 3.2, BP3D.meta.dia));   // 体（軟部組織）の濃さ。2026-11-10 に 0.042 から上げた（本・国試の像の腹部の明るさに合わせる）
+const matSkin = bodyVert(litMat(0xB8CBD8, 0.30, 0.07, 1.9)), matSkinX = bodyVert(xrayMat(0.09, false, 1.2, BP3D.meta.dia));   /* 2026-11-18：ふちの強調 3.2 → 1.2。体の表面のふちが白い線になっていた。体は中身の詰まった塊なので、本物は端ほど薄くなり白いふちは出ない */   // 体（軟部組織）の濃さ。2026-11-10 に 0.042 から上げた（本・国試の像の腹部の明るさに合わせる）
 matSkin.side = THREE.FrontSide;
 /* 体（体表・骨）は bodyFit に入れ、胃の型ごとに噴門が重なるよう動かす（sim.js の fitBodyToStomach） */
 const bodyFit = new THREE.Group(); bodyGroup.add(bodyFit);
