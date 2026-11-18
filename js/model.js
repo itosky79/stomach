@@ -347,8 +347,9 @@ function rebuild() {
   }
   for (let i = NMAIN; i < NN; i++) regionOf[i] = -1;
 
-  // 皺襞の強さ：胃底部・胃体部で明瞭、前庭部で乏しく、十二指腸にはない
-  const FOLD = { fundus: 1.0, body: 1.0, angle: 0.6, antrum: 0.22, pylorus: 0.1, duode: 0.0 };
+  // 皺襞の強さ：胃体部で明瞭、前庭部で乏しく、十二指腸にはない。胃底部は 2026-11-19 に 1.0 から 0.3 へ：管の先の丸めで溝の線が
+  // 穹窿部の頂に放射状に集まり、教科書の⑦⑪の像（穹窿部に線は見えない）と違っていた
+  const FOLD = { fundus: 0.3, body: 1.0, angle: 0.6, antrum: 0.22, pylorus: 0.1, duode: 0.0 };
   for (let i = 0; i < NMAIN; i++) {
     const f = FOLD[regionList[regionOf[i]][0]];
     for (let j = 0; j < CM; j++) aRug[(i * CM + j) * 3 + 2] = f;
@@ -405,7 +406,7 @@ function rebuild() {
 /* ---- 食道と胃をつなぐ ----
    食道と胃は別々の管で作っていて、食道の下の端の輪は胃の壁の手前で終わる。体位で胃がねじれたり振れたりすると、すき間が空く。
    そこで、食道の下の端にいちばん近い胃の壁の点（噴門の前後の断面の中から探す）を求め、食道の最後の ESO_JOIN 個の輪を、
-   その点より少し内側（0.5）まで滑らかに伸ばし、端をラッパのように広げて（最後の輪で 1.7 倍）胃の壁になじませる。
+   その点より内側（1.2）まで滑らかな曲線で伸ばし、端を少し広げて（最後の輪で 1.5 倍）胃の壁になじませる。
    胃の形が変わるたび（rebuild の最後と sim.js の shapeApply）に行う。食道のもとの形は escBase に取っておく */
 const ESO_JOIN = 6;
 const escBase = { c: new Float32Array(ESO_JOIN * 3), r: new Float32Array(ESO_JOIN), ok: false };
@@ -423,22 +424,39 @@ function joinEsophagus() {
     if (d < bd) { bd = d; best = k; bs = i; }
   }
   if (best < 0) return;
-  // 壁の点から、その断面の中心へ 0.5 入った所を食道の終わりにする
+  // 2026-11-19：食道の終わりを胃の壁の内側へ深く入れ（壁から断面の中心へ 1.2。断面の半径の半分まで）、広がった端が壁の中に隠れるようにした。
+  // 前は 0.5 しか入れず、輪の向きもつなぐ前のままだったので、広がった端の輪が胃の壁の外へ襟のようにはみ出し、食道と胃が離れて見えていた
   let ix = centers[bs * 3] - pos[best], iy = centers[bs * 3 + 1] - pos[best + 1], iz = centers[bs * 3 + 2] - pos[best + 2];
-  const il = Math.hypot(ix, iy, iz) || 1;
-  const tx = pos[best] + ix / il * 0.5, ty = pos[best + 1] + iy / il * 0.5, tz = pos[best + 2] + iz / il * 0.5;
-  const dx = tx - ex, dy = ty - ey, dz = tz - ez;
+  const il = Math.hypot(ix, iy, iz) || 1; ix /= il; iy /= il; iz /= il;
+  const dep = Math.min(1.2, 0.5 * il);
+  const P1 = [pos[best] + ix * dep, pos[best + 1] + iy * dep, pos[best + 2] + iz * dep];
+  // つなぐ前の最後の輪（動かさない）から終わりまでを、向きのつながった曲線（エルミート曲線）で結ぶ。終わりの向きは、もとの食道の向きと壁へ入る向きの間
+  const i0 = NN - ESO_JOIN - 1, c0 = i0 * 3, P0 = [centers[c0], centers[c0 + 1], centers[c0 + 2]];
+  const im = NN - ESO_JOIN - 2, t0 = [P0[0] - centers[im * 3], P0[1] - centers[im * 3 + 1], P0[2] - centers[im * 3 + 2]];
+  const ln = Math.hypot(P1[0] - P0[0], P1[1] - P0[1], P1[2] - P0[2]);
+  const nrm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const od = nrm([ex - escBase.c[(L - 1) * 3], ey - escBase.c[(L - 1) * 3 + 1], ez - escBase.c[(L - 1) * 3 + 2]]);
+  const m0 = nrm(t0).map(x => x * ln), m1 = nrm([od[0] + ix, od[1] + iy, od[2] + iz]).map(x => x * ln);
   for (let k = 0; k < ESO_JOIN; k++) {
-    const i = NN - ESO_JOIN + k, s = (k + 1) / ESO_JOIN, w = s * s * (3 - 2 * s);   // 端ほど大きく動かす
-    const c = i * 3;
-    centers[c] = escBase.c[k * 3] + dx * w; centers[c + 1] = escBase.c[k * 3 + 1] + dy * w; centers[c + 2] = escBase.c[k * 3 + 2] + dz * w;
-    const r = escBase.r[k] * (1 + 0.7 * s * s * s), rb = r * FLAT;
-    const ux = frameU[c], uy = frameU[c + 1], uz = frameU[c + 2], vx = frameV[c], vy = frameV[c + 1], vz = frameV[c + 2];
+    const s = (k + 1) / ESO_JOIN, s2 = s * s, s3 = s2 * s, h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
+    const c = (NN - ESO_JOIN + k) * 3;
+    for (let a = 0; a < 3; a++) centers[c + a] = h00 * P0[a] + h10 * m0[a] + h01 * P1[a] + h11 * m1[a];
+  }
+  // 輪の向きを、つないだ後の管の向きに合わせ直す（前の輪の向きを少しずつ回して運ぶ）
+  let pu = [frameU[c0], frameU[c0 + 1], frameU[c0 + 2]];
+  for (let k = 0; k < ESO_JOIN; k++) {
+    const i = NN - ESO_JOIN + k, c = i * 3, a = (i - 1) * 3, b = Math.min(NN - 1, i + 1) * 3;
+    const T = nrm([centers[b] - centers[a], centers[b + 1] - centers[a + 1], centers[b + 2] - centers[a + 2]]);
+    const d = pu[0] * T[0] + pu[1] * T[1] + pu[2] * T[2];
+    const U = nrm([pu[0] - T[0] * d, pu[1] - T[1] * d, pu[2] - T[2] * d]);
+    const V = [T[1] * U[2] - T[2] * U[1], T[2] * U[0] - T[0] * U[2], T[0] * U[1] - T[1] * U[0]];
+    frameU[c] = U[0]; frameU[c + 1] = U[1]; frameU[c + 2] = U[2]; frameV[c] = V[0]; frameV[c + 1] = V[1]; frameV[c + 2] = V[2]; pu = U;
+    const s = (k + 1) / ESO_JOIN, r = escBase.r[k] * (1 + 0.5 * s * s * s), rb = r * FLAT;
     for (let j = 0; j < CM; j++) {
       const th = j / CM * Math.PI * 2, cs = Math.cos(th), sn = Math.sin(th), q = (i * CM + j) * 3;
-      pos[q] = centers[c] + r * cs * vx + rb * sn * ux;
-      pos[q + 1] = centers[c + 1] + r * cs * vy + rb * sn * uy;
-      pos[q + 2] = centers[c + 2] + r * cs * vz + rb * sn * uz;
+      pos[q] = centers[c] + r * cs * V[0] + rb * sn * U[0];
+      pos[q + 1] = centers[c + 1] + r * cs * V[1] + rb * sn * U[1];
+      pos[q + 2] = centers[c + 2] + r * cs * V[2] + rb * sn * U[2];
     }
   }
 }
