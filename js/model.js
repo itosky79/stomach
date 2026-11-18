@@ -133,19 +133,35 @@ let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標�
    曲がりの中心の向き n に、輪の点が曲がりの半径の 0.8 倍より先へ出ないように平らにつぶす（小弯側が内側へくびれた形）。
    断面積と容量は、つぶしたあとの多角形の面積で数え直す */
 function unfoldRings() {
-  for (let i = 2; i < NMAIN - 2; i++) {
+  // 1. 断面ごとに、曲がりの中心の向き n と、つぶす量（管の半径 − 曲がりの半径の 0.8 倍）を求める
+  const N = NMAIN, def = new Float64Array(N), nv = new Float64Array(N * 3);
+  for (let i = 2; i < N - 2; i++) {
     const a = (i - 2) * 3, b = i * 3, c = (i + 2) * 3;
     const ux = centers[a] - centers[b], uy = centers[a + 1] - centers[b + 1], uz = centers[a + 2] - centers[b + 2];
     const vx = centers[c] - centers[b], vy = centers[c + 1] - centers[b + 1], vz = centers[c + 2] - centers[b + 2];
     const lu = Math.hypot(ux, uy, uz), lv = Math.hypot(vx, vy, vz); if (lu < 1e-6 || lv < 1e-6) continue;
-    // 曲がりの中心の向き（2 つの向きの和）と、外接円の半径
     let nx = ux / lu + vx / lv, ny = uy / lu + vy / lv, nz = uz / lu + vz / lv; const ln = Math.hypot(nx, ny, nz);
-    if (ln < 1e-4) continue; nx /= ln; ny /= ln; nz /= ln;
+    if (ln < 1e-4) continue; nv[b] = nx / ln; nv[b + 1] = ny / ln; nv[b + 2] = nz / ln;
     const wx = vx - ux, wy = vy - uy, wz = vz - uz, ac = Math.hypot(wx, wy, wz);
     const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx, A2 = Math.hypot(cx, cy, cz);
     if (A2 < 1e-9) continue;
-    const R = lu * lv * ac / (2 * A2), lim = 0.8 * R;
-    if (lim >= radius[i]) continue;
+    def[i] = Math.max(0, 0.8 * radius[i] - 0.8 * lu * lv * ac / (2 * A2));   // 曲がりの半径が管の半径の 0.8 倍より小さい所だけ（少しの重なりは見えないので、胃体部のゆるい曲がりはつぶさない）
+  }
+  // 2. つぶす量と向きを、前後 SM 断面になめらかに広げる（2026-11-18。1〜2 断面だけつぶすと、そこの底が急に持ち上がって段になり、
+  //    背臥位で胃体部の途中にバリウムがせき止められていた）。量は前後の最大を三角の重みで広げ、向きは量で重み付けして平均する
+  const SM = 10, ds = new Float64Array(N), ns = new Float64Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    let m = 0, sx = 0, sy = 0, sz = 0;
+    for (let k = Math.max(0, i - SM); k <= Math.min(N - 1, i + SM); k++) {
+      const w = 1 - Math.abs(k - i) / (SM + 1), d = def[k] * w; if (d > m) m = d;
+      sx += nv[k * 3] * def[k] * w; sy += nv[k * 3 + 1] * def[k] * w; sz += nv[k * 3 + 2] * def[k] * w;
+    }
+    const l = Math.hypot(sx, sy, sz); ds[i] = m; if (l > 1e-9) { ns[i * 3] = sx / l; ns[i * 3 + 1] = sy / l; ns[i * 3 + 2] = sz / l; }
+  }
+  // 3. 輪の点が、中心から向き n へ（半径 − つぶす量）より先へ出ないように平らにつぶす。断面積と容量は数え直す
+  for (let i = 0; i < N; i++) {
+    if (ds[i] <= 1e-6) continue;
+    const b = i * 3, nx = ns[b], ny = ns[b + 1], nz = ns[b + 2], lim = Math.max(radius[i] * 0.3, radius[i] - ds[i]);
     const before = ringArea(i);
     for (let j = 0; j < CM; j++) {
       const k = (i * CM + j) * 3, dx = pos[k] - centers[b], dy = pos[k + 1] - centers[b + 1], dz = pos[k + 2] - centers[b + 2];
