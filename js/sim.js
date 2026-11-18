@@ -576,12 +576,22 @@ const mucus = new Float32Array(NV).fill(1);    // 粘液の残り（1 ＝ 全部
 const subT = new Float32Array(NV);             // 液面の下にいた時間（秒）
 const prevS = new Float32Array(NV);            // 前の刻みの、液面からの高さ（模型の長さ）
 function baRho() { const c = BA.C / 100; return (c + (1 - c / 4.5)) * 1000; }   // kg/m³
+/* 表示と膜に使う液面の高さ（2026-11-18）。胃底部の先（管の端の丸め）の細い断面は、容量が小さく溜まりの量が 0 でも、実際には隣の溜まりと
+   つながっていて、同じ液面の下にある。そのまま使うと、背臥位で穹窿部の頂の壁が液面より上（膜だけ）と扱われ、白い溜まりの上に灰色の放射状の
+   模様が出ていた。胃底部の先から最初に溜まりのある断面までは、その断面の液面を使う */
+const lvlShow = new Float32Array(NN);
+function updateShowLevel() {
+  for (let n = 0; n < NN; n++) lvlShow[n] = lvl[n];
+  let i0 = -1; for (let i = 0; i < Math.min(NMAIN, 40); i++) if (wVol[i] > 1e-6) { i0 = i; break; }
+  if (i0 > 0) for (let n = 0; n < i0; n++) lvlShow[n] = Math.max(lvl[n], lvl[i0]);
+}
 function updateWet(dt) {
   const nrm = geom.attributes.normal.array, u = uUp.value;
   const rho = baRho(), mu = BA.mu * 1e-3, c = BA.C / 100, ODk = BA_MUM * c * 100;   // od ＝ ODk × h(m)
   uGroove.value = BA_MUM * c * BA_FOLD; uArea.value = BA_MUM * c * BA_AREA;
+  updateShowLevel();
   for (let n = 0; n < NN; n++) {
-    const L = lvl[n], b = n * CM;
+    const L = lvlShow[n], b = n * CM;
     for (let j = 0; j < CM; j++) {
       const idx = b + j, s = hArr[idx] - L;
       aLevel[idx] = L;
@@ -759,15 +769,16 @@ function updateThickness() {
     const c = i * 3, Ux = frameU[c], Uy = frameU[c + 1], Uz = frameU[c + 2], Vx = frameV[c], Vy = frameV[c + 1], Vz = frameV[c + 2];
     const eu0 = bx * Ux + by * Uy + bz * Uz, ev0 = bx * Vx + by * Vy + bz * Vz, n = Math.hypot(eu0, ev0);
     const b = i * CM;
-    if (n < 0.2) { for (let j = 0; j < CM; j++) aThick[b + j] = 10; continue; }   // X 線が管の向きとほぼ同じ：厚いとみなす
+    if (n < 0.2) { for (let j = 0; j < CM; j++) { aThick[b + j] = 10; aOne[b + j] = 1; } continue; }   // X 線が管の向きとほぼ同じ：厚いとみなす
     const eu = eu0 / n, ev = ev0 / n, stretch = Math.min(3, 1 / n);
     // 断面の高さ（上向き）を U・V で表した傾き。液面の高さ lvl[i] との比較に使う
     const hu = u.x * Ux + u.y * Uy + u.z * Uz, hv = u.x * Vx + u.y * Vy + u.z * Vz;
-    const hc = centers[c] * u.x + centers[c + 1] * u.y + centers[c + 2] * u.z, L = lvl[i] - hc;
+    const hc = centers[c] * u.x + centers[c + 1] * u.y + centers[c + 2] * u.z, L = lvlShow[i] - hc;
     for (let j = 0; j < CM; j++) {
       const k = (b + j) * 3, dx = pos[k] - centers[c], dy = pos[k + 1] - centers[c + 1], dz = pos[k + 2] - centers[c + 2];
       pu[j] = dx * Ux + dy * Uy + dz * Uz; pv[j] = dx * Vx + dy * Vy + dz * Vz;
     }
+    const allUnder = hmax[i] - (hmax[i] - hmin[i]) * 0 <= lvlShow[i];   // 断面が丸ごと液面の下
     for (let j = 0; j < CM; j++) {
       // 頂点 j を通り向き (eu, ev) の直線と、輪の辺との交わり（直線上の位置 t）の最小と最大
       const qu = pu[j], qv = pv[j];
@@ -792,10 +803,20 @@ function updateThickness() {
       // X 線が重力の向きに近い（背臥位・腹臥位の正面など）とき、液面より下の壁の点からは、X 線は液面まで溜まりの中を通る。その長さ
       // （液面までの高さ ÷ X 線の向きの上下の成分）も比べ、長いほうを使う（2026-11-18）。輪切り 1 枚の中だけで数えると、管が X 線の向きに
       // 寝ている穹窿部の上の方で厚みが 0 近くになる所ができ、白い溜まりの中に黒い線が出ていた
-      let th = len * stretch;
-      if (Math.abs(bu) > 0.5) { const hv0 = qu * hu + qv * hv; if (hv0 < L) th = Math.max(th, Math.min(10, (L - hv0) / Math.abs(bu))); }
-      aThick[b + j] = th;
+      let th = len * stretch, one = 0;
+      if (Math.abs(h1 - h0) > 1e-6 && (L - h0) * (L - h1) < 0) one = 1;   // 輪の中の X 線の道が液面と交わる：もう一方の端は液面
+      // X 線が重力の向きに近いとき（背臥位・腹臥位の正面など）は、液面より下の壁の点を通る X 線は、その断面のいちばん深い所から液面までの
+      // 溜まりを通るとみなす（2026-11-18）。輪切り 1 枚の中や、壁の点から液面までだけで数えると、管が X 線の向きに寝ている穹窿部の頂の
+      // あたりで厚みが小さくなる所ができ、白い溜まりの中に黒い弧が出ていた。本物は溜まりの中に薄い所はできない
+      // ただし、断面の一部だけが沈んでいる所（溜まりの縁）では、その壁の点から液面までにとどめる（いちばん深い所からにすると、側臥位などで
+      // 溜まりの縁の胃体部が白い縞になった）
+      if (Math.abs(bu) > 0.5) { const hv0 = qu * hu + qv * hv; if (hv0 < L) {
+        const col = allUnder ? (lvlShow[i] - hmin[i]) : (L - hv0);
+        th = Math.max(th, Math.min(10, col / Math.abs(bu))); one = 1; } }
+      aThick[b + j] = th; aOne[b + j] = one;
     }
   }
-  geom.attributes.aThick.needsUpdate = true;
+  // 胃底部の頂の点（管の端の丸めで半径がほぼ 0 になる輪）は、厚みが計れないので、すぐ隣の輪の値を使う（白い溜まりの中に黒い点が出ていた）
+  for (let i = 0; i < 3; i++) if (radius[i] < 0.3) for (let j = 0; j < CM; j++) { aThick[i * CM + j] = aThick[3 * CM + j]; aOne[i * CM + j] = aOne[3 * CM + j]; }
+  geom.attributes.aThick.needsUpdate = true; geom.attributes.aOne.needsUpdate = true;
 }

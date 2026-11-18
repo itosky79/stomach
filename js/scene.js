@@ -160,15 +160,16 @@ geom.setAttribute('aWet', new THREE.BufferAttribute(aWet, 1));
 geom.setAttribute('aFilm', new THREE.BufferAttribute(aFilm, 1));
 geom.setAttribute('aRug', new THREE.BufferAttribute(aRug, 3));
 geom.setAttribute('aThick', new THREE.BufferAttribute(aThick, 1));
+geom.setAttribute('aOne', new THREE.BufferAttribute(aOne, 1));
 geom.setIndex(new THREE.BufferAttribute(indices, 1));
 
 const VERT = `
-attribute float aLevel; attribute float aWet; attribute vec3 aRug; attribute float aThick; attribute float aFilm;
+attribute float aLevel; attribute float aWet; attribute vec3 aRug; attribute float aThick; attribute float aFilm; attribute float aOne; varying float vOne;
 uniform vec3 uUp;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
 varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick; varying float vFilm;
 void main(){
-  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug; vThick = aThick; vFilm = aFilm;
+  vH = dot(position, uUp); vLevel = aLevel; vWet = aWet; vNL = normal; vR = aRug; vThick = aThick; vFilm = aFilm; vOne = aOne;
   vec4 wp = modelMatrix * vec4(position,1.0);
   vNW = normalize(mat3(modelMatrix) * normal);
   vVd = normalize(cameraPosition - wp.xyz);
@@ -231,7 +232,7 @@ void main(){
 const FRAG_XRAY = `
 uniform vec3 uUp; uniform float uRug; uniform float uGroove; uniform float uArea;
 varying float vH; varying float vLevel; varying float vWet; varying vec3 vR;
-varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick; varying float vFilm;
+varying vec3 vNL; varying vec3 vNW; varying vec3 vVd; varying float vThick; varying float vFilm; varying float vOne;
 ${RUGAE}
 void main(){
   vec3 n = normalize(vNW);
@@ -249,8 +250,10 @@ void main(){
   // 白さは光学的な厚み（透過した X 線の対数）に比例させ、0〜3 を黒〜白に割り当てる（デジタル透視の表示に近いと仮定）
   float has = clamp(vFilm / 0.05, 0.0, 1.0);                 // 膜が無ければ溝にもたまっていない
   float od = (vFilm + (uGroove * foldGroove(vR) * vR.z * uRug + uArea * areaNet(vR)) * has) * edge;
-  float d = below * pool + (1.0 - below) * min(od / 3.0, 1.0);
-  d *= mix(1.0, edge, below);
+  // 溜まりの白さは、その X 線が通るバリウムの厚みだけで決める（2026-11-18）。前は 1 面 0.62 を表と裏の 2 面で足して白くし、さらに面を斜めに
+  // 通るほど白くしていた。背臥位の穹窿部のように X 線が溜まりの中で壁を 1 回しか通らない（もう一方は液面）所では 0.62 にしかならず、
+  // 壁が X 線にまっすぐ向いた所が灰色の弧（黒い線）に見えていた。壁を 1 回しか通らない所（vOne）は 2 面分を 1 面で受け持つ
+  float d = below * pool * (1.0 + vOne) + (1.0 - below) * min(od / 3.0, 1.0);
   gl_FragColor = vec4(vec3(0.93,0.955,1.0) * d, 1.0);
 }`;
 
