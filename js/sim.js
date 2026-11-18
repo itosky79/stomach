@@ -698,9 +698,12 @@ function fitBodyToStomach() {
    強さが変わったら胃の形を作り直す（model.js の rebuild が futonAmt で胃体部の前の壁を押す） */
 /* 姿勢による胃の縦の伸び（model.js の JSHAPE の説明）。0.01 以上変わったら（または端に着いたら）胃の形を作り直す（2026-11-18 に 0.03 から細かくした。1 回 10 ミリ秒ほど） */
 function postureStretch(tilt) { const g = Math.max(0, Math.min(1, Math.sin(tilt * Math.PI / 180))); return JSHAPE.stretchLie + (JSHAPE.stretchStand - JSHAPE.stretchLie) * g; }
+// 胃角より先の持ち上げも姿勢で変える（2026-11-19）：寝ているときは liftLie、立位では liftStand（起倒角の sin で混ぜる）。
+// 立位では前庭部から幽門が液面より上へ立ち上がる（本の立位の像の J 字）。寝ているとき（特に頭低位）は持ち上げが大きいと幽門の手前が窪みになる
+function postureLift(tilt) { const g = Math.max(0, Math.min(1, Math.sin(tilt * Math.PI / 180))); return JSHAPE.liftLie + (JSHAPE.liftStand - JSHAPE.liftLie) * g; }
 function postureStep() {
-  const want = postureStretch(tiltCur);
-  if (Math.abs(want - JSHAPE.stretch) > 0.01 || (want !== JSHAPE.stretch && (want === JSHAPE.stretchLie || want === JSHAPE.stretchStand))) { JSHAPE.stretch = want; keepCardia = true; try { rebuildAll(); } finally { keepCardia = false; } }
+  const want = postureStretch(tiltCur), wl = postureLift(tiltCur);
+  if (Math.abs(want - JSHAPE.stretch) > 0.01 || Math.abs(wl - JSHAPE.lift) > 0.04 || (want !== JSHAPE.stretch && (want === JSHAPE.stretchLie || want === JSHAPE.stretchStand)) || (wl !== JSHAPE.lift && (wl === JSHAPE.liftLie || wl === JSHAPE.liftStand))) { JSHAPE.stretch = want; JSHAPE.lift = wl; keepCardia = true; try { rebuildAll(); } finally { keepCardia = false; } }
 }
 function futonStep() {
   const d = Math.abs(((rollCur - 180) % 360 + 540) % 360 - 180), st = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
