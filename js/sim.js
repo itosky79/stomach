@@ -289,6 +289,7 @@ function poseName(tilt, roll) {
 }
 
 /* ================= 流体ソルバ ================= */
+const hminR = new Float32Array(NN), hmaxR = new Float32Array(NN);
 function computeHeights() {
   const ux = uUp.value.x, uy = uUp.value.y, uz = uUp.value.z;
   for (let n = 0; n < NN; n++) {
@@ -305,6 +306,7 @@ function computeHeights() {
     const c0 = lo2 * 3, c1 = hi2 * 3;
     const dh = Math.abs((centers[c1] - centers[c0]) * ux + (centers[c1 + 1] - centers[c0 + 1]) * uy + (centers[c1 + 2] - centers[c0 + 2]) * uz) / Math.max(1, hi2 - lo2);
     hmin[n] = lo - dh / 2; hmax[n] = hi + dh / 2;
+    hminR[n] = lo; hmaxR[n] = hi;   // 輪の縁だけで測った高さ（表示と膜に使う。updateShowLevel）
   }
 }
 function levelOf(n) {
@@ -581,9 +583,14 @@ function baRho() { const c = BA.C / 100; return (c + (1 - c / 4.5)) * 1000; }   
    模様が出ていた。胃底部の先から最初に溜まりのある断面までは、その断面の液面を使う */
 const lvlShow = new Float32Array(NN);
 function updateShowLevel() {
-  for (let n = 0; n < NN; n++) lvlShow[n] = lvl[n];
+  // 表示の液面は、輪の縁だけで測った高さの幅で数え直す（2026-11-18）。流れの計算は、断面の厚み分だけ上下に広げた高さ（computeHeights の
+  // hmin・hmax）を使うが、それで液面を出すと、浅い溜まりの液面が実際より高くなり、胃体部の壁が広く「沈んでいる」と扱われて白く写っていた
+  for (let n = 0; n < NN; n++) {
+    const c = cap[n], f = c > 1e-9 ? wVol[n] / c : 0;
+    lvlShow[n] = f <= 0 ? hminR[n] - 1e-3 : f >= 1 ? hmaxR[n] : hminR[n] + invFrac(f) * (hmaxR[n] - hminR[n]);
+  }
   let i0 = -1; for (let i = 0; i < Math.min(NMAIN, 40); i++) if (wVol[i] > 1e-6) { i0 = i; break; }
-  if (i0 > 0) for (let n = 0; n < i0; n++) lvlShow[n] = Math.max(lvl[n], lvl[i0]);
+  if (i0 > 0) for (let n = 0; n < i0; n++) lvlShow[n] = Math.max(lvlShow[n], lvlShow[i0]);
 }
 function updateWet(dt) {
   const nrm = geom.attributes.normal.array, u = uUp.value;
@@ -778,7 +785,7 @@ function updateThickness() {
       const k = (b + j) * 3, dx = pos[k] - centers[c], dy = pos[k + 1] - centers[c + 1], dz = pos[k + 2] - centers[c + 2];
       pu[j] = dx * Ux + dy * Uy + dz * Uz; pv[j] = dx * Vx + dy * Vy + dz * Vz;
     }
-    const allUnder = hmax[i] - (hmax[i] - hmin[i]) * 0 <= lvlShow[i];   // 断面が丸ごと液面の下
+    const allUnder = hmaxR[i] <= lvlShow[i];   // 断面が丸ごと液面の下
     for (let j = 0; j < CM; j++) {
       // 頂点 j を通り向き (eu, ev) の直線と、輪の辺との交わり（直線上の位置 t）の最小と最大
       const qu = pu[j], qv = pv[j];
@@ -811,7 +818,7 @@ function updateThickness() {
       // ただし、断面の一部だけが沈んでいる所（溜まりの縁）では、その壁の点から液面までにとどめる（いちばん深い所からにすると、側臥位などで
       // 溜まりの縁の胃体部が白い縞になった）
       if (Math.abs(bu) > 0.5) { const hv0 = qu * hu + qv * hv; if (hv0 < L) {
-        const col = allUnder ? (lvlShow[i] - hmin[i]) : (L - hv0);
+        const col = allUnder ? (lvlShow[i] - hminR[i]) : (L - hv0);
         th = Math.max(th, Math.min(10, col / Math.abs(bu))); one = 1; } }
       aThick[b + j] = th; aOne[b + j] = one;
     }

@@ -104,6 +104,9 @@ function xrayMat(density, bone, edgeCap, dia) {   // dia：横隔膜の高さ（
         float d = uD * edge;
         // 横隔膜より頭側は肺野なので軟部組織の濃度を落とす
         if(uBone < 0.5){ float dia = uDia - 0.05*vL.x*vL.x; d *= mix(1.0, 0.18, smoothstep(dia-1.5, dia+2.0, vL.y)); }
+        // 腕（体表のうち腕の部分）は薄くする（2026-11-18）。腕は胴より細いのに、表と裏の面を足す描き方では胴と同じ濃さの面が 2 枚増え、
+        // 斜位で胴のわきに重なると白い太い帯になっていた（背臥位第1斜位など）。本の像には腕は写っていない。bodyVert が vArmC を足す
+        if(uBone < 0.5) d *= mix(1.0, 0.3, step(0.5, vArmC));
         gl_FragColor = vec4(vec3(0.90,0.93,1.0) * d, 1.0);
       }`,
     transparent: true, depthWrite: false, depthTest: false,
