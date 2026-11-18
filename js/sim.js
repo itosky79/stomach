@@ -299,7 +299,12 @@ function computeHeights() {
       hArr[b + j] = h;
       if (h < lo) lo = h; if (h > hi) hi = h;
     }
-    hmin[n] = lo; hmax[n] = hi;
+    // 断面の厚み（隣の断面までの半分ずつ）が上下にどれだけ広がるかも足す（2026-11-18）。輪の縁の頂点だけで測ると、管が縦になった所
+    // （立位の胃体部など）では輪が水平になって底と天井がほぼ同じ高さになり、隣との高さの差がほとんど無くなってバリウムが下へ落ちなかった
+    const lo2 = n === 0 || n === NMAIN ? n : n - 1, hi2 = n === NMAIN - 1 || n === NN - 1 ? n : n + 1;
+    const c0 = lo2 * 3, c1 = hi2 * 3;
+    const dh = Math.abs((centers[c1] - centers[c0]) * ux + (centers[c1 + 1] - centers[c0 + 1]) * uy + (centers[c1 + 2] - centers[c0 + 2]) * uz) / Math.max(1, hi2 - lo2);
+    hmin[n] = lo - dh / 2; hmax[n] = hi + dh / 2;
   }
 }
 function levelOf(n) {
@@ -322,11 +327,12 @@ function levelOf(n) {
    液面の波の速さ √(g h) で 1 刻みに断面 1 つ分より進まないように、刻みを細かく分ける（CFL 条件）。
    幽門は開き具合（edges の k。閉じているとき 0.10）を通る断面積に掛ける。食道は胃の向きにしか流さない（k2 ＝ 0）。
    この式だと、傾けたときの流れの先端は √(g h) の数倍（毎秒 数十 cm）で進み、数秒で落ち着く。胃の中での流れの速さの実測とは照合していない */
-// cf：流れの抵抗（速さの 2 乗に比例する分）。2026-11-18 に 0.01（滑らかな壁の乱流の目安）→ 3 にした。透視の動画（病院の紹介動画、
-//   腹臥位で台を水平から頭低位へ倒す場面。透視像が途切れずに動いている所だけを測った）で、溜まりが一気に移るとき 2 割→8 割に約 1.2 秒、
-//   ほぼ移り終わるまで約 2 秒かかっていた。0.01 では段差で傾けると 0.3 秒で移り終わり、3 倍以上速かった。3 で 2 割→8 割 1.1 秒・95 % 2.2 秒。
-//   この値は、式に入っていないもの（ひだ・胃小区の抵抗、中のガスとの入れ替わり、胃の壁のしなり）をまとめて動画に合わせたもので、物理の値ではない
-const FLOW = { cf: 3, cfl: 0.4, maxSub: 80, sw: 0, sg: 0, gmax: 0 };
+// cf：乱れの抵抗（速さの 2 乗に比例。滑らかな壁の目安 0.01）。kl：速さに比例する抵抗（1/秒）。
+//   kl は 2026-11-18 に透視の動画（病院の紹介動画、腹臥位で台を水平から頭低位へ倒す場面。透視像が途切れずに動いている所だけを測った）に合わせた：
+//   溜まりの中心が移るとき、動き始め（2 割）から 8 割まで約 1.2 秒、95 % まで約 3.8 秒。kl 16 で 0.95 秒・3.85 秒（段差で傾けたとき）。
+//   はじめは cf を 3 にして合わせたが、層が薄いほど強く効く式なので、立位で胃体部の壁のバリウムが下りにくくなった。kl は層の厚さによらない。
+//   kl は、式に入っていないもの（ひだ・胃小区の抵抗、中のガスとの入れ替わり、胃の壁のしなり）をまとめて動画に合わせた値で、物理の値ではない
+const FLOW = { cf: 0.01, kl: 16, cfl: 0.4, maxSub: 80, sw: 0, sg: 0, gmax: 0 };
 const flowQ = new Float32Array(NN);            // 境目ごとの流量（edges の順。＋は i → j）
 function flowStep(dt) {
   const g = G0 / UNIT_M, nu = (BA.mu * 1e-3 / baRho()) / (UNIT_M * UNIT_M), ty = (BA.ty / baRho()) / (UNIT_M * UNIT_M);   // 模型の長さ・秒の単位
@@ -357,7 +363,7 @@ function flowStep(dt) {
         const u = Math.abs(q) / A, c3 = hh / (3 * nu); let T = 1.5 * ty + u / c3;
         { const gm = 3 * u / hh, w = Math.abs(q); FLOW.sw += w; FLOW.sg += w * gm; if (gm > FLOW.gmax) FLOW.gmax = gm; }   // 壁のずり速度（1/秒）の記録（流量で重み付け。確かめ用）
         if (ty > 0) for (let it = 0; it < 3; it++) { const f = c3 * (T - 1.5 * ty + 0.5 * ty * ty * ty / (T * T)) - u, df = c3 * (1 - ty * ty * ty / (T * T * T)); if (df > 1e-9) T = Math.max(ty * 1.0001, T - f / df); }
-        q /= 1 + ds * (T * W / Math.abs(q) + FLOW.cf * u / hh);       // ビンガムのまさつと乱れのまさつ（陰的に。向きは変えない）
+        q /= 1 + ds * (T * W / Math.abs(q) + FLOW.cf * u / hh + FLOW.kl);   // ビンガムのまさつ、乱れのまさつ、速さに比例する抵抗 kl（陰的に。向きは変えない）
       }
       if ((q > 0 && E.k <= 0) || (q < 0 && E.k2 <= 0)) q = 0;
       // 動かす量：上流の、敷居より上にある分と、下流の空きまで
@@ -368,6 +374,31 @@ function flowStep(dt) {
       flowQ[e] = q;
     }
     if (TYPES[curType].duoEnd) duoOutflow(ds, g, nu, ty);
+    fullRunFlow(ds, g);
+  }
+}
+/* 満杯の断面が続く所を通す流れ（2026-11-18）。J 字の底が満杯になると、満杯の断面の液面は天井の高さになり、両側（胃体部と前庭部）の
+   液面の差（水圧）が伝わらず、液面がそろわないまま止まっていた。満杯の断面の続き（両端が満杯でない断面）を 1 本の管とみなし、
+   両端の液面の差 Δh から、オリフィスの式 q = Cd × A × √(2 g Δh)（A は続きの中でいちばん細い断面の面積、Cd = 0.3）で、高いほうの端から
+   低いほうの端へ直接移す。Cd は仮の値（管の中の抵抗をまとめたもの） */
+const FULLRUN = { cd: 0.3 };
+function fullRunFlow(ds, g) {
+  let k = 0;
+  while (k < NMAIN) {
+    if (wVol[k] < cap[k] * 0.999) { k++; continue; }
+    let e = k; while (e + 1 < NMAIN && wVol[e + 1] >= cap[e + 1] * 0.999) e++;
+    const L = k - 1, R = e + 1;
+    if (L >= 0 && R < NMAIN && wVol[L] > 1e-7 && wVol[R] > 1e-7 && regionList[regionOf[R]][0] !== 'duode' && regionList[regionOf[L]][0] !== 'duode') {
+      const dh = lvl[L] - lvl[R];
+      if (Math.abs(dh) > 1e-4) {
+        let Amin = 1e9; for (let i = k; i <= e; i++) if (area[i] < Amin) Amin = area[i];
+        const a = dh > 0 ? L : R, b = dh > 0 ? R : L;
+        let amt = FULLRUN.cd * Amin * Math.sqrt(2 * g * Math.abs(dh)) * ds;
+        amt = Math.min(amt, wVol[a] * 0.5, Math.max(0, cap[b] - wVol[b]));
+        if (amt > 0 && Number.isFinite(amt)) { wVol[a] -= amt; wVol[b] += amt; lvl[a] = levelOf(a); lvl[b] = levelOf(b); }
+      }
+    }
+    k = e + 1;
   }
 }
 /* 十二指腸の端（下行部の先）から、その先の腸へ流れ出る（2026-11-16）。管の先に、同じ傾きで続く空の断面があるとみなし、
@@ -384,7 +415,7 @@ function duoOutflow(ds, g, nu, ty) {
   let q = duoQ + ds * g * A * (si - Bs) / dS;
   if (q <= ds * ty * W) { duoQ = 0; return; }
   q -= ds * ty * W;
-  const u = q / A; q /= 1 + ds * (3 * nu / (hh * hh) + FLOW.cf * u / hh);
+  const u = q / A; q /= 1 + ds * (3 * nu / (hh * hh) + FLOW.cf * u / hh + FLOW.kl);
   const amt = Math.min(q * ds, wVol[n] * 0.5);
   if (!(amt > 0) || !Number.isFinite(amt)) { duoQ = 0; return; }   // 2026-11-16：数値が壊れた（NaN）ときに流量を入れない（画面のループで右側臥位などのとき胃の中身が NaN になっていた）
   wVol[n] -= amt; drained += amt; duoQ = amt / ds;

@@ -177,6 +177,9 @@ function setXray(on) {
   meshBack.visible = !on;
   meshFront.material = on ? matXray : matFront;
   meshGas.visible = on;                       // 胃の中のガスで暗くする（scene.js の FRAG_GASX）
+  // 透視像では、体（軟部組織）→ ガスで暗くする → 骨 → バリウムの順に描く（2026-11-18）。前はガスを最後に引いていたので、
+  // 白く飽和したバリウムの溜まりの上まで暗くなり、溜まりの中に暗い帯が出ていた。本物はバリウムの所はガスが重なっても白いまま
+  meshSkin.renderOrder = on ? -2 : 6; meshGas.renderOrder = on ? -1 : 30;
   meshSurf.material = on ? matSurfX : matSurf;
   pourMesh.material = on ? matPourX : matPour;
   meshSkin.material = on ? matSkinX : matSkin;

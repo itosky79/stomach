@@ -127,6 +127,33 @@ const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm �
 const FUTON = { amt: 0.45 };
 let futonAmt = 0;
 let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標）。sim.js の setCompAxis が体位から決める
+/* 曲がりの内側で輪切りが重ならないようにする（2026-11-18）。J 字に強く曲げた胃角・前庭部・幽門の手前では、中心の線の曲がりの半径が
+   管の半径より小さく（きつい所で半分）、曲がりの内側で輪が重なって折り返し、胃の中に板が飛び出したように見えていた。
+   曲がりの中心の向き n に、輪の点が曲がりの半径の 0.8 倍より先へ出ないように平らにつぶす（小弯側が内側へくびれた形）。
+   断面積と容量は、つぶしたあとの多角形の面積で数え直す */
+function unfoldRings() {
+  for (let i = 2; i < NMAIN - 2; i++) {
+    const a = (i - 2) * 3, b = i * 3, c = (i + 2) * 3;
+    const ux = centers[a] - centers[b], uy = centers[a + 1] - centers[b + 1], uz = centers[a + 2] - centers[b + 2];
+    const vx = centers[c] - centers[b], vy = centers[c + 1] - centers[b + 1], vz = centers[c + 2] - centers[b + 2];
+    const lu = Math.hypot(ux, uy, uz), lv = Math.hypot(vx, vy, vz); if (lu < 1e-6 || lv < 1e-6) continue;
+    // 曲がりの中心の向き（2 つの向きの和）と、外接円の半径
+    let nx = ux / lu + vx / lv, ny = uy / lu + vy / lv, nz = uz / lu + vz / lv; const ln = Math.hypot(nx, ny, nz);
+    if (ln < 1e-4) continue; nx /= ln; ny /= ln; nz /= ln;
+    const wx = vx - ux, wy = vy - uy, wz = vz - uz, ac = Math.hypot(wx, wy, wz);
+    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx, A2 = Math.hypot(cx, cy, cz);
+    if (A2 < 1e-9) continue;
+    const R = lu * lv * ac / (2 * A2), lim = 0.8 * R;
+    if (lim >= radius[i]) continue;
+    const before = ringArea(i);
+    for (let j = 0; j < CM; j++) {
+      const k = (i * CM + j) * 3, dx = pos[k] - centers[b], dy = pos[k + 1] - centers[b + 1], dz = pos[k + 2] - centers[b + 2];
+      const d = dx * nx + dy * ny + dz * nz;
+      if (d > lim) { const e = d - lim; pos[k] -= e * nx; pos[k + 1] -= e * ny; pos[k + 2] -= e * nz; }
+    }
+    if (before > 1e-9) { area[i] *= Math.max(0.05, ringArea(i) / before); cap[i] = area[i] * dl[i]; }
+  }
+}
 function ringArea(i) {   // 断面 i の輪の多角形の面積（断面の平面 U・V で測る）
   const c = i * 3, ux = frameU[c], uy = frameU[c + 1], uz = frameU[c + 2], vx = frameV[c], vy = frameV[c + 1], vz = frameV[c + 2];
   let A = 0, pu = 0, pv = 0, fu = 0, fv = 0;
@@ -266,6 +293,7 @@ function rebuild() {
   // 十二指腸球部の太さ（JSHAPE.bulbR）：幽門のすぐ先でいちばん太く（1 + bulbR 倍）、先へ行くほど細くする（球部の形。本の像に合わせた見た目の値）
   const nEnd = S.duoEnd || pts.length - 1, bulbMul = x => { if (!JSHAPE.bulbR || x < pc) return 1; const t = (x - pc) / Math.max(0.5, nEnd - pc), up = Math.min(1, t / 0.3); return t > 1 ? 1 + 0.4 * JSHAPE.bulbR * Math.max(0, 1 - (t - 1) * 3) : 1 + JSHAPE.bulbR * up * up * (3 - 2 * up) * (1 - 0.6 * Math.max(0, (t - 0.3) / 0.7)); };   // 球部の先は元の太さへなめらかに戻す
   buildRings(pts, R0, NMAIN, 0, tpr, x => (x >= pc ? lumenK * bulbMul(x) : mulD(x)) * fMul(x), tprE);
+  unfoldRings();   // 曲がりの内側で輪が重ならないようにする
 
   cardiaIdx = Math.round(S.cardia / nCtl * (NMAIN - 1));
   pylIdx = Math.round((pylStart + 0.5) / nCtl * (NMAIN - 1));
