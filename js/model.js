@@ -113,6 +113,7 @@ function buildRings(pts, rads, N, off, taper, radMul, taperEnd) {   // taperEnd�
 // 胃の形の改変（BodyParts3D の胃から。値はどれも本の像の見た目と教科書の 10 項目で選んだもので、実測ではない）
 //   stretch：噴門より下を縦に伸ばす倍率、lift：胃角より先（前庭部〜幽門）を持ち上げる量、fwd：試しただけ（0 のまま）
 //   body・bodyAt：胃体部だけを腹側へ出す量と山の位置（2026-11-10。背臥位の溜まりが胃体部へ広がらないように）
+//   lift：2026-11-19 に 3 → 0.5（持ち上げすぎで、頭低位の第2斜位で幽門の手前が窪みになり、入れ直しでバリウムが 14 % 残っていた）。pylNarrow：幽門管を細くする倍率
 //   pull：胃角より先を胃角のほうへ横に寄せる割合、ant・antZ：前庭部〜幽門前部を太くする量と、その分だけ中心を腹側へ出す量、
 //   bulb・bulbR：十二指腸球部を上へ向ける量と太くする量（2026-11-10。胃角部から十二指腸までを本の像に近づけるため）
 // 姿勢で胃の縦の伸び方を変える（2026-11-16）：寝ている（背臥位・腹臥位・頭低位）ときは JSHAPE.stretchLie、立位では JSHAPE.stretchStand。
@@ -120,7 +121,7 @@ function buildRings(pts, rads, N, off, taper, radMul, taperEnd) {   // taperEnd�
 //   根拠：背臥位の生体 CT で transpyloric plane は L1 の下部〜L2 の上部（Mirjalili 2012, Clin Anat 25:819）→ 1.6 で幽門が L1 の下 1/3（1.5 でも同じだが、1.6 のほうが教科書の 10 項目に合う）。
 //   立位のバリウム像で胃角は L3〜L4 の中間を中心に分布（日本人 744 人。喜多 1992, 日東洋医誌 43:13）→ 2 で胃角部の中ほどが L3 の上 1/3。
 //   背臥位では臓器が最大 39 mm 頭側へ動く（positional MRI。Beillas 2009, Stapp Car Crash J 53:127）→ 1.6 と 2 の幽門の差は約 3 cm
-const JSHAPE = { stretch: 2, stretchLie: 1.6, stretchStand: 2, lift: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 1, antEnd: 0.7 };
+const JSHAPE = { stretch: 2, stretchLie: 1.6, stretchStand: 2, lift: 0.5, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 1, antEnd: 0.7, pylNarrow: 0.7 };
 const FUNDUS = { r: 0.6, d: 4 };         // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 4（実寸およそ 4.8 cm）。2026-11-04 に 1.35 倍・1.5 から 2.6 へ、2026-11-10 に 4 へ深くした
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 // 圧迫フトン（2026-11-10）：腹臥位の頭低位で腹の下に入れる枕。胃体部の前の壁を背中側へ押す（applyCompression を腹側からの向きで使う）。
@@ -269,7 +270,10 @@ function rebuild() {
   // 前庭部〜幽門前部の太さ（JSHAPE.ant）：元の形は幽門へ向かって早くから細くなる（空腹で縮んだ形）ので、前庭部の始まりから太くしていき、
   // 幽門の輪の手前まで保って、輪で元の太さへ戻す（本の像の、太い前庭部と短い幽門管の形）。近位：遠位の容積の比（DISTEND）はこのあと合わせるので変わらない
   const an0 = reg('antrum')[2], an1 = reg('pylorus')[2], an2 = reg('duode')[2], sm01 = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
-  const antMul = c => !JSHAPE.ant || c <= an0 || c >= an2 ? 1 : 1 + JSHAPE.ant * sm01((c - an0) / (an1 - an0)) * sm01((an2 - c) / (JSHAPE.antEnd * (an2 - an1)));
+  // 幽門管（幽門部）は細く（pylNarrow：元の太さに掛ける倍率。1 で元のまま）。2026-11-19：幽門部まで前庭部と同じ太さだったので、頭低位の第2斜位などで
+  // 幽門の手前に 20 mL ほど溜まっていた（実際の幽門管は細く短い）
+  const pylW = c => c <= an1 ? 1 : c >= an2 ? 1 : 1 - (1 - JSHAPE.pylNarrow) * Math.sin(Math.PI * Math.min(1, (c - an1) / (an2 - an1)));
+  const antMul = c => (!JSHAPE.ant || c <= an0 || c >= an2 ? 1 : 1 + JSHAPE.ant * sm01((c - an0) / (an1 - an0)) * sm01((an2 - c) / (JSHAPE.antEnd * (an2 - an1)))) * pylW(c);
   const fMul = c => (1 + FUNDUS.r * fW(c)) * antMul(c);
   const pts = S.pts.map((p, k) => [p[0], p[1], p[2] - FUNDUS.d * fW(k)]);   // z は腹側が +、背中側へ下げる
   if (JSHAPE.ant && JSHAPE.antZ) for (let k = 0; k < pts.length; k++) pts[k][2] += JSHAPE.antZ * (antMul(k) - 1) / JSHAPE.ant;   // 太くした分、中心を腹側へ（背中側の壁を下げない。背臥位でここに溜まらないように）
