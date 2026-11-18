@@ -407,7 +407,7 @@ const armW = (x, y) => armCut(x, y) * armSm(ARM.y1, ARM.y0, y);
 
 /* ---- 骨格（胸郭・胸骨と脊椎だけ。目印として要るものに絞る）---- */
 const boneGroup = new THREE.Group(); bodyFit.add(boneGroup);
-const matBone = bodyVert(litMat(0xD6DEE6, 0.26, 0.07, 0.95)), matBoneX = bodyVert(xrayMat(0.030, true, 1.8));   // BodyParts3D の骨は面が多いので薄めに
+const matBone = bodyVert(litMat(0xD6DEE6, 0.26, 0.07, 0.95)), matBoneX = bodyVert(xrayMat(0.010, true, 1.3));   // BodyParts3D の骨は面が多いので薄めに。2026-11-18 に 0.030・ふちの強調 1.8 から下げた：透視の動画のモニターでは、背骨がうっすら帯になる程度で肋骨はほとんど見えなかったため（見た目で合わせた値）
 { const m = new THREE.Mesh(bp3dGeom(BP3D.bones), matBone); m.renderOrder = 0; boneGroup.add(m); }
 
 /* 体表が全身を覆うので、手足や頭を別に作る必要はなくなった（表示の切り替えのために箱だけ残す） */
