@@ -753,6 +753,7 @@ function updateThickness() {
   _qi.copy(bodyGroup.quaternion).invert();
   _bd.set(0, 1, 0).applyQuaternion(_qi);   // X 線の向き（胃の座標）
   const bx = _bd.x, by = _bd.y, bz = _bd.z, u = uUp.value;
+  const bu = bx * u.x + by * u.y + bz * u.z;   // X 線の向きの上下の成分
   const pu = new Float64Array(CM), pv = new Float64Array(CM);
   for (let i = 0; i < NN; i++) {
     const c = i * 3, Ux = frameU[c], Uy = frameU[c + 1], Uz = frameU[c + 2], Vx = frameV[c], Vy = frameV[c + 1], Vz = frameV[c + 2];
@@ -788,7 +789,12 @@ function updateThickness() {
         const fb = h0 < h1 ? Math.max(0, Math.min(1, ta)) : 1 - Math.max(0, Math.min(1, ta));
         len *= fb;
       } else if (h0 > L) len = 0;
-      aThick[b + j] = len * stretch;
+      // X 線が重力の向きに近い（背臥位・腹臥位の正面など）とき、液面より下の壁の点からは、X 線は液面まで溜まりの中を通る。その長さ
+      // （液面までの高さ ÷ X 線の向きの上下の成分）も比べ、長いほうを使う（2026-11-18）。輪切り 1 枚の中だけで数えると、管が X 線の向きに
+      // 寝ている穹窿部の上の方で厚みが 0 近くになる所ができ、白い溜まりの中に黒い線が出ていた
+      let th = len * stretch;
+      if (Math.abs(bu) > 0.5) { const hv0 = qu * hu + qv * hv; if (hv0 < L) th = Math.max(th, Math.min(10, (L - hv0) / Math.abs(bu))); }
+      aThick[b + j] = th;
     }
   }
   geom.attributes.aThick.needsUpdate = true;
