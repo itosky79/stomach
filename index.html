@@ -82,7 +82,14 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
         <div class="pos-grid three" id="tiltGrid"></div>
         <p class="grp-h" style="margin:11px 0 9px">体軸の回転</p>
         <div class="pos-grid four" id="rollGrid"></div>
-        <details class="fold rotfold" style="margin-top:12px"><summary>回転法</summary>
+      </div>
+
+      <div class="pane" id="pane1" hidden>
+        <div class="seg wide" id="p1Seg" role="group" aria-label="手順の中身" style="grid-template-columns:repeat(2,1fr); margin-bottom:10px">
+          <button type="button" data-p="seq" aria-pressed="true">撮影手順</button>
+          <button type="button" data-p="rot" aria-pressed="false">回転法</button>
+        </div>
+        <div id="p1Rot" hidden>
         <div class="seg wide" id="rotSeg" role="group" aria-label="回転法" style="grid-template-columns:repeat(2,1fr); margin-bottom:9px">
           <button type="button" data-k="1" aria-pressed="true">右回り回転変換法</button>
           <button type="button" data-k="2">左右交互変換法</button>
@@ -98,10 +105,8 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
           <button class="act wide" id="bRot" type="button">回す</button>
         </div>
         <p class="rotnow" id="rotNow" aria-live="polite"></p>
-        </details>
-      </div>
-
-      <div class="pane" id="pane1" hidden>
+        </div>
+        <div id="p1Seq">
         <div class="seg wide" id="seqSeg" style="grid-template-columns:repeat(2,1fr); margin-bottom:10px">
           <button type="button" data-s="0" aria-pressed="true">基準撮影法Ⅰ</button>
           <button type="button" data-s="1">基準撮影法Ⅱ</button>
@@ -112,6 +117,7 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
           <button class="act" id="bNext" type="button">次へ</button>
         </div>
         <ol class="seq" id="seqList"></ol>
+        </div>
       </div>
 
       <div class="pane" id="pane2" hidden>
@@ -215,10 +221,15 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
     </div>
 
     <div class="grp">
-      <details class="fold" style="margin-top:0; border-top:none; padding-top:0"><summary>表示と操作</summary>
-      <p class="grp-h" style="margin-top:10px">胃の中身</p>
+      <p class="grp-h">胃の中身</p>
       <label class="rng">バリウム <input type="range" id="rBa" min="120" max="150" step="5" value="150"><output id="oBa">150 mL</output></label>
       <label class="rng">発泡剤のガス <input type="range" id="rGas" min="100" max="400" step="25" value="400"><output id="oGas">400 mL</output></label>
+      <p class="grp-h" style="margin-top:10px">ラベル</p>
+      <div class="seg wide" id="labSeg">
+        <button type="button" data-l="0">なし</button>
+        <button type="button" data-l="1" aria-pressed="true">主要</button>
+        <button type="button" data-l="2">詳細</button>
+      </div>
       <p class="grp-h" style="margin-top:10px">透視の視野（縦の長さ）</p>
       <div class="seg wide" id="fovSeg">
         <button type="button" data-f="auto" aria-pressed="true">自動</button>
@@ -227,26 +238,16 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
         <button type="button" data-f="17">17 cm</button>
         <button type="button" data-f="12">12 cm</button>
       </div>
-      <p class="grp-h" style="margin-top:10px">ラベル</p>
-      <div class="seg wide" id="labSeg">
-        <button type="button" data-l="0">なし</button>
-        <button type="button" data-l="1" aria-pressed="true">主要</button>
-        <button type="button" data-l="2">詳細</button>
-      </div>
       <div class="toggles" style="margin-top:11px">
         <label class="tg"><input type="checkbox" id="tBone" checked>骨格を3Dにも表示</label>
         <label class="tg"><input type="checkbox" id="tPyl">幽門を開く</label>
       </div>
-      <div class="acts" style="margin-top:10px">
-        <button class="act wide" id="bClear" type="button">フィルム消去</button>
-      </div>
-      </details>
     </div>
   </div>
 </div>
 
 <div class="films">
-  <div class="fh2"><h2>撮影したフィルム</h2><span class="hint">CLICK TO ENLARGE</span></div>
+  <div class="fh2"><h2>撮影したフィルム</h2><span class="fh2r"><span class="hint">CLICK TO ENLARGE</span><button class="act" id="bClear" type="button">フィルム消去</button></span></div>
   <div class="strip" id="strip"><p class="empty">「撮影」ボタンを押すと、その体位のシミュレーション写真がここに並びます。<br>撮影手順モードで①から順に撮ると、検診1件分のフィルムセットができます。</p></div>
 </div>
 

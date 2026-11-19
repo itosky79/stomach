@@ -566,6 +566,14 @@ const ROT_METHODS = [
 const ROT = { kind: 1, plan: null, i: 0, base: 0, lap: 0, step: 0, done: false, n: [0, 3, 3] };
 
 // 学習タブの「起倒角」「体軸の回転」の下にある「回転法」。2 つの方法を切り替える
+// 手順タブの中の切り替え：撮影手順 ／ 回転法（2026-11-19 に回転法を学習タブから移した）
+const p1Seg = document.getElementById('p1Seg');
+p1Seg.addEventListener('click', e => {
+  const b = e.target.closest('button[data-p]'); if (!b) return;
+  [...p1Seg.children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  document.getElementById('p1Seq').hidden = b.dataset.p !== 'seq';
+  document.getElementById('p1Rot').hidden = b.dataset.p !== 'rot';
+});
 const rotSeg = document.getElementById('rotSeg');
 function setRotKind(k) {
   rotStop();
