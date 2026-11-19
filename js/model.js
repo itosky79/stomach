@@ -361,7 +361,7 @@ function rebuild() {
 
   compMid = -1;
   applyCompression(compRegion, compAmt);
-  if (futonAmt > 0.01) { const ax = compAxis, cm = compMid; compAxis = [0, 0, 1]; applyCompression('body', futonAmt, FUTON.band); compAxis = ax; compMid = cm; }
+  // 圧迫フトンはここではなく、体位のねじれをかけたあとに押す（sim.js の futonPress。2026-11-19）
 
   // 中心合わせ
   let mnx = 1e9, mny = 1e9, mnz = 1e9, mxx = -1e9, mxy = -1e9, mxz = -1e9;

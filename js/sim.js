@@ -191,6 +191,22 @@ function twistSave() {
   twistBase = { pos: pos.slice(), centers: centers.slice(), fu: frameU.slice(), fv: frameV.slice() }; twistCur = [NaN, 0];
   twistBase.centers.set(escBase.c.subarray((ESO_JOIN - 1) * 3, ESO_JOIN * 3), (NN - 1) * 3);   // ねじれの中心（噴門）は、胃とつなぐ前の食道の下の端
   posTw = pos.slice(); centersTw = centers.slice(); sagS.fill(0); sagTgt.fill(0);
+  twistBase.area = area.slice(); twistBase.cap = cap.slice();
+}
+/* 圧迫フトン（2026-11-19）：ねじれをかけたあとの胃を、腹の側（体の +z）から押す。前は形を作るとき（ねじれの前）に押していたので、
+   腹臥位・頭低位のねじれ（30°）で押して平らにした面が斜めに回り、フトンに向いていなかった。そのため ⑤⑥ で溜まりの境目が斜めになり、
+   胃角〜前庭部に浅いくぼみ（数 mL のバリウムが白い塊で残る）と、溜まりのしっぽが帯のようになびいて見えていた */
+function futonPress() {
+  const B = twistBase, n = NMAIN * CM * 3;
+  area.set(B.area); cap.set(B.cap);
+  if (!(futonAmt > 0.01)) return;
+  for (let k = 0; k < n; k++) pos[k] = posTw[k];
+  for (let k = 0; k < NMAIN * 3; k++) centers[k] = centersTw[k];
+  const ax = compAxis, cm = compMid; compAxis = [0, 0, 1];
+  try { applyCompression('body', futonAmt, FUTON.band); } finally { compAxis = ax; compMid = cm; }
+  for (let k = 0; k < n; k++) posTw[k] = pos[k];
+  for (let k = 0; k < NMAIN * 3; k++) centersTw[k] = centers[k];
+  spillExcess();
 }
 const _twq = new THREE.Quaternion(), _twb = new THREE.Quaternion(), _twv = new THREE.Vector3(), _twa = new THREE.Vector3(), _twz = new THREE.Vector3(0, 0, 1);
 function applyTwist() {
@@ -212,6 +228,7 @@ function applyTwist() {
     for (let j = 0; j < CM; j++) rot(B.pos, posTw, (i * CM + j) * 3, true);
     rot(B.centers, centersTw, i * 3, true); rot(B.fu, frameU, i * 3, false); rot(B.fv, frameV, i * 3, false);
   }
+  futonPress();
   shapeApply();
 }
 
@@ -697,7 +714,7 @@ function fitBodyToStomach() {
   setTableToBody(_fit);
 }
 /* 圧迫フトン：腹臥位（回転角 180° の前後 45° まで。75° で 0）で、頭低位（−5° から効き始め −20° で最大）のときに入る。
-   強さが変わったら胃の形を作り直す（model.js の rebuild が futonAmt で胃体部の前の壁を押す） */
+   強さが変わったら胃の形を作り直す（ねじれをかけたあとに futonPress が胃体部の前の壁を押す） */
 /* 姿勢による胃の縦の伸び（model.js の JSHAPE の説明）。0.01 以上変わったら（または端に着いたら）胃の形を作り直す（2026-11-18 に 0.03 から細かくした。1 回 10 ミリ秒ほど） */
 function postureStretch(tilt) { const g = Math.max(0, Math.min(1, Math.sin(tilt * Math.PI / 180))); return JSHAPE.stretchLie + (JSHAPE.stretchStand - JSHAPE.stretchLie) * g; }
 // 胃角より先の持ち上げも姿勢で変える（2026-11-19）：寝ているときは liftLie、立位では liftStand（起倒角の sin で混ぜる）。
