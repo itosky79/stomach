@@ -306,8 +306,10 @@ function rebuild() {
   if (S.duoEnd) { const e = S.duoEnd, d = [pts[e][0] - S.pts[e][0], pts[e][1] - S.pts[e][1], pts[e][2] - (S.pts[e][2] - FUNDUS.d * fW(e))];
     for (let k = e + 1; k < pts.length; k++) for (let q = 0; q < 3; q++) pts[k][q] = S.pts[k][q] + d[q]; }
   if (JSHAPE.body) {   // 胃体部だけを腹側へ出す（胃底部の端 0 → 胃体部の中ほどで最大 → 胃角部の始まり 0）。背臥位で胃底部の溜まりが胃体部へ広がらないように
-    const b0 = fEnd * 0.6, b1 = ang[2], bm = b0 + (b1 - b0) * JSHAPE.bodyAt;
-    for (let k = 0; k < pts.length; k++) { const t = k <= bm ? (k - b0) / (bm - b0) : (b1 - k) / (b1 - bm); if (t > 0) pts[k][2] += JSHAPE.body * Math.sin(Math.PI / 2 * Math.min(1, t)) ** 2; }
+    // 2026-11-19：前は胃角部の始まりで 0 に戻していたので、押し出しの後ろ（胃体部の下〜胃角部）が背臥位で 5〜6 mm のくぼみになり、
+    // バリウムが溜まっていた。胃角部の始まりまで押し出しを保ち、胃角部の中で 0 に戻す（胃角部は前庭部へ向かって上がっていくので、くぼみにならない）
+    const b0 = fEnd * 0.6, b1 = ang[2], bm = b0 + (b1 - b0) * JSHAPE.bodyAt, b2 = ang[3];
+    for (let k = 0; k < pts.length; k++) { const t = k <= bm ? (k - b0) / (bm - b0) : k <= b1 ? 1 : (b2 - k) / (b2 - b1); if (t > 0) pts[k][2] += JSHAPE.body * Math.sin(Math.PI / 2 * Math.min(1, t)) ** 2; }
   }
   const tpr = 0.06 * (S.duoEnd || nC) / nC;   // 管の両端の丸め（全体に対する割合）。十二指腸の下行部を足した型でも、胃底部の先の丸めの長さを変えない
   const tprE = S.duoEnd ? 0 : tpr;   // 十二指腸の下行部まである型は、端を閉じない（その先の腸へ流れ出る。sim.js の flowStep）
