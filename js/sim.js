@@ -424,6 +424,27 @@ function fullRunFlow(ds, g) {
    上の境目と同じ式（重力・ビンガム流体のまさつ・乱れ）で流量を求めて、流れ出た分を drained に足す。
    先が上り坂（頭低位など）なら、液面が先の断面の底を越えるまで流れ出ない */
 let duoQ = 0;
+/* 幽門の開閉（2026-11-19）。幽門は胃の蠕動 1 周期ごとに、数秒ずつ開いて流す：
+   - 幽門を通る流れは 2〜4 秒の短い回に分かれて起こる（King PM, et al. Gut 1984;25:1384-91。超音波、健常者 10 人、液体食）
+   - 胃から十二指腸への流れは 1 周期あたり平均 1.7 回、1 回の長さは約 2.5 秒（King PM, et al. Gut 1987;28:545-8。健常者の群）
+   - 胃の蠕動の周期は約 3 回/分（胃電図。健常者の優勢周波数 約 3 cpm）→ 20 秒
+   開いたときの開き具合 PYL.open は、水 300 mL・半座位 45° で胃に残る量が半分になる時間が、健常者の水の T1/2 の平均 12.4 分
+   （Ziessman HA, et al. J Nucl Med 2009;50:726-31）になるように合わせた値。胃の張り（胃の中の圧）は計算に入れず、重力だけで流しているので、
+   その分もこの値に含まれる。1 周期の回数（1 回か 2 回、平均 1.7 回）は周期の番号から決まる擬似乱数で決める（毎回同じ）。
+   開くのは、蠕動が幽門で終わって緩んだ直後（King 1984：流れの 75 % は終末胃・幽門の弛緩の直後）とし、周期の 10 % と 55 % の所から開く */
+const PYL = { period: 20, episodes: 1.7, dur: 2.5, open: 0.0042, auto: true };
+let pylT = 0;
+function pylorusOpenNow(t) {
+  const n = Math.floor(t / PYL.period), ph = t - n * PYL.period;
+  const r = (Math.sin(n * 12.9898 + 78.233) * 43758.5453) % 1, two = Math.abs(r) < PYL.episodes - 1;
+  return (ph >= 0.10 * PYL.period && ph < 0.10 * PYL.period + PYL.dur) || (two && ph >= 0.55 * PYL.period && ph < 0.55 * PYL.period + PYL.dur);
+}
+function pylorusStep(dt) {
+  pylT += dt;
+  if (!pylEdge) return;
+  const k = pylorusOpen || (PYL.auto && pylorusOpenNow(pylT)) ? PYL.open : PYL_LEAK;
+  pylEdge.k = pylEdge.k2 = k;
+}
 function duoOutflow(ds, g, nu, ty) {
   const n = NMAIN - 1, m = NMAIN - 2;
   if (wVol[n] <= 1e-9) { duoQ = 0; return; }

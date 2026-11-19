@@ -75,7 +75,7 @@ function evalStep(dt) {   // main.js の loop と同じ順（カメラ・ラベ�
   upLocal(uUp.value);
   computeHeights();
   dose(dt);
-  flowStep(dt);
+  pylorusStep(dt); flowStep(dt);
   for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
   updateWet(dt);
   drawPourTrail();
@@ -87,6 +87,7 @@ function evalPrepare(tilt, roll) {
   if (changed) { rebuildAll(); buildLabels(); }
   tiltCur = tiltT = tilt; rollCur = rollT = roll;
   postureStep();   // 姿勢による胃の伸びを、流す前に合わせる
+  pylT = 0;        // 幽門の開閉の時計を毎回 0 から（評価を毎回同じにする）
   sagS.fill(0);   // たわみは毎回まっすぐの形から始める（前の体位の形を持ち越さない）
   settle();
   const vRef = wVol.reduce((a, b) => a + b, 0);

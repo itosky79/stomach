@@ -68,7 +68,7 @@ function loop(now) {
   for (let s = 0; s < nSub; s++) {
     computeHeights();
     dose(h);
-    flowStep(h);
+    pylorusStep(h); flowStep(h);
     for (let n = 0; n < NN; n++) lvl[n] = levelOf(n);
     updateWet(h);
     drawPourTrail();

@@ -4,7 +4,8 @@ const CM = 28;                 // 断面あたりの頂点数
 const NMAIN = 231, NESO = 26;  // 断面数（胃＋十二指腸 / 食道）。2026-11-16 に十二指腸の下行部を足したので 170 から増やした（胃の断面の細かさは同じ）
 const NN = NMAIN + NESO, NV = NN * CM;
 const FLAT = 0.78;             // 前後方向の扁平率
-let PYL_LEAK = 0.005;        // 幽門が閉じているときの開き具合（流れが通る断面積に掛ける）。仮の値。2026-11-16：十二指腸の端を開いたので 0.01 から絞った（0.01 だと評価の経路の間に 86 mL 流れ出た）
+let pylEdge = null;        // 幽門の輪の流路（sim.js の pylorusStep が開き具合を変える）
+let PYL_LEAK = 0;          // 幽門が閉じているときの開き具合。2026-11-19：0.005 から 0 に。0.005 では水 300 mL が閉じたままでも 2.1 分で半分流れ出ていた。幽門は蠕動に合わせて開いたときだけ流す（sim.js の PYL）
 const SUB = 8;                 // 流体ソルバのサブステップ
 
 /* ================= 円形断面の充填率⇔水位 逆変換表 ================= */
@@ -387,12 +388,13 @@ function rebuild() {
   bsRadius = Math.sqrt(rs);
 
   // 流路グラフ
-  edges = [];
+  edges = []; pylEdge = null;
   for (let i = 0; i < NMAIN - 1; i++) {
     let k = 1, k2 = 1;
     // 幽門の輪（幽門部と十二指腸球部の境目）だけを絞る。2026-11-10：前は幽門部の区間の境目すべてを絞っていて、幽門部の中のバリウムが動けずに残っていた
     if (regionList[regionOf[i]][0] === 'pylorus' && regionList[regionOf[i + 1]][0] === 'duode') { k = k2 = pylorusOpen ? 0.2 : PYL_LEAK; }   // 幽門の開き具合（流れが通る断面積に掛ける。sim.js の flowStep）。閉じているときも少しもれる。値は仮（流れを物理の式にした 2026-11-10 に 0.85・0.10 から小さくした）
     edges.push({ i: i, j: i + 1, k: k, k2: k2 });
+    if (k !== 1) pylEdge = edges[edges.length - 1];
   }
   for (let i = NMAIN; i < NN - 1; i++) edges.push({ i: i, j: i + 1, k: 1, k2: 0 });   // 食道の中も口の側へは戻さない（蠕動で胃へ送る。sim.js の dose）
   // 食道の下端から胃へは、流路でつながず、噴門から胃の壁に沿って低いほうへ流れた先の断面へ入れる（sim.js の pourTarget と dose）。

@@ -381,8 +381,6 @@ document.getElementById('bReadQ').addEventListener('click', () => {
 });
 
 /* --- 共通 --- */
-const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('change', e => fn(e.target.checked)); };   // 古いキャッシュとの食い違いで要素がなくても止めない
-bind('tPyl', v => { pylorusOpen = v; rebuildAll(); });
 { // 胃の中身：バリウム（120〜150 mL）と発泡剤のガス（100〜400 mL）。胃の大きさは合計に合わせる（model.js の rebuild）
   const S3 = Math.pow(BODY_SCALE, 3), rBa = document.getElementById('rBa'), rGas = document.getElementById('rGas');
   rBa.addEventListener('input', () => { targetMl = +rBa.value / S3; document.getElementById('oBa').textContent = rBa.value + ' mL'; rebuildAll(); buildLabels(); });
