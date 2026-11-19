@@ -121,7 +121,7 @@ function buildRings(pts, rads, N, off, taper, radMul, taperEnd) {   // taperEnd�
 //   根拠：背臥位の生体 CT で transpyloric plane は L1 の下部〜L2 の上部（Mirjalili 2012, Clin Anat 25:819）→ 1.6 で幽門が L1 の下 1/3（1.5 でも同じだが、1.6 のほうが教科書の 10 項目に合う）。
 //   立位のバリウム像で胃角は L3〜L4 の中間を中心に分布（日本人 744 人。喜多 1992, 日東洋医誌 43:13）→ 2 で胃角部の中ほどが L3 の上 1/3。
 //   背臥位では臓器が最大 39 mm 頭側へ動く（positional MRI。Beillas 2009, Stapp Car Crash J 53:127）→ 1.6 と 2 の幽門の差は約 3 cm
-const JSHAPE = { stretch: 2, stretchLie: 1.6, stretchStand: 2, lift: 0.5, liftLie: 0.5, liftStand: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 1, antEnd: 0.7, pylNarrow: 0.7 };
+const JSHAPE = { stretch: 2, stretchLie: 1.35, stretchStand: 2, lift: 0.5, liftLie: 0.5, liftStand: 3, fwd: 0, body: 1, bodyAt: 0.6, pull: 0.8, bulb: 0.6, bulbR: 1, ant: 0.5, antZ: 1, antEnd: 0.7, pylNarrow: 0.7 };
 const FUNDUS = { r: 0.6, d: 4 };         // 穹窿部を深くする量（rebuild）：胃底部の先端で太さ 1.6 倍、背中側へ 4（実寸およそ 4.8 cm）。2026-11-04 に 1.35 倍・1.5 から 2.6 へ、2026-11-10 に 4 へ深くした
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 // 圧迫フトン（2026-11-10）：腹臥位の頭低位で腹の下に入れる枕。胃体部の前の壁を背中側へ押す（applyCompression を腹側からの向きで使う）。
