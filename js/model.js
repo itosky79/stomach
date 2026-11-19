@@ -126,7 +126,10 @@ const FUNDUS = { r: 0.6, d: 4 };         // 穹窿部を深くする量（rebuil
 const COMP_R = 5 / 1.2, COMP_GAP = 0.25;   // 圧迫筒の半径（実寸 5 cm を模型の単位に）、押し込んだときの前後の壁の隙間（模型の単位）
 // 圧迫フトン（2026-11-10）：腹臥位の頭低位で腹の下に入れる枕。胃体部の前の壁を背中側へ押す（applyCompression を腹側からの向きで使う）。
 // futonAmt は今の強さ（0〜FUTON.amt。sim.js の futonStep が体位から決める）。FUTON.amt は見た目と教科書の 10 項目で選んだ値（実測ではない）
-const FUTON = { amt: 0.45 };
+// band：フトンが押す帯の頭足方向の半分の長さ（模型の単位）。3D のフトン（scene.js の futonMesh、体の軸方向 20 cm × 幅 30 cm）に合わせて 10 cm。
+// 2026-11-19：前は圧迫筒と同じ半径 5 cm の円で胃体部の真ん中だけを押していて、⑤⑥ で胃体部の下〜前庭部が低いまま残り、バリウムが白い帯になって残っていた。
+// フトンは「みぞおちあたりへ挿入」する布団（虎の巻 p.92）なので、左右は胃の全幅を押す
+const FUTON = { amt: 0.45, band: 10 / 1.2 };
 let futonAmt = 0;
 let compAxis = [0, 0, 1];                   // X 線管の向き（胃の座標）。sim.js の setCompAxis が体位から決める
 /* 曲がりの内側で輪切りが重ならないようにする（2026-11-18）。J 字に強く曲げた胃角・前庭部・幽門の手前では、中心の線の曲がりの半径が
@@ -184,7 +187,7 @@ function ringArea(i) {   // 断面 i の輪の多角形の面積（断面の平�
   }
   return Math.abs(A) / 2;
 }
-function applyCompression(key, amt) {
+function applyCompression(key, amt, band) {   // band：あれば左右は全幅、頭足方向だけ ±band の帯で押す（フトン）
   if (!(amt > 0) || !key) return;
   let f = -1, l = -1;
   for (let i = 0; i < NMAIN; i++) if (regionList[regionOf[i]][0] === key) { if (f < 0) f = i; l = i; }
@@ -193,7 +196,7 @@ function applyCompression(key, amt) {
   const [ax, ay, az] = compAxis;
   const wOf = k => {   // 圧迫筒の円の中なら 1、外なら 0（ふちで滑らかに）
     const dx = pos[k] - cx, dy = pos[k + 1] - cy, dz = pos[k + 2] - cz, h = dx * ax + dy * ay + dz * az;
-    const r = Math.sqrt(Math.max(0, dx * dx + dy * dy + dz * dz - h * h)), t = (r - 0.75 * COMP_R) / (0.5 * COMP_R);
+    const r = band ? Math.abs(dy) : Math.sqrt(Math.max(0, dx * dx + dy * dy + dz * dz - h * h)), R = band || COMP_R, t = (r - 0.75 * R) / (0.5 * R);
     return t <= 0 ? 1 : t >= 1 ? 0 : 1 - t * t * (3 - 2 * t);
   };
   // 断面ごとの、いちばん前（X 線管の側）といちばん後ろの壁の高さ
@@ -358,7 +361,7 @@ function rebuild() {
 
   compMid = -1;
   applyCompression(compRegion, compAmt);
-  if (futonAmt > 0.01) { const ax = compAxis, cm = compMid; compAxis = [0, 0, 1]; applyCompression('body', futonAmt); compAxis = ax; compMid = cm; }
+  if (futonAmt > 0.01) { const ax = compAxis, cm = compMid; compAxis = [0, 0, 1]; applyCompression('body', futonAmt, FUTON.band); compAxis = ax; compMid = cm; }
 
   // 中心合わせ
   let mnx = 1e9, mny = 1e9, mnz = 1e9, mxx = -1e9, mxy = -1e9, mxz = -1e9;
