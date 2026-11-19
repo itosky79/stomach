@@ -52,6 +52,10 @@ let keepCardia = false, cardiaKeep = null;   // 作り直しで噴門の位置�
      この 2 点を直線で結び、胃の容積から近位：遠位の比を決める（範囲の外は端の値）
    ・発泡剤で拡張した胃の CT gastrography：胃の容積 438.5 ± 163.4 mL（BMI 25 未満。Kim SH ほか, Obesity Surgery 2020, doi:10.1007/s11695-019-04189-5）。
      バリウム 150 mL ＋ ガス 100〜400 mL（250〜550 mL）は、この範囲に入る */
+/* 空腹時に胃に残っている分（2026-11-19）：絶食していても胃の中には胃液と空気が少し残る。上の MRI（Min YW ほか 2015）の空腹時の胃の容積
+   151.9 mL を、胃の大きさ（バリウム＋発泡剤のガス＋これ）に足す。中身は空気として扱う（流れる液には入れない。胃液と空気の割合は未確認）。
+   DISTEND の近位：遠位の比も、空腹時の分を含んだ胃の容積で測ったものなので、足したほうが辻褄が合う */
+const RESID_ML = 151.9;
 const DISTEND = {
   v0: 151.9, r0: 2.33, v1: 521.6, r1: 3.59,
   ratio(v) { const t = Math.max(0, Math.min(1, (v - this.v0) / (this.v1 - this.v0))); return this.r0 + (this.r1 - this.r0) * t; }
@@ -264,7 +268,7 @@ function rebuild() {
   // 胃の拡張：胃の容量を胃の中身（バリウム＋発泡剤のガス、実寸 mL）に合わせ、胃角を境に近位（胃底部・胃体部）と遠位（胃角部より先）の
   // 容積の比を、胃の容積に応じて変える。拡張するほど近位がよく膨らむ（DISTEND の実測値による）。十二指腸球部と食道は膨らませない。
   // 太さ（rad0、なければ rad）に、近位で kP、遠位で kD を掛ける（胃角部の中で滑らかにつなぐ）。断面積は太さの 2 乗に比例する
-  const R0 = S.rad0 || S.rad, S3 = Math.pow(BODY_SCALE, 3), want = targetMl * S3 + gasMl, nC = S.pts.length - 1;
+  const R0 = S.rad0 || S.rad, S3 = Math.pow(BODY_SCALE, 3), want = targetMl * S3 + gasMl + RESID_ML, nC = S.pts.length - 1;
   const reg = k => S.regions.find(r => r[0] === k), ang = reg('angle'), pc = reg('duode')[2];
   const wDist = c => c <= ang[2] ? 0 : c >= ang[3] ? 1 : (c - ang[2]) / (ang[3] - ang[2]);   // 0 = 近位、1 = 遠位
   // 穹窿部（胃底部）を深くする（2026-11-04）：胃底部の断面を太くし（先端ほど。最大 FUNDUS.r 倍）、中心の線を背中側へ下げる（最大 FUNDUS.d）。
