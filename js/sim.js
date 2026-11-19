@@ -428,7 +428,7 @@ let duoQ = 0;
    - 幽門を通る流れは 2〜4 秒の短い回に分かれて起こる（King PM, et al. Gut 1984;25:1384-91。超音波、健常者 10 人、液体食）
    - 胃から十二指腸への流れは 1 周期あたり平均 1.7 回、1 回の長さは約 2.5 秒（King PM, et al. Gut 1987;28:545-8。健常者の群）
    - 胃の蠕動の周期は約 3 回/分（胃電図。健常者の優勢周波数 約 3 cpm）→ 20 秒
-   開いたときの開き具合 PYL.open は、水 300 mL・半座位 45° で胃に残る量が半分になる時間が、健常者の水の T1/2 の平均 12.4 分（0.0026 で 12.2 分。
+   開いたときの開き具合 PYL.open は、水 300 mL・半座位 45° で胃に残る量が半分になる時間が、健常者の水の T1/2 の平均 12.4 分（0.0026 で 12.2 分、下の終末前庭部収縮を入れたあと 12.4 分。
    2026-11-19 に空腹時に残っている分を胃の大きさに足したので 0.0042 から合わせ直した）
    （Ziessman HA, et al. J Nucl Med 2009;50:726-31）になるように合わせた値。胃の張り（胃の中の圧）は計算に入れず、重力だけで流しているので、
    その分もこの値に含まれる。1 周期の回数（1 回か 2 回、平均 1.7 回）は周期の番号から決まる擬似乱数で決める（毎回同じ）。
@@ -445,6 +445,52 @@ function pylorusStep(dt) {
   if (!pylEdge) return;
   const k = pylorusOpen || (PYL.auto && pylorusOpenNow(pylT)) ? PYL.open : PYL_LEAK;
   pylEdge.k = pylEdge.k2 = k;
+  tacStep();
+}
+/* 前庭部の終末の収縮（2026-11-19）。胃の蠕動の波が前庭部の終わり（幽門の手前）に届くと、終末の前庭部がまとめて縮み（終末前庭部収縮）、
+   幽門が閉じているので、中身は収縮の輪をくぐって胃体部の側へ押し戻される（逆向きの噴流。retropulsion）：
+   - 健常者の超音波で、蠕動の波の 54 % が前庭部の終わりまで届いた（終末前庭部収縮。内腔を閉じるもの 20 %、閉じないもの 42 %）。
+     残りは前庭部の手前 2/3 で消えた。幽門を通る流れは、前庭部が収縮していない間に起きた（Pallotta N, et al. Am J Gastroenterol 1998;93:2513-22）
+   - 幽門を通る流れの 75 % は、終末前庭部・幽門の弛緩の直後に起きた（King PM, et al. Gut 1984;25:1384-91）→ 収縮は幽門が開く前（周期の 0〜10 %）に置く
+   - 波が幽門に近づくと、前庭部に幽門から離れる向きの流れ（逆向きの噴流）ができる（Imai Y, et al. Am J Physiol GI 2013;304:G536-42。計算の研究）
+   - 周期は約 3 回/分（バリウム 250 mL を飲んだ健常者の透視で 2.9 回/分。Boiron M, et al. Gastroenterol Clin Biol 1987;11:312-8）→ PYL.period 20 秒
+   ここでは、収縮する範囲（幽門部と、その手前の前庭部 TAC.len）に入る量を、TAC.lumen（縮みきったとき残る内腔の割合）まで減らし、
+   入りきらない分を手前（胃体部の側）の空いている断面へ戻す。波が前庭部を進む途中の動き（中身をかき混ぜる）は入れていない。
+   どの周期で終わりまで届くか（54 %）は、周期の番号から決まる擬似乱数で決める（毎回同じ）。
+   TAC.len・TAC.lumen は仮の値（収縮する範囲の長さと、縮みきったときの内腔の大きさの実測を確かめていない） */
+const TAC = { reach: 0.54, len: 0.02, lumen: 0.3, t0: 0.0, t1: 0.10, auto: true };
+let tacZone = null, tacOn = false;
+function tacZoneOf() {
+  // 幽門の輪（pylEdge.i）から手前へ、幽門部の全部と前庭部の TAC.len（m）
+  if (!pylEdge) return null;
+  const z = []; let n = pylEdge.i, d = 0;
+  while (n >= 0) {
+    const r = regionList[regionOf[n]][0];
+    if (r === 'pylorus') z.push(n);
+    else if (r === 'antrum' && d < TAC.len) { z.push(n); d += dl[n] * UNIT_M; }
+    else break;
+    n--;
+  }
+  return z;
+}
+function tacStep() {
+  if (!TAC.auto || !pylEdge) { tacOn = false; return; }
+  const n = Math.floor(pylT / PYL.period), ph = pylT / PYL.period - n;
+  const r = Math.abs((Math.sin(n * 39.3468 + 11.135) * 23421.631) % 1);
+  if (r >= TAC.reach || ph < TAC.t0 || ph >= TAC.t1) { tacOn = false; return; }
+  // 縮み方：周期の t0〜t1 の間に、内腔が 1 → TAC.lumen → 1（正弦の山）
+  const s = Math.sin(Math.PI * (ph - TAC.t0) / (TAC.t1 - TAC.t0)), keep = 1 - (1 - TAC.lumen) * s;
+  if (!tacZone) tacZone = tacZoneOf();
+  if (!tacZone || !tacZone.length) return;
+  tacOn = true;
+  let ex = 0;
+  for (const k of tacZone) { const lim = cap[k] * keep; if (wVol[k] > lim) { ex += wVol[k] - lim; wVol[k] = lim; } }
+  // 押し戻す：収縮する範囲のすぐ手前から胃体部の側へ、空いている断面に入れていく
+  for (let k = tacZone[tacZone.length - 1] - 1; k >= 0 && ex > 1e-9; k--) {
+    const room = cap[k] - wVol[k];
+    if (room > 0) { const t = Math.min(room, ex); wVol[k] += t; ex -= t; }
+  }
+  if (ex > 1e-9) wVol[tacZone[0]] += ex;   // 胃が満杯で戻せない分は戻さない（起こらないはず）
 }
 function duoOutflow(ds, g, nu, ty) {
   const n = NMAIN - 1, m = NMAIN - 2;

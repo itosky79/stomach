@@ -394,7 +394,7 @@ function rebuild() {
   bsRadius = Math.sqrt(rs);
 
   // 流路グラフ
-  edges = []; pylEdge = null;
+  edges = []; pylEdge = null; if (typeof tacZone !== 'undefined') tacZone = null;
   for (let i = 0; i < NMAIN - 1; i++) {
     let k = 1, k2 = 1;
     // 幽門の輪（幽門部と十二指腸球部の境目）だけを絞る。2026-11-10：前は幽門部の区間の境目すべてを絞っていて、幽門部の中のバリウムが動けずに残っていた
