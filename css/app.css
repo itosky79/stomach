@@ -162,6 +162,7 @@ button.act.wide{grid-column:1/-1; color:var(--barium); border-color:#456A80}
 .seg button:hover{color:var(--text)}
 .barL{display:flex; gap:8px; align-items:center; flex-wrap:wrap; pointer-events:auto}
 .barR{display:flex; gap:8px; align-items:center; pointer-events:auto}
+.spshot{display:none}   /* スマホなど縦に積む幅だけ、透視像の近くにも撮影ボタンを出す（下の @media） */
 .expose{
   padding:5px 14px; border:1px solid #6B4A2A; background:rgba(40,22,8,.9); border-radius:3px;
   color:#F3C173; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; cursor:pointer;
@@ -391,6 +392,7 @@ details.fold p{margin:7px 0 0; font-size:11.5px; color:var(--dim); line-height:1
 
 /* ---------- スマートフォン・タブレット ---------- */
 @media (max-width:900px){
+  .spshot{display:inline-block}
   /* グリッドをやめて通常の積み重ねにする。
      こうすると .work 全体が包含ブロックになり、3D を sticky で貼り付けられる */
   .work{display:block}

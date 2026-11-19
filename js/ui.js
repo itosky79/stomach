@@ -414,6 +414,7 @@ document.getElementById('bDrink').addEventListener('click', () => {
 });
 document.getElementById('bClear').addEventListener('click', () => { films = []; shotCount = 0; renderStrip(); });
 document.getElementById('bShot').addEventListener('click', capture);
+document.getElementById('bShotSp').addEventListener('click', capture);   // スマホの幅だけ出る、透視像の近くの撮影ボタン
 const viewSeg = document.getElementById('viewSeg');
 function syncViewSeg() { [...viewSeg.children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.v === viewMode)); }
 [...viewSeg.children].forEach(b => b.addEventListener('click', () => { viewMode = +b.dataset.v; syncViewSeg(); layoutFilm(); }));
