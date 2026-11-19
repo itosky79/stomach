@@ -47,7 +47,6 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
       <div class="barR">
         <button class="vrbtn" id="bVR" type="button" hidden>VR</button>
         <button class="drink" id="bDrink" type="button" title="胃の中を空にして、バリウムを飲むところからやり直す（壁の膜も粘液も最初に戻る）">飲み直す</button>
-        <button class="expose" id="bShot" type="button">撮影</button>
       </div>
     </div>
     <svg id="tiltGiz" viewBox="0 0 124 86" aria-label="撮影台の傾き">
@@ -247,7 +246,7 @@ document.write('<link rel="stylesheet" href="css/app.css?v=' + (Date.parse(docum
 </div>
 
 <div class="films">
-  <div class="fh2"><h2>撮影したフィルム</h2><span class="fh2r"><span class="hint">CLICK TO ENLARGE</span><button class="act" id="bClear" type="button">フィルム消去</button></span></div>
+  <div class="fh2"><h2>撮影したフィルム</h2><span class="fh2r"><button class="act" id="bClear" type="button">フィルム消去</button><button class="expose" id="bShot" type="button">撮影</button></span></div>
   <div class="strip" id="strip"><p class="empty">「撮影」ボタンを押すと、その体位のシミュレーション写真がここに並びます。<br>撮影手順モードで①から順に撮ると、検診1件分のフィルムセットができます。</p></div>
 </div>
 
