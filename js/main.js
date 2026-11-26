@@ -33,7 +33,7 @@ function loop(now) {
   if (playing) {
     playT += dt;
     if (typeof SP !== 'undefined' && SP.mo) playT = 0;   // 経路をたどっている間は数えない（着いてから 3.4 秒見せる）
-    if (playT > 3.4 && tiltCur === tiltT && !(typeof SP !== 'undefined' && SP.mo)) { playT = 0; if (seqIdx >= SEQ.length - 1) { playing = false; document.getElementById('bPlay').textContent = '順に再生'; } else gotoStep(seqIdx + 1); }
+    if (playT > 3.4 && tiltCur === tiltT && !(typeof SP !== 'undefined' && SP.mo)) { playT = 0; if (seqIdx >= SEQ.length - 1) { playing = false; document.getElementById('bPlay').textContent = '順に再生'; } else gotoStep(seqIdx + 1, true); }
   }
   if (renderer.xr.isPresenting) xrInput(dt);   // VR のスティックとレバー
   const k = 1 - Math.exp(-dt * 3.6);

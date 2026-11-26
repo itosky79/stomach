@@ -49,6 +49,7 @@ function setMode(m) {
   curMode = m; playing = false;
   [...tabs.children].forEach(b => b.setAttribute('aria-pressed', +b.dataset.m === m));
   for (let i = 0; i < 4; i++) document.getElementById('pane' + i).hidden = (i !== m);
+  if (m !== 1) { seqPathStop(); rotStop(); }   // 手順タブを離れたら、手順の経路や回転法で体を回している途中でも止める（ほかのタブで体が勝手に回り続けないように）
   document.body.classList.toggle('quiz', m === 3);          // スマホでは問題タブだけ3Dを固定しない
   if (m === 1 && seqIdx < 0) gotoStep(0);
   if (m === 2) syncFree();
@@ -73,7 +74,9 @@ buildSeq();
   [...seqSeg.children].forEach(x => x.setAttribute('aria-pressed', x === b));
   SEQ = SEQSET[+b.dataset.s]; playing = false; buildSeq(); gotoStep(0);
 }));
-function gotoStep(i) {
+// route：本に書いてある体位変換の経路をたどるか。「次へ」「順に再生」で 1 つ先へ進むときだけ true。
+// タブを開いたとき・手順の切り替え・番号を押したときは、まっすぐその体位へ（タブを開いただけで体が回り出さないように）
+function gotoStep(i, route) {
   const prevIdx = seqIdx;
   seqIdx = Math.max(0, Math.min(SEQ.length - 1, i));
   const S = SEQ[seqIdx];
@@ -81,17 +84,17 @@ function gotoStep(i) {
     if (+b.dataset.i === seqIdx) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
   });
   // 1 つ先へ進むとき（次へ・順に再生）は、本に書いてある体位変換の経路をたどる（data.js の SEQ1_ROUTES・SEQ2_ROUTES）。番号で飛んだときはまっすぐその体位へ
-  const R = (SEQ === SEQ2 ? SEQ2_ROUTES : SEQ === SEQ1 ? SEQ1_ROUTES : [])[seqIdx] || null, follow = R && seqIdx === prevIdx + 1;
+  const R = (SEQ === SEQ2 ? SEQ2_ROUTES : SEQ === SEQ1 ? SEQ1_ROUTES : [])[seqIdx] || null, follow = route && R && seqIdx === prevIdx + 1;
   if (follow) seqPathStart(R); else goPose(S.tilt, S.roll);
   setComp(S.comp || '', S.comp ? 0.7 : 0);
   syncFree(); updateNotes();
 }
 document.getElementById('bPrev').addEventListener('click', () => { playing = false; gotoStep(seqIdx - 1); });
-document.getElementById('bNext').addEventListener('click', () => { playing = false; gotoStep(seqIdx + 1); });
+document.getElementById('bNext').addEventListener('click', () => { playing = false; gotoStep(seqIdx + 1, true); });
 document.getElementById('bPlay').addEventListener('click', e => {
   playing = !playing; playT = 0;
   e.target.textContent = playing ? '一時停止' : '順に再生';
-  if (playing && seqIdx < 0) gotoStep(0);
+  if (playing && seqIdx < 0) gotoStep(0, true);
 });
 
 /* --- 操作卓：スティックとレバー --- */
